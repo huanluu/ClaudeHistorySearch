@@ -33,6 +33,7 @@ struct SessionDetailView: View {
             }
         }
         .frame(width: 420, height: 500)
+        .navigationBarBackButtonHidden(true)
         .task {
             await loadSession()
         }

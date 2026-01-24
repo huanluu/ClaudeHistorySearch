@@ -64,6 +64,7 @@ struct SearchPopoverView: View {
                         onBack: { navigationPath.removeLast() }
                     )
                     .environmentObject(apiClient)
+                    .toolbar(.hidden)
                 }
             }
         }
