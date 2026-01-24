@@ -103,12 +103,12 @@ router.get('/search', (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = parseInt(req.query.offset) || 0;
 
-    // Escape special FTS5 characters and format query
+    // Escape special FTS5 characters and format query with prefix matching
     const sanitizedQuery = query
-      .replace(/['"]/g, '')
+      .replace(/['"*()]/g, '')  // Remove special FTS5 characters
       .split(/\s+/)
       .filter(term => term.length > 0)
-      .map(term => `"${term}"`)
+      .map(term => `${term}*`)  // Add * for prefix matching (without quotes)
       .join(' ');
 
     if (!sanitizedQuery) {
