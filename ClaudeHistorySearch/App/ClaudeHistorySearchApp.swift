@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeHistoryShared
 
 @main
 struct ClaudeHistorySearchApp: App {

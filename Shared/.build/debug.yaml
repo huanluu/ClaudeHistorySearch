@@ -1,0 +1,47 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module": ["<ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module>"]
+  "test": ["<ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+commands:
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift"]
+    outputs: ["/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources"]
+    description: "Write auxiliary file /Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources"
+
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt"
+
+  "<ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules/ClaudeHistoryShared.swiftmodule"]
+    outputs: ["<ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module>"]
+
+  "C.ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources"]
+    outputs: ["/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.swift.o","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules/ClaudeHistoryShared.swiftmodule"]
+    description: "Compiling Swift Module 'ClaudeHistoryShared' (5 sources)"
+    args: ["/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","ClaudeHistoryShared","-emit-dependencies","-emit-module","-emit-module-path","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules/ClaudeHistoryShared.swiftmodule","-output-file-map","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/output-file-map.json","-parse-as-library","-incremental","-c","@/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources","-I","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx13.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j12","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/include/ClaudeHistoryShared-Swift.h","-swift-version","5","-plugin-path","/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk","-F","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk","-Xcc","-F","-Xcc","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","shared"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Package.swift","/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

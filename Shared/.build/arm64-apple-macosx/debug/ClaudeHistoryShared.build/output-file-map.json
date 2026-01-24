@@ -1,0 +1,40 @@
+{
+  "": {
+    "swift-dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/master.swiftdeps"
+  },
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift": {
+    "dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.d",
+    "object": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.swift.o",
+    "swiftmodule": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared~partial.swiftmodule",
+    "swift-dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.swiftdeps",
+    "diagnostics": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.dia"
+  },
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift": {
+    "dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.d",
+    "object": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.swift.o",
+    "swiftmodule": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message~partial.swiftmodule",
+    "swift-dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.swiftdeps",
+    "diagnostics": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.dia"
+  },
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift": {
+    "dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.d",
+    "object": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.swift.o",
+    "swiftmodule": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session~partial.swiftmodule",
+    "swift-dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.swiftdeps",
+    "diagnostics": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.dia"
+  },
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift": {
+    "dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.d",
+    "object": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.swift.o",
+    "swiftmodule": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.swiftdeps",
+    "diagnostics": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.dia"
+  },
+  "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift": {
+    "dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.d",
+    "object": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.swift.o",
+    "swiftmodule": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery~partial.swiftmodule",
+    "swift-dependencies": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.swiftdeps",
+    "diagnostics": "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.dia"
+  }
+}

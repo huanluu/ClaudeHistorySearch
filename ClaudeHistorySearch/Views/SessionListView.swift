@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeHistoryShared
 
 struct SessionListView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery

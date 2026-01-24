@@ -1,0 +1,295 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.ClaudeHistoryShared-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources",
+      "importPath" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "ClaudeHistoryShared",
+      "moduleOutputPath" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules/ClaudeHistoryShared.swiftmodule",
+      "objects" : [
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.swift.o",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.swift.o",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.swift.o",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.swift.o",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/include/ClaudeHistoryShared-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+        "-F",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "shared"
+      ],
+      "outputFileMapPath" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ClaudeHistoryShared.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Message.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/Session.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/ServerDiscovery.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules/ClaudeHistoryShared.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift",
+        "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift"
+      ],
+      "tempsPath" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "ClaudeHistoryShared" : [
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "ClaudeHistoryShared",
+      "-package-name",
+      "shared",
+      "-c",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift",
+      "-I",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/include/ClaudeHistoryShared-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+      "-F",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "shared",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "ClaudeHistoryShared" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/ClaudeHistoryShared.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Message.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Models/Session.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/Sources/ClaudeHistoryShared/Services/ServerDiscovery.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/ClaudeHistoryShared.build/sources"
+    },
+    "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode_26.1.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/huanlu/Developer/ClaudeHistorySearch/Shared/.build/arm64-apple-macosx/debug/swift-version--3A98693DF01E6000.txt"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeHistoryShared
 
 struct MessageBubbleView: View {
     let message: Message

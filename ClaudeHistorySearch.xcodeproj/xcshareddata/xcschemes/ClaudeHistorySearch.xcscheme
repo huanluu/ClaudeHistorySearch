@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "06000001"
+               BlueprintIdentifier = "G1H2I3J4K5L60001"
                BuildableName = "ClaudeHistorySearch.app"
                BlueprintName = "ClaudeHistorySearch"
                ReferencedContainer = "container:ClaudeHistorySearch.xcodeproj">
@@ -43,7 +43,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "06000001"
+            BlueprintIdentifier = "G1H2I3J4K5L60001"
             BuildableName = "ClaudeHistorySearch.app"
             BlueprintName = "ClaudeHistorySearch"
             ReferencedContainer = "container:ClaudeHistorySearch.xcodeproj">
@@ -60,7 +60,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "06000001"
+            BlueprintIdentifier = "G1H2I3J4K5L60001"
             BuildableName = "ClaudeHistorySearch.app"
             BlueprintName = "ClaudeHistorySearch"
             ReferencedContainer = "container:ClaudeHistorySearch.xcodeproj">

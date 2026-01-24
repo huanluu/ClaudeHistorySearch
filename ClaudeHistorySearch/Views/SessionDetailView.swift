@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeHistoryShared
 
 struct SessionDetailView: View {
     @EnvironmentObject var apiClient: APIClient
