@@ -21,6 +21,7 @@
 		A2B3C4D5E6F70006 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70006 /* SettingsView.swift */; };
 		A2B3C4D5E6F70007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70007 /* Assets.xcassets */; };
 		A2B3C4D5E6F70008 /* ClaudeHistoryShared in Frameworks */ = {isa = PBXBuildFile; productRef = E1F2A3B4C5D60002 /* ClaudeHistoryShared */; };
+		A2B3C4D5E6F70009 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70008 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		B2C3D4E5F6A70005 /* MessageRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRowView.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70006 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B2C3D4E5F6A70008 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B60001 /* ClaudeHistorySearch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeHistorySearch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2D3E4F5A6B70001 /* ClaudeHistorySearchMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeHistorySearchMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -117,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				B2C3D4E5F6A70001 /* ClaudeHistorySearchMacApp.swift */,
+				B2C3D4E5F6A70008 /* AppDelegate.swift */,
 				F2A3B4C5D6E70002 /* Views */,
 				B2C3D4E5F6A70007 /* Assets.xcassets */,
 			);
@@ -254,6 +257,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A2B3C4D5E6F70001 /* ClaudeHistorySearchMacApp.swift in Sources */,
+				A2B3C4D5E6F70009 /* AppDelegate.swift in Sources */,
 				A2B3C4D5E6F70002 /* SearchPopoverView.swift in Sources */,
 				A2B3C4D5E6F70003 /* SearchResultRowView.swift in Sources */,
 				A2B3C4D5E6F70004 /* SessionDetailView.swift in Sources */,
