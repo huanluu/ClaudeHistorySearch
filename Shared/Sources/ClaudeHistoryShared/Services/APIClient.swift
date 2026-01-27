@@ -11,6 +11,14 @@ public class APIClient: ObservableObject {
         return decoder
     }()
 
+    // Use a URLSession with no caching to always get fresh data
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+        return URLSession(configuration: config)
+    }()
+
     public init() {}
 
     public func setBaseURL(_ url: URL?) {
@@ -34,7 +42,7 @@ public class APIClient: ObservableObject {
             URLQueryItem(name: "offset", value: "\(offset)")
         ]
 
-        let (data, response) = try await URLSession.shared.data(from: components.url!)
+        let (data, response) = try await session.data(from: components.url!)
         try validateResponse(response)
         return try decoder.decode(SessionsResponse.self, from: data)
     }
@@ -45,7 +53,7 @@ public class APIClient: ObservableObject {
         }
 
         let url = baseURL.appendingPathComponent("sessions").appendingPathComponent(id)
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         try validateResponse(response)
         return try decoder.decode(SessionDetailResponse.self, from: data)
     }
@@ -64,7 +72,7 @@ public class APIClient: ObservableObject {
             URLQueryItem(name: "offset", value: "\(offset)")
         ]
 
-        let (data, response) = try await URLSession.shared.data(from: components.url!)
+        let (data, response) = try await session.data(from: components.url!)
         try validateResponse(response)
         return try decoder.decode(SearchResponse.self, from: data)
     }
@@ -77,7 +85,7 @@ public class APIClient: ObservableObject {
         }
 
         let url = baseURL.appendingPathComponent("health")
-        let (_, response) = try await URLSession.shared.data(from: url)
+        let (_, response) = try await session.data(from: url)
 
         if let httpResponse = response as? HTTPURLResponse {
             return httpResponse.statusCode == 200

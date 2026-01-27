@@ -2,6 +2,10 @@ import SwiftUI
 import Carbon
 import ClaudeHistoryShared
 
+extension Notification.Name {
+    static let popoverDidShow = Notification.Name("popoverDidShow")
+}
+
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -69,6 +73,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             NSApp.activate(ignoringOtherApps: true)
+            // Notify view to refresh data
+            NotificationCenter.default.post(name: .popoverDidShow, object: nil)
         }
     }
 

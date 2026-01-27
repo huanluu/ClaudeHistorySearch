@@ -74,11 +74,18 @@ struct SearchPopoverView: View {
         }
         .onAppear {
             isSearchFieldFocused = true
-        }
-        .task {
-            await loadRecentSessions()
+            // Refresh recent sessions each time popover appears
+            Task {
+                await loadRecentSessions()
+            }
         }
         .onChange(of: serverDiscovery.serverURL) { _ in
+            Task {
+                await loadRecentSessions()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
+            isSearchFieldFocused = true
             Task {
                 await loadRecentSessions()
             }

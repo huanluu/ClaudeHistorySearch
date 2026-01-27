@@ -70,9 +70,23 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
   console.log('Watching for file changes...\n');
 
+  // Periodic reindex to catch any missed files (watcher can be unreliable)
+  const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  const reindexTimer = setInterval(async () => {
+    console.log('Running periodic reindex...');
+    const reindexResult = await indexAllSessions();
+    if (reindexResult.indexed > 0) {
+      console.log(`Periodic reindex: ${reindexResult.indexed} new sessions indexed`);
+    } else {
+      console.log('Periodic reindex: no new sessions');
+    }
+  }, REINDEX_INTERVAL);
+  console.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
+
   // Graceful shutdown
   const shutdown = () => {
     console.log('\nShutting down...');
+    clearInterval(reindexTimer);
     service.stop();
     bonjour.destroy();
     watcher.close();
