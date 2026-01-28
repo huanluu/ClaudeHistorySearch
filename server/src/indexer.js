@@ -37,6 +37,7 @@ async function parseSessionFile(filePath) {
   let sessionId = null;
   let project = null;
   let earliestTimestamp = null;
+  let latestTimestamp = null;
   let firstUserMessage = null;
 
   const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
@@ -66,8 +67,13 @@ async function parseSessionFile(filePath) {
 
       const timestamp = obj.timestamp ? new Date(obj.timestamp).getTime() : null;
 
-      if (timestamp && (!earliestTimestamp || timestamp < earliestTimestamp)) {
-        earliestTimestamp = timestamp;
+      if (timestamp) {
+        if (!earliestTimestamp || timestamp < earliestTimestamp) {
+          earliestTimestamp = timestamp;
+        }
+        if (!latestTimestamp || timestamp > latestTimestamp) {
+          latestTimestamp = timestamp;
+        }
       }
 
       // Extract message content
@@ -104,6 +110,7 @@ async function parseSessionFile(filePath) {
     sessionId,
     project,
     startedAt: earliestTimestamp,
+    lastActivityAt: latestTimestamp,
     preview: firstUserMessage,
     messages
   };
@@ -133,7 +140,7 @@ async function indexSessionFile(filePath, forceReindex = false) {
 
   console.log(`Indexing: ${filePath}`);
 
-  const { sessionId, project, startedAt, preview, messages } = await parseSessionFile(filePath);
+  const { sessionId, project, startedAt, lastActivityAt, preview, messages } = await parseSessionFile(filePath);
 
   if (!sessionId || messages.length === 0) {
     return null;
@@ -149,6 +156,7 @@ async function indexSessionFile(filePath, forceReindex = false) {
       sessionId,
       project || 'Unknown',
       startedAt || Date.now(),
+      lastActivityAt || startedAt || Date.now(),
       messages.length,
       preview || '',
       Date.now()

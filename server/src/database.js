@@ -22,6 +22,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     project TEXT NOT NULL,
     started_at INTEGER NOT NULL,
+    last_activity_at INTEGER,
     message_count INTEGER DEFAULT 0,
     preview TEXT,
     last_indexed INTEGER
@@ -30,6 +31,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project);
   CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC);
 `);
+
+// Migration: add last_activity_at column if it doesn't exist (for existing databases)
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN last_activity_at INTEGER`);
+  console.log('Added last_activity_at column to sessions table');
+} catch (e) {
+  // Column already exists, ignore
+}
+
+// Create index on last_activity_at (after migration ensures column exists)
+db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity_at DESC)`);
 
 // Create FTS5 virtual table for full-text search
 db.exec(`
@@ -45,8 +57,8 @@ db.exec(`
 
 // Prepared statements for common operations
 const insertSession = db.prepare(`
-  INSERT OR REPLACE INTO sessions (id, project, started_at, message_count, preview, last_indexed)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, last_indexed)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
 const insertMessage = db.prepare(`
@@ -60,7 +72,7 @@ const getSessionById = db.prepare(`
 
 const getRecentSessions = db.prepare(`
   SELECT * FROM sessions
-  ORDER BY started_at DESC
+  ORDER BY COALESCE(last_activity_at, started_at) DESC
   LIMIT ? OFFSET ?
 `);
 
