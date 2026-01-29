@@ -1,5 +1,19 @@
 import Foundation
 
+public enum SearchSortOption: String, CaseIterable, Identifiable {
+    case relevance
+    case date
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .relevance: return "Relevance"
+        case .date: return "Date"
+        }
+    }
+}
+
 @MainActor
 public class APIClient: ObservableObject {
     @Published public var isLoading = false
@@ -60,7 +74,7 @@ public class APIClient: ObservableObject {
 
     // MARK: - Search
 
-    public func search(query: String, limit: Int = 50, offset: Int = 0) async throws -> SearchResponse {
+    public func search(query: String, limit: Int = 50, offset: Int = 0, sort: SearchSortOption = .relevance) async throws -> SearchResponse {
         guard let baseURL = baseURL else {
             throw APIError.noServer
         }
@@ -69,7 +83,8 @@ public class APIClient: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "limit", value: "\(limit)"),
-            URLQueryItem(name: "offset", value: "\(offset)")
+            URLQueryItem(name: "offset", value: "\(offset)"),
+            URLQueryItem(name: "sort", value: sort.rawValue)
         ]
 
         let (data, response) = try await session.data(from: components.url!)

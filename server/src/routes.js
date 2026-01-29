@@ -93,7 +93,7 @@ router.get('/sessions/:id', (req, res) => {
 /**
  * GET /search
  * Full-text search across all messages, grouped by session
- * Query params: q (search query), limit (default 50), offset (default 0)
+ * Query params: q (search query), limit (default 50), offset (default 0), sort (relevance|date)
  * Returns only the best-matching message per session
  */
 router.get('/search', (req, res) => {
@@ -105,6 +105,7 @@ router.get('/search', (req, res) => {
 
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = parseInt(req.query.offset) || 0;
+    const sort = req.query.sort === 'date' ? 'date' : 'relevance';
 
     // Escape special FTS5 characters and format query with prefix matching
     const sanitizedQuery = query
@@ -120,7 +121,7 @@ router.get('/search', (req, res) => {
 
     // Fetch more results than needed to account for deduplication
     const fetchLimit = (limit + offset) * 3;
-    const allResults = searchMessages.all(sanitizedQuery, fetchLimit, 0);
+    const allResults = searchMessages(sanitizedQuery, fetchLimit, 0, sort);
 
     // Group by session - keep only the best-matching message per session
     // Results are already ordered by rank, so first occurrence is best match
@@ -156,7 +157,8 @@ router.get('/search', (req, res) => {
         offset,
         hasMore: uniqueResults.length > offset + limit
       },
-      query
+      query,
+      sort
     });
   } catch (error) {
     console.error('Error searching:', error);

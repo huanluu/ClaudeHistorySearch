@@ -5,6 +5,7 @@ struct SessionListView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
     @EnvironmentObject var apiClient: APIClient
 
+    @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var sessions: [Session] = []
     @State private var isLoading = false
     @State private var error: String?
@@ -16,6 +17,10 @@ struct SessionListView: View {
     @State private var showSettings = false
 
     private let pageSize = 20
+
+    private var sortOption: SearchSortOption {
+        SearchSortOption(rawValue: sortOptionRaw) ?? .relevance
+    }
 
     var body: some View {
         NavigationStack {
@@ -175,6 +180,39 @@ struct SessionListView: View {
 
     private var searchResultsView: some View {
         List {
+            // Sort filter picker (compact, inline style)
+            HStack {
+                Spacer()
+                Menu {
+                    ForEach(SearchSortOption.allCases) { option in
+                        Button {
+                            sortOptionRaw = option.rawValue
+                            Task {
+                                await performSearch(query: searchText)
+                            }
+                        } label: {
+                            HStack {
+                                Text(option.displayName)
+                                if sortOption == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Text(sortOption.displayName)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray5))
+                        .cornerRadius(8)
+                }
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+
             if isSearching {
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -255,7 +293,7 @@ struct SessionListView: View {
         isSearching = true
 
         do {
-            let response = try await apiClient.search(query: query)
+            let response = try await apiClient.search(query: query, sort: sortOption)
             searchResults = response.results
         } catch {
             // Silent fail for search

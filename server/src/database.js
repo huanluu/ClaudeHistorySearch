@@ -85,7 +85,7 @@ const getRecentSessions = db.prepare(`
   LIMIT ? OFFSET ?
 `);
 
-const searchMessages = db.prepare(`
+const searchMessagesByRelevance = db.prepare(`
   SELECT
     messages_fts.session_id,
     messages_fts.role,
@@ -103,6 +103,31 @@ const searchMessages = db.prepare(`
   ORDER BY rank
   LIMIT ? OFFSET ?
 `);
+
+const searchMessagesByDate = db.prepare(`
+  SELECT
+    messages_fts.session_id,
+    messages_fts.role,
+    messages_fts.content,
+    messages_fts.timestamp,
+    messages_fts.uuid,
+    sessions.project,
+    sessions.started_at,
+    sessions.title,
+    highlight(messages_fts, 2, '<mark>', '</mark>') as highlighted_content,
+    bm25(messages_fts) as rank
+  FROM messages_fts
+  JOIN sessions ON sessions.id = messages_fts.session_id
+  WHERE messages_fts MATCH ?
+  ORDER BY sessions.started_at DESC, rank
+  LIMIT ? OFFSET ?
+`);
+
+// Wrapper function to select the appropriate query based on sort option
+function searchMessages(query, limit, offset, sort = 'relevance') {
+  const stmt = sort === 'date' ? searchMessagesByDate : searchMessagesByRelevance;
+  return stmt.all(query, limit, offset);
+}
 
 const getMessagesBySessionId = db.prepare(`
   SELECT session_id, role, content, timestamp, uuid
@@ -126,6 +151,8 @@ export {
   getSessionById,
   getRecentSessions,
   searchMessages,
+  searchMessagesByRelevance,
+  searchMessagesByDate,
   getMessagesBySessionId,
   clearSessionMessages,
   getSessionLastIndexed,

@@ -9,6 +9,7 @@ struct SearchPopoverView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
     @EnvironmentObject var apiClient: APIClient
 
+    @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var searchText = ""
     @State private var searchResults: [SearchResult] = []
     @State private var recentSessions: [Session] = []
@@ -18,6 +19,10 @@ struct SearchPopoverView: View {
     @State private var showSettings = false
 
     @FocusState private var isSearchFieldFocused: Bool
+
+    private var sortOption: SearchSortOption {
+        get { SearchSortOption(rawValue: sortOptionRaw) ?? .relevance }
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -154,6 +159,35 @@ struct SearchPopoverView: View {
                 }
 
             if !searchText.isEmpty {
+                // Sort picker (inline, before cancel button)
+                Menu {
+                    ForEach(SearchSortOption.allCases) { option in
+                        Button {
+                            sortOptionRaw = option.rawValue
+                            Task {
+                                await performSearch()
+                            }
+                        } label: {
+                            HStack {
+                                Text(option.displayName)
+                                if sortOption == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Text(sortOption.displayName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(6)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
                 Button(action: {
                     searchText = ""
                     searchResults = []
@@ -330,7 +364,7 @@ struct SearchPopoverView: View {
         isSearching = true
 
         do {
-            let response = try await apiClient.search(query: query)
+            let response = try await apiClient.search(query: query, sort: sortOption)
             searchResults = response.results
         } catch {
             searchResults = []
