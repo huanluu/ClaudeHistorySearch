@@ -29,6 +29,8 @@ public class ServerDiscovery: ObservableObject {
     }
 
     private var browser: NWBrowser?
+    private var pendingConnection: NWConnection?
+    private var searchTimeout: Task<Void, Never>?
     private let serviceType = "_claudehistory._tcp"
 
     // UserDefaults key for cached server
@@ -59,9 +61,11 @@ public class ServerDiscovery: ObservableObject {
                 switch state {
                 case .failed(let error):
                     self?.connectionStatus = .error(error.localizedDescription)
-                    self?.isSearching = false
+                    self?.stopSearching()
                 case .cancelled:
                     self?.isSearching = false
+                case .ready:
+                    print("Browser ready, waiting for services...")
                 default:
                     break
                 }
@@ -74,25 +78,45 @@ public class ServerDiscovery: ObservableObject {
                     if case .service(let name, let type, let domain, _) = result.endpoint {
                         print("Found service: \(name) \(type) \(domain)")
                         self?.resolveService(result: result)
+                        return // Only try the first one
                     }
                 }
             }
         }
 
         browser?.start(queue: .main)
+
+        // Add a 10 second timeout
+        searchTimeout = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            if self.isSearching {
+                self.connectionStatus = .error("No server found")
+                self.stopSearching()
+            }
+        }
     }
 
     public func stopSearching() {
+        searchTimeout?.cancel()
+        searchTimeout = nil
+        pendingConnection?.cancel()
+        pendingConnection = nil
         browser?.cancel()
         browser = nil
         isSearching = false
     }
 
     private func resolveService(result: NWBrowser.Result) {
+        // Cancel any pending connection
+        pendingConnection?.cancel()
+
         let connection = NWConnection(to: result.endpoint, using: .tcp)
+        pendingConnection = connection
 
         connection.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
+                guard self?.pendingConnection === connection else { return }
+
                 switch state {
                 case .ready:
                     if let endpoint = connection.currentPath?.remoteEndpoint,
@@ -102,7 +126,14 @@ public class ServerDiscovery: ObservableObject {
                         case .ipv4(let addr):
                             hostString = "\(addr)"
                         case .ipv6(let addr):
-                            hostString = "[\(addr)]"
+                            // Skip IPv6 link-local addresses, prefer IPv4
+                            let addrString = "\(addr)"
+                            if addrString.hasPrefix("fe80") {
+                                print("Skipping IPv6 link-local address: \(addrString)")
+                                connection.cancel()
+                                return
+                            }
+                            hostString = "[\(addrString)]"
                         case .name(let name, _):
                             hostString = name
                         @unknown default:
@@ -115,7 +146,6 @@ public class ServerDiscovery: ObservableObject {
                         }
                         self?.serverURL = url
                         self?.connectionStatus = .connected(hostString)
-                        self?.isSearching = false
 
                         // Cache the URL
                         UserDefaults.standard.set(url.absoluteString, forKey: self?.cachedURLKey ?? "")
@@ -123,8 +153,11 @@ public class ServerDiscovery: ObservableObject {
                         self?.stopSearching()
                     }
                     connection.cancel()
+                case .waiting(let error):
+                    print("Connection waiting: \(error)")
                 case .failed(let error):
                     print("Connection failed: \(error)")
+                    self?.pendingConnection = nil
                     connection.cancel()
                 default:
                     break
@@ -136,7 +169,14 @@ public class ServerDiscovery: ObservableObject {
     }
 
     public func setManualURL(_ urlString: String) {
-        guard let url = URL(string: urlString) else {
+        var urlToUse = urlString
+
+        // Add http:// if no scheme provided
+        if !urlToUse.contains("://") {
+            urlToUse = "http://\(urlToUse)"
+        }
+
+        guard let url = URL(string: urlToUse) else {
             connectionStatus = .error("Invalid URL")
             return
         }
@@ -146,6 +186,7 @@ public class ServerDiscovery: ObservableObject {
     }
 
     public func disconnect() {
+        stopSearching()
         serverURL = nil
         connectionStatus = .disconnected
         UserDefaults.standard.removeObject(forKey: cachedURLKey)
