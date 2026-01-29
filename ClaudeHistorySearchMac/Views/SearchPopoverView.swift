@@ -349,8 +349,8 @@ struct SessionRowView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 10) {
-                // Project icon
-                Image(systemName: "folder")
+                // Chat icon
+                Image(systemName: "bubble.left.and.bubble.right")
                     .foregroundColor(.blue)
                     .font(.system(size: 14))
                     .frame(width: 20)
@@ -366,6 +366,12 @@ struct SessionRowView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    // Project folder path
+                    Text(session.projectName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
 
                     // Preview
                     Text(session.preview)
