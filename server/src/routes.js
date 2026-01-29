@@ -92,8 +92,9 @@ router.get('/sessions/:id', (req, res) => {
 
 /**
  * GET /search
- * Full-text search across all messages
+ * Full-text search across all messages, grouped by session
  * Query params: q (search query), limit (default 50), offset (default 0)
+ * Returns only the best-matching message per session
  */
 router.get('/search', (req, res) => {
   try {
@@ -117,10 +118,27 @@ router.get('/search', (req, res) => {
       return res.status(400).json({ error: 'Invalid search query' });
     }
 
-    const results = searchMessages.all(sanitizedQuery, limit, offset);
+    // Fetch more results than needed to account for deduplication
+    const fetchLimit = (limit + offset) * 3;
+    const allResults = searchMessages.all(sanitizedQuery, fetchLimit, 0);
+
+    // Group by session - keep only the best-matching message per session
+    // Results are already ordered by rank, so first occurrence is best match
+    const seenSessions = new Set();
+    const uniqueResults = [];
+
+    for (const r of allResults) {
+      if (!seenSessions.has(r.session_id)) {
+        seenSessions.add(r.session_id);
+        uniqueResults.push(r);
+      }
+    }
+
+    // Apply pagination to deduplicated results
+    const paginatedResults = uniqueResults.slice(offset, offset + limit);
 
     res.json({
-      results: results.map(r => ({
+      results: paginatedResults.map(r => ({
         sessionId: r.session_id,
         project: r.project,
         sessionStartedAt: r.started_at,
@@ -136,7 +154,7 @@ router.get('/search', (req, res) => {
       pagination: {
         limit,
         offset,
-        hasMore: results.length === limit
+        hasMore: uniqueResults.length > offset + limit
       },
       query
     });
