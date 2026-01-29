@@ -8,7 +8,8 @@ A local search system for Claude Code session history. Consists of a Node.js ser
 - **Automatic indexing** of session history from `~/.claude/projects/`
 - **Real-time updates** via file watching (new sessions indexed automatically)
 - **Bonjour discovery** - iOS app automatically finds the server on your local network
-- **Session browsing** - View all sessions with pagination support
+- **Remote access** - Access from anywhere via ngrok tunnel
+- **Session browsing** - View all sessions grouped by project with pagination
 
 ## Requirements
 
@@ -17,8 +18,8 @@ A local search system for Claude Code session history. Consists of a Node.js ser
 - macOS (for Claude Code session files)
 
 ### iOS App
-- iOS 15.0+
-- Xcode 14+
+- iOS 17.0+
+- Xcode 15+
 
 ## Getting Started
 
@@ -45,7 +46,43 @@ npm run dev
 
 Open `ClaudeHistorySearch.xcodeproj` in Xcode and run on your device or simulator.
 
-The app will automatically discover the server via Bonjour. If discovery fails, it falls back to `localhost:3847`.
+The app will automatically discover the server via Bonjour. You can also manually enter a server URL in Settings.
+
+## Remote Access (iPhone Outside Local Network)
+
+To access your Claude history from anywhere, use ngrok to create a secure tunnel:
+
+### Setup (one-time)
+
+1. Install ngrok:
+   ```bash
+   brew install ngrok
+   ```
+
+2. Sign up at https://dashboard.ngrok.com/signup and get your authtoken
+
+3. Configure ngrok:
+   ```bash
+   ngrok config add-authtoken YOUR_TOKEN
+   ```
+
+### Start Remote Access
+
+1. Start the server:
+   ```bash
+   cd server && npm start
+   ```
+
+2. Start ngrok tunnel:
+   ```bash
+   ngrok http 3847
+   ```
+
+3. Copy the `https://xxx.ngrok-free.dev` URL
+
+4. In the iOS app, go to Settings → Manual Connection and enter the URL
+
+**Note:** Free ngrok URLs change when you restart the tunnel. For a persistent URL, use ngrok's paid plan or set up a Cloudflare Tunnel with your own domain.
 
 ## Architecture
 
@@ -103,6 +140,19 @@ curl -X POST http://localhost:3847/reindex?force=true
 
 - **Database**: `~/.claude-history-server/search.db`
 - **Source**: `~/.claude/projects/**/*.jsonl`
+
+## Customization
+
+### App Icon
+
+The app icon is generated programmatically. To modify it:
+
+```bash
+# Edit generate_icon.py to change colors/design
+python3 generate_icon.py
+```
+
+Then rebuild the app in Xcode.
 
 ## License
 
