@@ -7,7 +7,7 @@ A local search system for Claude Code session history. Consists of a Node.js ser
 - **Full-text search** across all Claude Code conversations using SQLite FTS5
 - **Automatic indexing** of session history from `~/.claude/projects/`
 - **Real-time updates** via file watching (new sessions indexed automatically)
-- **Bonjour discovery** - iOS app automatically finds the server on your local network
+- **Bonjour discovery** - iOS app automatically finds the server on your local network (auto-disabled on Macs with firewall stealth mode)
 - **Remote access** - Access from anywhere via ngrok tunnel
 - **Session browsing** - View all sessions grouped by project with pagination
 
@@ -33,7 +33,7 @@ npm start
 
 The server will:
 - Start on port 3847
-- Advertise via Bonjour as `_claudehistory._tcp`
+- Advertise via Bonjour as `_claudehistory._tcp` (unless firewall stealth mode is detected)
 - Index all existing sessions from `~/.claude/projects/`
 - Watch for new sessions and index them automatically
 
@@ -47,6 +47,24 @@ npm run dev
 Open `ClaudeHistorySearch.xcodeproj` in Xcode and run on your device or simulator.
 
 The app will automatically discover the server via Bonjour. You can also manually enter a server URL in Settings.
+
+### Corporate/Work Macs (Stealth Mode)
+
+If your Mac has firewall stealth mode enabled (common on corporate-managed Macs), Bonjour discovery won't work. The server auto-detects this and skips Bonjour advertisement.
+
+**Workaround:** Use your Mac's `.local` hostname instead:
+
+1. Find your Mac's hostname:
+   ```bash
+   scutil --get LocalHostName
+   ```
+
+2. In the iOS app, manually enter:
+   ```
+   http://YOUR-MAC-NAME.local:3847
+   ```
+
+The `.local` hostname uses mDNS for resolution (which still works) and persists across networks - the same URL works at home, office, or anywhere both devices are on the same local network.
 
 ## Remote Access (iPhone Outside Local Network)
 

@@ -1,12 +1,27 @@
 import express from 'express';
 import Bonjour from 'bonjour-service';
 import { watch } from 'chokidar';
+import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
 import routes from './routes.js';
 import { DB_PATH } from './database.js';
 
-const PORT = 3847;
+const PORT = process.env.PORT || 3847;
 const SERVICE_TYPE = 'claudehistory';
+
+// Check if macOS firewall stealth mode is enabled (blocks Bonjour discovery)
+function isStealthModeEnabled() {
+  try {
+    const output = execSync('/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    return output.includes('stealth mode is on');
+  } catch {
+    // If we can't check, assume stealth mode is off
+    return false;
+  }
+}
 
 const app = express();
 app.use(express.json());
@@ -35,18 +50,24 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const result = await indexAllSessions();
   console.log(`Initial index complete: ${result.indexed} sessions indexed\n`);
 
-  // Advertise via Bonjour/mDNS
-  const bonjour = new Bonjour.default();
-  const service = bonjour.publish({
-    name: 'Claude History Server',
-    type: SERVICE_TYPE,
-    port: PORT,
-    txt: {
-      version: '1.0.0'
-    }
-  });
-
-  console.log(`Bonjour service advertised as _${SERVICE_TYPE}._tcp on port ${PORT}`);
+  // Advertise via Bonjour/mDNS (auto-disabled if stealth mode is on)
+  let bonjour = null;
+  let service = null;
+  const stealthMode = isStealthModeEnabled();
+  if (stealthMode) {
+    console.log('Bonjour advertisement disabled (firewall stealth mode is on)');
+  } else {
+    bonjour = new Bonjour.default();
+    service = bonjour.publish({
+      name: 'Claude History Server',
+      type: SERVICE_TYPE,
+      port: PORT,
+      txt: {
+        version: '1.0.0'
+      }
+    });
+    console.log(`Bonjour service advertised as _${SERVICE_TYPE}._tcp on port ${PORT}`);
+  }
 
   // Watch for file changes
   const watcher = watch(`${PROJECTS_DIR}/**/*.jsonl`, {
@@ -87,8 +108,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const shutdown = () => {
     console.log('\nShutting down...');
     clearInterval(reindexTimer);
-    service.stop();
-    bonjour.destroy();
+    if (service) service.stop();
+    if (bonjour) bonjour.destroy();
     watcher.close();
     server.close(() => {
       console.log('Server stopped');
