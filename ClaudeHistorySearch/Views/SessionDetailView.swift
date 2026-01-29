@@ -61,9 +61,9 @@ struct SessionDetailView: View {
 
     private var displayTitle: String {
         if let session = session {
-            return session.projectName
+            return session.displayName
         } else if let detail = sessionDetail {
-            return detail.session.projectName
+            return detail.session.displayName
         }
         return "Conversation"
     }

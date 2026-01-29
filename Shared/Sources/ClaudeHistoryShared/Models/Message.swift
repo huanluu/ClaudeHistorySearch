@@ -40,6 +40,7 @@ public struct SearchResult: Identifiable, Codable, Hashable, Sendable {
     public let sessionId: String
     public let project: String
     public let sessionStartedAt: Int64
+    public let title: String?
     public let message: Message
 
     public var id: String { "\(sessionId)-\(message.uuid)" }
@@ -52,10 +53,19 @@ public struct SearchResult: Identifiable, Codable, Hashable, Sendable {
         (project as NSString).lastPathComponent
     }
 
-    public init(sessionId: String, project: String, sessionStartedAt: Int64, message: Message) {
+    /// Display name for the session - uses title if available, otherwise falls back to project name
+    public var displayName: String {
+        if let title = title, !title.isEmpty {
+            return title
+        }
+        return projectName
+    }
+
+    public init(sessionId: String, project: String, sessionStartedAt: Int64, title: String? = nil, message: Message) {
         self.sessionId = sessionId
         self.project = project
         self.sessionStartedAt = sessionStartedAt
+        self.title = title
         self.message = message
     }
 }

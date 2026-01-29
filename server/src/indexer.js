@@ -1,4 +1,4 @@
-import { createReadStream, readdirSync, statSync, existsSync } from 'fs';
+import { createReadStream, readdirSync, statSync, existsSync, readFileSync } from 'fs';
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
@@ -12,6 +12,36 @@ import {
 
 const CLAUDE_DIR = join(homedir(), '.claude');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
+
+/**
+ * Load sessions-index.json from a project directory and return a map of sessionId → title
+ */
+function loadSessionsIndex(projectPath) {
+  const indexPath = join(projectPath, 'sessions-index.json');
+  const titleMap = new Map();
+
+  if (!existsSync(indexPath)) {
+    return titleMap;
+  }
+
+  try {
+    const content = readFileSync(indexPath, 'utf-8');
+    const data = JSON.parse(content);
+
+    // Handle both formats: { entries: [...] } or direct array
+    const sessions = data.entries || (Array.isArray(data) ? data : []);
+
+    for (const session of sessions) {
+      if (session.sessionId && session.summary) {
+        titleMap.set(session.sessionId, session.summary);
+      }
+    }
+  } catch (e) {
+    console.error(`Error reading sessions-index.json from ${projectPath}:`, e.message);
+  }
+
+  return titleMap;
+}
 
 /**
  * Extract text content from message content (handles both string and array formats)
@@ -118,8 +148,11 @@ async function parseSessionFile(filePath) {
 
 /**
  * Index a single session file
+ * @param {string} filePath - Path to the JSONL file
+ * @param {boolean} forceReindex - Whether to force reindexing even if up to date
+ * @param {Map<string, string>} titleMap - Map of sessionId → title from sessions-index.json
  */
-async function indexSessionFile(filePath, forceReindex = false) {
+async function indexSessionFile(filePath, forceReindex = false, titleMap = new Map()) {
   const fileName = basename(filePath, '.jsonl');
 
   // Skip agent files and other non-session files
@@ -146,6 +179,9 @@ async function indexSessionFile(filePath, forceReindex = false) {
     return null;
   }
 
+  // Look up title from sessions-index.json
+  const title = titleMap.get(sessionId) || null;
+
   // Use transaction for atomic update
   const transaction = db.transaction(() => {
     // Clear existing messages for this session
@@ -159,6 +195,7 @@ async function indexSessionFile(filePath, forceReindex = false) {
       lastActivityAt || startedAt || Date.now(),
       messages.length,
       preview || '',
+      title,
       Date.now()
     );
 
@@ -205,6 +242,9 @@ async function indexAllSessions(forceReindex = false) {
 
     if (!stat.isDirectory()) continue;
 
+    // Load sessions-index.json for this project to get titles
+    const titleMap = loadSessionsIndex(projectPath);
+
     // Find all JSONL files in this project
     const files = readdirSync(projectPath);
 
@@ -213,7 +253,7 @@ async function indexAllSessions(forceReindex = false) {
 
       const filePath = join(projectPath, file);
       try {
-        const result = await indexSessionFile(filePath, forceReindex);
+        const result = await indexSessionFile(filePath, forceReindex, titleMap);
 
         if (result) {
           indexed++;

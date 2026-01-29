@@ -38,7 +38,8 @@ router.get('/sessions', (req, res) => {
         project: s.project,
         startedAt: s.started_at,
         messageCount: s.message_count,
-        preview: s.preview
+        preview: s.preview,
+        title: s.title
       })),
       pagination: {
         limit,
@@ -73,7 +74,8 @@ router.get('/sessions/:id', (req, res) => {
         project: session.project,
         startedAt: session.started_at,
         messageCount: session.message_count,
-        preview: session.preview
+        preview: session.preview,
+        title: session.title
       },
       messages: messages.map(m => ({
         uuid: m.uuid,
@@ -122,6 +124,7 @@ router.get('/search', (req, res) => {
         sessionId: r.session_id,
         project: r.project,
         sessionStartedAt: r.started_at,
+        title: r.title,
         message: {
           uuid: r.uuid,
           role: r.role,

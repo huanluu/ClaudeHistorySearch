@@ -6,13 +6,15 @@ public struct Session: Identifiable, Codable, Hashable, Sendable {
     public let startedAt: Int64
     public let messageCount: Int
     public let preview: String
+    public let title: String?
 
-    public init(id: String, project: String, startedAt: Int64, messageCount: Int, preview: String) {
+    public init(id: String, project: String, startedAt: Int64, messageCount: Int, preview: String, title: String? = nil) {
         self.id = id
         self.project = project
         self.startedAt = startedAt
         self.messageCount = messageCount
         self.preview = preview
+        self.title = title
     }
 
     public var startedAtDate: Date {
@@ -21,6 +23,14 @@ public struct Session: Identifiable, Codable, Hashable, Sendable {
 
     public var projectName: String {
         (project as NSString).lastPathComponent
+    }
+
+    /// Display name for the session - uses title if available, otherwise falls back to project name
+    public var displayName: String {
+        if let title = title, !title.isEmpty {
+            return title
+        }
+        return projectName
     }
 }
 

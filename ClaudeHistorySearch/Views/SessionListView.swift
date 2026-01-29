@@ -274,7 +274,7 @@ struct SessionRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(session.projectName)
+                Text(session.displayName)
                     .font(.headline)
                     .lineLimit(1)
                 Spacer()

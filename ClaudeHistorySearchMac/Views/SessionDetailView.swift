@@ -55,7 +55,7 @@ struct SessionDetailView: View {
             Spacer()
 
             if let detail = sessionDetail {
-                Text(detail.session.projectName)
+                Text(detail.session.displayName)
                     .font(.headline)
                     .lineLimit(1)
             }

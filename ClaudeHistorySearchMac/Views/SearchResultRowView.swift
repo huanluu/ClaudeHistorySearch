@@ -16,9 +16,9 @@ struct SearchResultRowView: View {
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    // Project name and date
+                    // Session title and date
                     HStack {
-                        Text(result.projectName)
+                        Text(result.displayName)
                             .font(.headline)
                             .lineLimit(1)
                         Spacer()
