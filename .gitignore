@@ -22,3 +22,6 @@ server/.env
 # IDE
 .idea/
 .vscode/
+
+# Swift Package Manager build artifacts
+Shared/.build/
