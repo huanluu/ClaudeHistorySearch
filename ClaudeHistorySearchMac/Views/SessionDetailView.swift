@@ -120,6 +120,10 @@ struct SessionDetailView: View {
                 LazyVStack(spacing: 0) {
                     // Session info
                     VStack(spacing: 4) {
+                        Text(detail.session.project)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
                         Text(detail.session.startedAtDate, style: .date)
                             .font(.caption)
                             .foregroundColor(.secondary)

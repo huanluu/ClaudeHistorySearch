@@ -368,7 +368,7 @@ struct SessionRowView: View {
                     }
 
                     // Project folder path
-                    Text(session.projectName)
+                    Text(session.project)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
