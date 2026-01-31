@@ -52,22 +52,22 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ---
 
-## Phase 2: Testing Infrastructure ⬚ Not Started
+## Phase 2: Testing Infrastructure ✅ Complete
 
 ### 2.1 Server Tests
-- [ ] Create `server/jest.config.js`
-- [ ] Create `server/tests/routes.test.js` - API endpoints + auth
-- [ ] Create `server/tests/database.test.js` - FTS5 queries
-- [ ] Create `server/tests/__fixtures__/sample-session.jsonl`
-- [ ] Add jest and supertest to devDependencies
+- [x] Create `server/jest.config.js`
+- [x] Create `server/tests/routes.test.js` - API endpoints + auth
+- [x] Create `server/tests/database.test.js` - FTS5 queries
+- [x] Create `server/tests/__fixtures__/sample-session.jsonl`
+- [x] Add jest and supertest to devDependencies
 
 ### 2.2 iOS Tests
-- [ ] Create `Shared/Tests/ClaudeHistorySharedTests/APIClientTests.swift`
-- [ ] Create `Shared/Tests/ClaudeHistorySharedTests/MockURLProtocol.swift`
+- [x] Create `Shared/Tests/ClaudeHistorySharedTests/APIClientTests.swift`
+- [x] Create `Shared/Tests/ClaudeHistorySharedTests/MockURLProtocol.swift`
 
 ### 2.3 Verification
-- [ ] `npm test` passes
-- [ ] Xcode tests pass (Cmd+U)
+- [x] `npm test` passes (31 tests)
+- [x] `swift test` passes (16 tests)
 
 ---
 
@@ -128,7 +128,7 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 | Phase | Status | Completed | Notes |
 |-------|--------|-----------|-------|
 | 1 | Complete | 2026-01-31 | API key auth for server + iOS/macOS Keychain storage |
-| 2 | Not Started | - | |
+| 2 | Complete | 2026-01-31 | Jest + supertest for server (31 tests), Swift Package tests (16 tests) |
 | 3 | Not Started | - | |
 | 4 | Not Started | - | |
 | 5 | Not Started | - | |
