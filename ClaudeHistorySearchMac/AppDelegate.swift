@@ -22,6 +22,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerGlobalHotKey()
         setupEventMonitor()
 
+        // Load API key from keychain
+        apiClient.loadAPIKeyFromKeychain()
+
         Task {
             await autoConnect()
         }

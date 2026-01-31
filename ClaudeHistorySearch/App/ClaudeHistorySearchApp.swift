@@ -12,6 +12,9 @@ struct ClaudeHistorySearchApp: App {
                 .environmentObject(serverDiscovery)
                 .environmentObject(apiClient)
                 .task {
+                    // Load API key from keychain
+                    apiClient.loadAPIKeyFromKeychain()
+
                     // Auto-start server discovery if not connected
                     if serverDiscovery.serverURL == nil {
                         serverDiscovery.startSearching()

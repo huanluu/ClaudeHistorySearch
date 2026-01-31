@@ -49,6 +49,8 @@ struct SessionListView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+                    .environmentObject(serverDiscovery)
+                    .environmentObject(apiClient)
             }
             .refreshable {
                 await loadSessions(refresh: true)
@@ -390,8 +392,16 @@ struct SearchResultRowView: View {
 
 struct SettingsView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
+    @EnvironmentObject var apiClient: APIClient
     @Environment(\.dismiss) var dismiss
     @State private var manualURL = ""
+    @State private var apiKeyInput = ""
+    @State private var showAPIKey = false
+    @State private var apiKeyStatus: APIKeyStatus = .unknown
+
+    enum APIKeyStatus {
+        case unknown, saved, error(String)
+    }
 
     var body: some View {
         NavigationStack {
@@ -423,6 +433,54 @@ struct SettingsView: View {
                         Button("Disconnect", role: .destructive) {
                             serverDiscovery.disconnect()
                         }
+                    }
+                }
+
+                Section("Authentication") {
+                    HStack {
+                        Text("Status")
+                        Spacer()
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(apiClient.isAuthenticated ? Color.green : Color.red)
+                                .frame(width: 8, height: 8)
+                            Text(apiClient.isAuthenticated ? "Authenticated" : "Not authenticated")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    HStack {
+                        if showAPIKey {
+                            TextField("Enter API Key", text: $apiKeyInput)
+                                .textContentType(.password)
+                                .autocapitalization(.none)
+                        } else {
+                            SecureField("Enter API Key", text: $apiKeyInput)
+                        }
+                        Button(action: { showAPIKey.toggle() }) {
+                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                        }
+                    }
+
+                    Button("Save Key") {
+                        saveAPIKey()
+                    }
+                    .disabled(apiKeyInput.isEmpty)
+
+                    if KeychainHelper.shared.hasAPIKey() {
+                        Button("Clear Key", role: .destructive) {
+                            clearAPIKey()
+                        }
+                    }
+
+                    if case .error(let message) = apiKeyStatus {
+                        Text(message)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    } else if case .saved = apiKeyStatus {
+                        Text("API key saved")
+                            .foregroundColor(.green)
+                            .font(.caption)
                     }
                 }
 
@@ -463,6 +521,25 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func saveAPIKey() {
+        do {
+            try apiClient.saveAPIKeyToKeychain(apiKeyInput)
+            apiKeyInput = ""
+            apiKeyStatus = .saved
+        } catch {
+            apiKeyStatus = .error(error.localizedDescription)
+        }
+    }
+
+    private func clearAPIKey() {
+        do {
+            try apiClient.clearAPIKey()
+            apiKeyStatus = .unknown
+        } catch {
+            apiKeyStatus = .error(error.localizedDescription)
         }
     }
 }

@@ -5,6 +5,8 @@ import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
 import routes from './routes.js';
 import { DB_PATH } from './database.js';
+import { authMiddleware } from './auth/middleware.js';
+import { hasApiKey } from './auth/keyManager.js';
 
 const PORT = process.env.PORT || 3847;
 const SERVICE_TYPE = 'claudehistory';
@@ -29,13 +31,16 @@ app.use(express.json());
 // CORS middleware for local development
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, X-API-Key');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
+
+// Authentication middleware
+app.use(authMiddleware);
 
 // Mount API routes
 app.use('/', routes);
@@ -44,6 +49,13 @@ app.use('/', routes);
 const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
+
+  // API key status
+  if (hasApiKey()) {
+    console.log('Authentication: API key required');
+  } else {
+    console.log('Authentication: No API key configured (run "npm run key:generate" to secure the server)');
+  }
 
   // Initial indexing
   console.log('\nStarting initial index...');

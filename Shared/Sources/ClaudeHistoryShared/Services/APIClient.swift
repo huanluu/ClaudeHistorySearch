@@ -18,8 +18,10 @@ public enum SearchSortOption: String, CaseIterable, Identifiable {
 public class APIClient: ObservableObject {
     @Published public var isLoading = false
     @Published public var error: String?
+    @Published public var isAuthenticated = true
 
     private var baseURL: URL?
+    private var apiKey: String?
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         return decoder
@@ -43,6 +45,33 @@ public class APIClient: ObservableObject {
         baseURL
     }
 
+    public func setAPIKey(_ key: String?) {
+        apiKey = key
+        isAuthenticated = true
+    }
+
+    public func getAPIKey() -> String? {
+        apiKey
+    }
+
+    /// Load API key from Keychain
+    public func loadAPIKeyFromKeychain() {
+        apiKey = KeychainHelper.shared.getAPIKey()
+    }
+
+    /// Save API key to Keychain
+    public func saveAPIKeyToKeychain(_ key: String) throws {
+        try KeychainHelper.shared.saveAPIKey(key)
+        apiKey = key
+        isAuthenticated = true
+    }
+
+    /// Clear API key from memory and Keychain
+    public func clearAPIKey() throws {
+        try KeychainHelper.shared.deleteAPIKey()
+        apiKey = nil
+    }
+
     // MARK: - Sessions
 
     public func fetchSessions(limit: Int = 20, offset: Int = 0) async throws -> SessionsResponse {
@@ -56,7 +85,10 @@ public class APIClient: ObservableObject {
             URLQueryItem(name: "offset", value: "\(offset)")
         ]
 
-        let (data, response) = try await session.data(from: components.url!)
+        var request = URLRequest(url: components.url!)
+        addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
         try validateResponse(response)
         return try decoder.decode(SessionsResponse.self, from: data)
     }
@@ -67,7 +99,10 @@ public class APIClient: ObservableObject {
         }
 
         let url = baseURL.appendingPathComponent("sessions").appendingPathComponent(id)
-        let (data, response) = try await session.data(from: url)
+        var request = URLRequest(url: url)
+        addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
         try validateResponse(response)
         return try decoder.decode(SessionDetailResponse.self, from: data)
     }
@@ -87,7 +122,10 @@ public class APIClient: ObservableObject {
             URLQueryItem(name: "sort", value: sort.rawValue)
         ]
 
-        let (data, response) = try await session.data(from: components.url!)
+        var request = URLRequest(url: components.url!)
+        addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
         try validateResponse(response)
         return try decoder.decode(SearchResponse.self, from: data)
     }
@@ -110,6 +148,12 @@ public class APIClient: ObservableObject {
 
     // MARK: - Helpers
 
+    private func addAuthHeader(to request: inout URLRequest) {
+        if let apiKey = apiKey {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
+    }
+
     private func validateResponse(_ response: URLResponse) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -118,6 +162,9 @@ public class APIClient: ObservableObject {
         switch httpResponse.statusCode {
         case 200..<300:
             return
+        case 401:
+            isAuthenticated = false
+            throw APIError.unauthorized
         case 404:
             throw APIError.notFound
         case 400..<500:
@@ -133,6 +180,7 @@ public class APIClient: ObservableObject {
 public enum APIError: LocalizedError {
     case noServer
     case invalidResponse
+    case unauthorized
     case notFound
     case clientError(Int)
     case serverError(Int)
@@ -144,6 +192,8 @@ public enum APIError: LocalizedError {
             return "No server connected"
         case .invalidResponse:
             return "Invalid server response"
+        case .unauthorized:
+            return "Invalid or missing API key"
         case .notFound:
             return "Resource not found"
         case .clientError(let code):
