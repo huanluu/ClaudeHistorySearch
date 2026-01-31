@@ -14,6 +14,20 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ---
 
+## Workflow (Per Phase)
+
+**IMPORTANT:** Follow this process for each phase:
+
+1. **Re-read this PLAN.md** to understand current progress
+2. **Create tasks** using `TaskCreate` for all items in the current phase
+3. **Implement tasks** - work through each task, marking `in_progress` then `completed`
+4. **Run validation** - execute all verification steps listed in the phase
+5. **Only after validation passes** - commit changes with descriptive message
+6. **Update PLAN.md** - mark phase as complete with date and notes
+7. **Proceed to next phase** or wait for user confirmation
+
+---
+
 ## Phase 1: Authentication ✅ Complete
 
 ### 1.1 Server - API Key Middleware
