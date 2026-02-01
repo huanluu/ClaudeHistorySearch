@@ -1,0 +1,4 @@
+{"type":"user","sessionId":"command-session-001","uuid":"cmd-msg-001","cwd":"/Users/test/cmd-project","timestamp":"2025-01-16T09:00:00Z","message":{"content":"<command-name>/status</command-name>"}}
+{"type":"user","sessionId":"command-session-001","uuid":"cmd-msg-002","cwd":"/Users/test/cmd-project","timestamp":"2025-01-16T09:00:30Z","message":{"content":"<local-command>clear</local-command>"}}
+{"type":"user","sessionId":"command-session-001","uuid":"cmd-msg-003","cwd":"/Users/test/cmd-project","timestamp":"2025-01-16T09:01:00Z","message":{"content":"How do I run tests in Jest?"}}
+{"type":"assistant","sessionId":"command-session-001","uuid":"cmd-msg-004","cwd":"/Users/test/cmd-project","timestamp":"2025-01-16T09:01:45Z","message":{"content":"You can run tests with `npm test` or `npx jest`. Use `--watch` for continuous testing."}}

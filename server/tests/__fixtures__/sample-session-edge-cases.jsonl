@@ -1,0 +1,6 @@
+{"type":"system","sessionId":"edge-session-001","uuid":"edge-msg-001","cwd":"/Users/test/edge-project","timestamp":"2025-01-17T08:00:00Z","message":{"content":"System initialization"}}
+
+{"type":"summary","sessionId":"edge-session-001","content":"This is a summary entry"}
+{"not-valid-json
+{"type":"user","sessionId":"edge-session-001","uuid":"edge-msg-002","cwd":"/Users/test/edge-project","timestamp":"2025-01-17T08:01:00Z","message":{"content":"Valid message after issues"}}
+{"type":"assistant","sessionId":"edge-session-001","uuid":"edge-msg-003","cwd":"/Users/test/edge-project","timestamp":"2025-01-17T08:02:00Z","message":{"content":"Response to valid message"}}
