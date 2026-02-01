@@ -2,11 +2,15 @@ import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
 import { validateApiKey, hasApiKey } from '../auth/keyManager.js';
+import { SessionStore, SessionExecutor } from '../sessions/index.js';
 
 /**
  * Message types for WebSocket communication
  */
-export type MessageType = 'ping' | 'pong' | 'auth' | 'auth_result' | 'error' | 'message';
+export type MessageType =
+  | 'ping' | 'pong' | 'auth' | 'auth_result' | 'error' | 'message'
+  | 'session.start' | 'session.cancel' | 'session.resume'
+  | 'session.output' | 'session.error' | 'session.complete';
 
 export interface WSMessage {
   type: MessageType;
@@ -21,6 +25,35 @@ export interface AuthPayload {
 export interface AuthResultPayload {
   success: boolean;
   message?: string;
+}
+
+export interface SessionStartPayload {
+  sessionId: string;
+  prompt: string;
+  workingDir: string;
+}
+
+export interface SessionResumePayload extends SessionStartPayload {
+  resumeSessionId: string;
+}
+
+export interface SessionCancelPayload {
+  sessionId: string;
+}
+
+export interface SessionOutputPayload {
+  sessionId: string;
+  message: unknown;
+}
+
+export interface SessionErrorPayload {
+  sessionId: string;
+  error: string;
+}
+
+export interface SessionCompletePayload {
+  sessionId: string;
+  exitCode: number;
 }
 
 /**
@@ -68,6 +101,7 @@ export class WebSocketTransport {
   private pingInterval: number;
   private pingTimer: NodeJS.Timeout | null = null;
   private clients: Set<AuthenticatedWebSocket> = new Set();
+  private sessionStore: SessionStore = new SessionStore();
 
   // Event handlers
   private onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
@@ -239,6 +273,13 @@ export class WebSocketTransport {
     ws.on('close', () => {
       this.clients.delete(authenticatedWs);
       console.log(`[WebSocket] Client disconnected: ${authenticatedWs.clientId}`);
+
+      // Cancel all sessions for this client
+      const sessions = this.sessionStore.removeByClient(authenticatedWs.clientId);
+      for (const executor of sessions) {
+        executor.cancel();
+      }
+
       this.onDisconnection?.(authenticatedWs);
     });
 
@@ -266,6 +307,22 @@ export class WebSocketTransport {
         return;
       }
 
+      // Handle session messages
+      if (message.type === 'session.start') {
+        this._handleSessionStart(ws, message.payload as SessionStartPayload);
+        return;
+      }
+
+      if (message.type === 'session.resume') {
+        this._handleSessionResume(ws, message.payload as SessionResumePayload);
+        return;
+      }
+
+      if (message.type === 'session.cancel') {
+        this._handleSessionCancel(ws, message.payload as SessionCancelPayload);
+        return;
+      }
+
       // Delegate other messages to handler
       this.onMessage?.(ws, message);
     } catch (error) {
@@ -275,6 +332,70 @@ export class WebSocketTransport {
         payload: { message: 'Invalid message format' }
       });
     }
+  }
+
+  /**
+   * Handle session.start message
+   */
+  private _handleSessionStart(ws: AuthenticatedWebSocket, payload: SessionStartPayload): void {
+    const executor = this.sessionStore.create(payload.sessionId, ws.clientId);
+    this._wireSessionEvents(ws, executor, payload.sessionId);
+
+    executor.start({
+      prompt: payload.prompt,
+      workingDir: payload.workingDir
+    });
+  }
+
+  /**
+   * Handle session.resume message
+   */
+  private _handleSessionResume(ws: AuthenticatedWebSocket, payload: SessionResumePayload): void {
+    const executor = this.sessionStore.create(payload.sessionId, ws.clientId);
+    this._wireSessionEvents(ws, executor, payload.sessionId);
+
+    executor.start({
+      prompt: payload.prompt,
+      workingDir: payload.workingDir,
+      resumeSessionId: payload.resumeSessionId
+    });
+  }
+
+  /**
+   * Handle session.cancel message
+   */
+  private _handleSessionCancel(_ws: AuthenticatedWebSocket, payload: SessionCancelPayload): void {
+    const executor = this.sessionStore.get(payload.sessionId);
+    if (executor) {
+      executor.cancel();
+    }
+  }
+
+  /**
+   * Wire up session executor events to WebSocket messages
+   */
+  private _wireSessionEvents(ws: AuthenticatedWebSocket, executor: SessionExecutor, sessionId: string): void {
+    executor.on('message', (message: unknown) => {
+      this.send(ws, {
+        type: 'session.output',
+        payload: { sessionId, message } as SessionOutputPayload
+      });
+    });
+
+    executor.on('error', (error: string) => {
+      this.send(ws, {
+        type: 'session.error',
+        payload: { sessionId, error } as SessionErrorPayload
+      });
+    });
+
+    executor.on('complete', (exitCode: number) => {
+      this.send(ws, {
+        type: 'session.complete',
+        payload: { sessionId, exitCode } as SessionCompletePayload
+      });
+      this.sessionStore.remove(sessionId);
+    });
   }
 
   /**
