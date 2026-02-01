@@ -8,6 +8,13 @@ public enum WSMessageType: String, Codable {
     case authResult = "auth_result"
     case error
     case message
+    // Session types
+    case sessionStart = "session.start"
+    case sessionResume = "session.resume"
+    case sessionCancel = "session.cancel"
+    case sessionOutput = "session.output"
+    case sessionError = "session.error"
+    case sessionComplete = "session.complete"
 }
 
 /// WebSocket message structure
@@ -27,6 +34,63 @@ public struct WSMessage: Codable {
 public struct AuthResultPayload: Codable {
     public let success: Bool
     public let message: String?
+}
+
+// MARK: - Session Payloads
+
+/// Payload for session.start message
+public struct SessionStartPayload: Codable {
+    public let sessionId: String
+    public let prompt: String
+    public let workingDir: String
+
+    public init(sessionId: String, prompt: String, workingDir: String) {
+        self.sessionId = sessionId
+        self.prompt = prompt
+        self.workingDir = workingDir
+    }
+}
+
+/// Payload for session.resume message
+public struct SessionResumePayload: Codable {
+    public let sessionId: String
+    public let resumeSessionId: String
+    public let prompt: String
+    public let workingDir: String
+
+    public init(sessionId: String, resumeSessionId: String, prompt: String, workingDir: String) {
+        self.sessionId = sessionId
+        self.resumeSessionId = resumeSessionId
+        self.prompt = prompt
+        self.workingDir = workingDir
+    }
+}
+
+/// Payload for session.cancel message
+public struct SessionCancelPayload: Codable {
+    public let sessionId: String
+
+    public init(sessionId: String) {
+        self.sessionId = sessionId
+    }
+}
+
+/// Payload for session.output message
+public struct SessionOutputPayload: Codable {
+    public let sessionId: String
+    public let message: AnyCodable
+}
+
+/// Payload for session.error message
+public struct SessionErrorPayload: Codable {
+    public let sessionId: String
+    public let error: String
+}
+
+/// Payload for session.complete message
+public struct SessionCompletePayload: Codable {
+    public let sessionId: String
+    public let exitCode: Int
 }
 
 /// Type-erased Codable wrapper for dynamic payloads

@@ -188,7 +188,7 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ---
 
-## Phase 6: Start New Session (TDD) ⬚ Not Started
+## Phase 6: Start New Session (TDD) ✅ Complete
 
 **Goal**: Enable starting a NEW Claude session from iOS/macOS app using `claude -p` headless mode.
 
@@ -199,29 +199,32 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - No SDK dependency needed
 
 ### 6.1 TDD Step 1: Write Server Tests FIRST
-- [ ] Create `server/tests/sessions.test.ts` - SessionExecutor + SessionStore tests
-- [ ] Create `server/tests/websocket-sessions.test.ts` - Integration tests
-- [ ] Run tests → See them FAIL (red)
+- [x] Create `server/tests/sessions.test.ts` - SessionExecutor + SessionStore tests (19 tests)
+- [x] Create `server/tests/websocket-sessions.test.ts` - Integration tests (6 tests)
+- [x] Run tests → See them FAIL (red)
 
 ### 6.2 TDD Step 2: Implement Server Features
-- [ ] Create `server/src/sessions/SessionExecutor.ts` - Spawns `claude -p`
-- [ ] Create `server/src/sessions/SessionStore.ts` - Tracks active sessions
-- [ ] Modify `server/src/transport/WebSocketTransport.ts` - Handle session messages
-- [ ] Run tests → See them PASS (green)
+- [x] Create `server/src/sessions/SessionExecutor.ts` - Spawns `claude -p`
+- [x] Create `server/src/sessions/SessionStore.ts` - Tracks active sessions
+- [x] Create `server/src/sessions/index.ts` - Module exports
+- [x] Modify `server/src/transport/WebSocketTransport.ts` - Handle session messages
+- [x] Run tests → See them PASS (green)
 
 ### 6.3 TDD Step 3: Write Client Tests FIRST
-- [ ] Create `Shared/Tests/.../SessionViewModelTests.swift`
-- [ ] Run tests → See them FAIL (red)
+- [x] Create `Shared/Tests/ClaudeHistorySharedTests/SessionViewModelTests.swift` (10 tests)
+- [x] Run tests → See them FAIL (red)
 
 ### 6.4 TDD Step 4: Implement Client Features
-- [ ] Fill in `SessionViewModel.swift` - State, messages, startSession(), cancel()
-- [ ] Create `ClaudeHistorySearch/Views/NewSessionView.swift` - UI for new session
-- [ ] Run tests → See them PASS (green)
+- [x] Fill in `SessionViewModel.swift` - State, messages, startSession(), cancel()
+- [ ] Create `ClaudeHistorySearch/Views/NewSessionView.swift` - UI for new session (moved to Phase 6.5)
+- [x] Run tests → See them PASS (green)
 
-### 6.5 Verification
-- [ ] `npm test` passes (~20 new tests)
-- [ ] `swift test` passes (~7 new tests)
-- [ ] Manual E2E: Start session from app, output streams, cancel works
+### 6.5 Remaining UI Work
+- [ ] Create `NewSessionView.swift` - Prompt input, working directory picker, start/cancel buttons
+
+### 6.6 Verification
+- [x] `npm test` passes (116 tests = 91 + 25 new session tests)
+- [x] `swift test` passes (45 tests = 35 + 10 new SessionViewModel tests)
 
 ---
 
@@ -271,8 +274,8 @@ claude --resume <sessionId> -p "follow-up prompt" --output-format stream-json
 | 3.5 | Complete | 2026-02-01 | **TypeScript Migration** - Converted all server code to TypeScript |
 | 4 | Complete | 2026-02-01 | **WebSocket Infrastructure** - ws package, WebSocketTransport, iOS WebSocketClient + 12 tests |
 | 5 | Complete | 2026-02-01 | **View Refactoring + Code Sharing** - MessageRow, MessageListView, SessionViewModel, SessionRowContent, SearchResultRowContent, unified SettingsView |
-| 6 | Not Started | - | Start new session (TDD) |
+| 6 | Complete | 2026-02-01 | **New Session TDD** - SessionExecutor, SessionStore, SessionViewModel (25 server tests + 10 Swift tests). UI pending. |
 | 7 | Not Started | - | Resume historical session (TDD) |
 
-**Current Test Totals:** 91 server tests + 35 Swift tests = 126 total tests
-**Expected After Phase 7:** ~126 server tests + ~45 Swift tests = ~171 total tests
+**Current Test Totals:** 116 server tests + 45 Swift tests = 161 total tests
+**Expected After Phase 7:** ~121 server tests + ~48 Swift tests = ~169 total tests
