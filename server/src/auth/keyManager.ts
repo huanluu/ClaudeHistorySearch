@@ -8,15 +8,22 @@ interface Config {
   apiKeyCreatedAt?: string;
 }
 
-const CONFIG_DIR = join(homedir(), '.claude-history-server');
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+// Dynamic config path to support testing via env var
+function getConfigDir(): string {
+  return process.env.CLAUDE_HISTORY_CONFIG_DIR || join(homedir(), '.claude-history-server');
+}
+
+function getConfigFile(): string {
+  return join(getConfigDir(), 'config.json');
+}
 
 /**
  * Ensure the config directory exists
  */
 function ensureConfigDir(): void {
-  if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+  const configDir = getConfigDir();
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
   }
 }
 
@@ -25,11 +32,12 @@ function ensureConfigDir(): void {
  */
 function loadConfig(): Config {
   ensureConfigDir();
-  if (!existsSync(CONFIG_FILE)) {
+  const configFile = getConfigFile();
+  if (!existsSync(configFile)) {
     return {};
   }
   try {
-    return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Config;
+    return JSON.parse(readFileSync(configFile, 'utf-8')) as Config;
   } catch {
     return {};
   }
@@ -40,7 +48,7 @@ function loadConfig(): Config {
  */
 function saveConfig(config: Config): void {
   ensureConfigDir();
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  writeFileSync(getConfigFile(), JSON.stringify(config, null, 2));
 }
 
 /**
@@ -105,5 +113,5 @@ if (process.argv[1]?.endsWith('keyManager.ts') && process.argv[2] === 'generate'
   console.log('\n=== API Key Generated ===\n');
   console.log(`Your API key: ${key}\n`);
   console.log('IMPORTANT: Save this key securely. It will not be shown again.\n');
-  console.log(`Config stored at: ${CONFIG_FILE}\n`);
+  console.log(`Config stored at: ${getConfigFile()}\n`);
 }

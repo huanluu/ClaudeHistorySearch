@@ -6,7 +6,7 @@ import routes from './routes.js';
 import { DB_PATH } from './database.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
-import { HttpTransport } from './transport/index.js';
+import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
@@ -28,6 +28,9 @@ function isStealthModeEnabled(): boolean {
 // Create HTTP transport
 const transport = new HttpTransport({ port: PORT });
 
+// WebSocket transport (initialized after HTTP server starts)
+let wsTransport: WebSocketTransport | null = null;
+
 // Authentication middleware
 transport.use(authMiddleware);
 
@@ -40,6 +43,36 @@ async function main(): Promise<void> {
 
   console.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
+
+  // Initialize WebSocket transport (attached to HTTP server)
+  const httpServer = transport.getServer();
+  if (httpServer) {
+    wsTransport = new WebSocketTransport({
+      server: httpServer,
+      path: '/ws',
+      pingInterval: 30000,
+      onConnection: (ws: AuthenticatedWebSocket) => {
+        console.log(`[WebSocket] Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
+      },
+      onDisconnection: (ws: AuthenticatedWebSocket) => {
+        console.log(`[WebSocket] Client disconnected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
+      },
+      onMessage: (ws: AuthenticatedWebSocket, message: WSMessage) => {
+        console.log(`[WebSocket] Message from ${ws.clientId}:`, message.type);
+        // Handle application-level messages here
+        // For now, just echo back
+        if (message.type === 'message') {
+          wsTransport?.send(ws, {
+            type: 'message',
+            payload: { echo: message.payload },
+            id: message.id
+          });
+        }
+      }
+    });
+    wsTransport.start();
+    console.log(`WebSocket server available at ws://0.0.0.0:${PORT}/ws`);
+  }
 
   // API key status
   if (hasApiKey()) {
@@ -114,6 +147,7 @@ async function main(): Promise<void> {
     service?.stop?.();
     bonjour?.destroy();
     watcher.close();
+    await wsTransport?.stop();
     await transport.stop();
     console.log('Server stopped');
     process.exit(0);

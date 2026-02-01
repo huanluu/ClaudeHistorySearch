@@ -121,19 +121,25 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ---
 
-## Phase 4: WebSocket Infrastructure ⬚ Not Started
+## Phase 4: WebSocket Infrastructure ✅ Complete
 
 ### 4.1 Server WebSocket
-- [ ] Add `ws` package dependency
-- [ ] Create `server/src/transport/WebSocketTransport.ts`
-- [ ] Update `server/src/index.ts` for HTTP server + WS
+- [x] Add `ws` package dependency
+- [x] Create `server/src/transport/WebSocketTransport.ts`
+- [x] Update `server/src/index.ts` for HTTP server + WS
+- [x] Update `server/src/auth/keyManager.ts` for test config override
 
 ### 4.2 iOS WebSocket Client
-- [ ] Create `Shared/Sources/ClaudeHistoryShared/Services/WebSocketClient.swift`
+- [x] Create `Shared/Sources/ClaudeHistoryShared/Services/WebSocketClient.swift`
 
-### 4.3 Verification
-- [ ] WebSocket connects with auth
-- [ ] Ping/pong works
+### 4.3 Tests
+- [x] Create `server/tests/websocket.test.ts` (12 tests)
+
+### 4.4 Verification
+- [x] WebSocket connects with auth
+- [x] Ping/pong works
+- [x] `npm test` passes (91 tests: 16 routes + 15 database + 27 indexer + 21 transport + 12 websocket)
+- [x] `swift test` passes (35 tests)
 
 ---
 
@@ -164,7 +170,7 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 | 2 | Complete | 2026-01-31 | Jest + supertest for server (58 tests), Swift Package tests (16 tests) |
 | 3 | Complete | 2026-01-31 | Transport abstraction (server) + NetworkService protocol (iOS) + tests (21 transport + 19 NetworkService) |
 | 3.5 | Complete | 2026-02-01 | **TypeScript Migration** - Converted all server code to TypeScript |
-| 4 | Not Started | - | |
+| 4 | Complete | 2026-02-01 | **WebSocket Infrastructure** - ws package, WebSocketTransport, iOS WebSocketClient + 12 tests |
 | 5 | Not Started | - | |
 
-**Current Test Totals:** 79 server tests + 35 Swift tests = 114 total tests
+**Current Test Totals:** 91 server tests + 35 Swift tests = 126 total tests
