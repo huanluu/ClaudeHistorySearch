@@ -18,7 +18,6 @@ struct SearchPopoverView: View {
     @State private var isLoadingSessions = false
     @State private var navigationPath = NavigationPath()
     @State private var showSettings = false
-    @State private var showNewSession = false
 
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -85,9 +84,6 @@ struct SearchPopoverView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)
         }
-        .sheet(isPresented: $showNewSession) {
-            NewSessionView(webSocketClient: webSocketClient)
-        }
         .onAppear {
             isSearchFieldFocused = true
             // Refresh recent sessions each time popover appears
@@ -126,12 +122,14 @@ struct SearchPopoverView: View {
 
             // New session button
             if serverDiscovery.serverURL != nil {
-                Button(action: { showNewSession = true }) {
+                Button(action: {
+                    try? TerminalService.shared.startNewSession()
+                }) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundColor(.accentColor)
                 }
                 .buttonStyle(.plain)
-                .help("Start new session")
+                .help("Start new session in iTerm2")
             }
 
             // Settings button

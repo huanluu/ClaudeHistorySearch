@@ -8,6 +8,20 @@ class TerminalService {
 
     private let iTermBundleId = "com.googlecode.iterm2"
 
+    /// Starts a new Claude session in iTerm2 with the office alias
+    func startNewSession() throws {
+        // Close the popover first so permission dialogs are visible
+        NotificationCenter.default.post(name: Notification.Name("closePopover"), object: nil)
+
+        let command = "office && claude"
+
+        if isITerm2Available() {
+            try executeInITerm2(command: command)
+        } else {
+            try executeInTerminal(command: command)
+        }
+    }
+
     /// Opens iTerm2 (or Terminal.app fallback) with `cd <workingDir> && claude --resume <sessionId>`
     func openSession(sessionId: String, workingDirectory: String) throws {
         // Close the popover first so permission dialogs are visible
