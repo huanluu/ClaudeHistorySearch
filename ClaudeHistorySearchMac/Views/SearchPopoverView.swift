@@ -298,13 +298,16 @@ struct SearchPopoverView: View {
                 .padding(.vertical, 8)
 
                 ForEach(recentSessions) { session in
-                    SessionRowView(session: session) {
+                    Button {
                         navigationPath.append(NavigationDestination.sessionDetail(
                             sessionId: session.id,
                             highlightText: nil,
                             scrollToMessageId: nil
                         ))
+                    } label: {
+                        SessionRowContent(session: session, style: .compact)
                     }
+                    .buttonStyle(.plain)
                     Divider()
                         .padding(.leading, 12)
                 }
@@ -318,13 +321,16 @@ struct SearchPopoverView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(searchResults) { result in
-                    SearchResultRowView(result: result, query: searchText) {
+                    Button {
                         navigationPath.append(NavigationDestination.sessionDetail(
                             sessionId: result.sessionId,
                             highlightText: searchText,
                             scrollToMessageId: result.message.uuid
                         ))
+                    } label: {
+                        SearchResultRowContent(result: result, query: searchText, style: .compact)
                     }
+                    .buttonStyle(.plain)
                     Divider()
                         .padding(.leading, 12)
                 }
@@ -374,67 +380,9 @@ struct SearchPopoverView: View {
     }
 }
 
-// MARK: - Session Row View
-
-struct SessionRowView: View {
-    let session: Session
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .top, spacing: 10) {
-                // Chat icon
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .foregroundColor(.blue)
-                    .font(.system(size: 14))
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    // Session title and date
-                    HStack {
-                        Text(session.displayName)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(session.startedAtDate, style: .relative)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    // Project folder path
-                    Text(session.project)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-
-                    // Preview
-                    Text(session.preview)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-
-                    // Message count
-                    HStack(spacing: 4) {
-                        Image(systemName: "message")
-                            .font(.caption2)
-                        Text("\(session.messageCount) messages")
-                            .font(.caption2)
-                    }
-                    .foregroundColor(.secondary)
-                }
-
-                // Chevron
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
+// Row views now use shared components from ClaudeHistoryShared:
+// - SessionRowContent
+// - SearchResultRowContent
 
 #Preview {
     SearchPopoverView()

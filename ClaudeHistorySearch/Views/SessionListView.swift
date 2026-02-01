@@ -134,7 +134,7 @@ struct SessionListView: View {
                     Section(header: Text(formatSectionDate(date))) {
                         ForEach(groupedSessions[date] ?? []) { session in
                             NavigationLink(value: session) {
-                                SessionRowView(session: session)
+                                SessionRowContent(session: session)
                             }
                         }
                     }
@@ -232,7 +232,7 @@ struct SessionListView: View {
                             scrollToMessageId: result.message.uuid
                         )
                     } label: {
-                        SearchResultRowView(result: result, query: searchText)
+                        SearchResultRowContent(result: result, query: searchText)
                     }
                 }
             }
@@ -306,87 +306,7 @@ struct SessionListView: View {
     }
 }
 
-// MARK: - Session Row
-
-struct SessionRowView: View {
-    let session: Session
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(session.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-                Text(session.startedAtDate, style: .relative)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Text(session.preview)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .lineLimit(2)
-
-            HStack {
-                Image(systemName: "message")
-                    .font(.caption2)
-                Text("\(session.messageCount) messages")
-                    .font(.caption2)
-            }
-            .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-// MARK: - Search Result Row
-
-struct SearchResultRowView: View {
-    let result: SearchResult
-    let query: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: result.message.isUser ? "person.fill" : "bubble.left.fill")
-                    .foregroundColor(result.message.isUser ? .blue : .gray)
-                Text(result.message.isUser ? "You" : "Claude")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(result.startedAtDate, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Text(highlightedPreview)
-                .font(.subheadline)
-                .lineLimit(3)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var highlightedPreview: AttributedString {
-        let content = String(result.message.content.prefix(200))
-        var attributedString = AttributedString(content)
-
-        let lowercasedContent = content.lowercased()
-        let lowercasedQuery = query.lowercased()
-        var searchStart = lowercasedContent.startIndex
-
-        while let range = lowercasedContent.range(of: lowercasedQuery, range: searchStart..<lowercasedContent.endIndex) {
-            if let attrStart = AttributedString.Index(range.lowerBound, within: attributedString),
-               let attrEnd = AttributedString.Index(range.upperBound, within: attributedString) {
-                attributedString[attrStart..<attrEnd].backgroundColor = .yellow
-                attributedString[attrStart..<attrEnd].foregroundColor = .black
-            }
-            searchStart = range.upperBound
-        }
-
-        return attributedString
-    }
-}
+// MARK: - Row Views (use shared components from ClaudeHistoryShared)
 
 // MARK: - Settings View
 
