@@ -159,6 +159,7 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - [x] Extract `SessionRowContent` - Shared session list row with `.default` / `.compact` styles
 - [x] Extract `SearchResultRowContent` - Shared search result row with highlighting
 - [x] Unify `SettingsView` - Single view with `#if os()` for platform differences
+- [x] Unify `SessionView` - Single view with `#if os()` for platform differences (copy button added to iOS)
 
 ### 5.3 Files
 **New (Shared):**
@@ -167,15 +168,14 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - `Shared/Sources/ClaudeHistoryShared/Views/SessionRowContent.swift`
 - `Shared/Sources/ClaudeHistoryShared/Views/SearchResultRowContent.swift`
 - `Shared/Sources/ClaudeHistoryShared/Views/SettingsView.swift`
+- `Shared/Sources/ClaudeHistoryShared/Views/SessionView.swift`
 - `Shared/Sources/ClaudeHistoryShared/ViewModels/SessionMode.swift`
 - `Shared/Sources/ClaudeHistoryShared/ViewModels/SessionViewModel.swift`
 
-**Renamed:**
-- `ClaudeHistorySearch/Views/SessionDetailView.swift` → `SessionView.swift`
-- `ClaudeHistorySearchMac/Views/SessionDetailView.swift` → `SessionView.swift`
-
 **Deleted (replaced by shared):**
+- `ClaudeHistorySearch/Views/SessionDetailView.swift` (→ shared SessionView)
 - `ClaudeHistorySearch/Views/MessageBubbleView.swift`
+- `ClaudeHistorySearchMac/Views/SessionDetailView.swift` (→ shared SessionView)
 - `ClaudeHistorySearchMac/Views/MessageRowView.swift`
 - `ClaudeHistorySearchMac/Views/SearchResultRowView.swift`
 - `ClaudeHistorySearchMac/Views/SettingsView.swift`
