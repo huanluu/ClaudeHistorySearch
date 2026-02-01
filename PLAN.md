@@ -1,6 +1,6 @@
 # ClaudeHistorySearch Enhancement Plan
 
-## Status: In Progress
+## Status: ✅ Complete
 
 ## Overview
 
@@ -267,8 +267,40 @@ claude --resume <sessionId> -p "follow-up prompt" --output-format stream-json
 ### 7.6 Verification
 - [x] `npm test` passes (116 tests)
 - [x] `swift test` passes (45 tests)
-- [ ] Manual E2E: Browse history → Resume → See historical + new messages
-- [ ] Desktop: `claude --resume <id>` shows continued conversation
+- [x] Manual E2E: Browse history → Resume → See historical + new messages
+- [x] Desktop: `claude --resume <id>` shows continued conversation
+- [x] Continuous conversation (multi-turn) working on both iOS and macOS
+
+---
+
+## Critical Implementation Details (Learned)
+
+### Claude CLI Headless Mode Requirements
+
+**Environment Variables (Required):**
+```bash
+CI=1           # Disables interactive prompts
+TERM=dumb      # Signals no real terminal
+NO_COLOR=1     # Disables ANSI codes that corrupt JSON
+```
+
+**Spawn Configuration:**
+```typescript
+spawn('claude', args, {
+  cwd: workingDir,
+  env: { ...process.env, CI: '1', TERM: 'dumb', NO_COLOR: '1' },
+  stdio: ['ignore', 'pipe', 'pipe']  // stdin MUST be 'ignore'
+});
+```
+
+**Required Flags:**
+- `--output-format stream-json` - JSON line output
+- `--verbose` - Required when using stream-json with `-p`
+- `--dangerously-skip-permissions` - Skip permission prompts
+
+**Output Format:** Content is at `message.message.content[].text` (nested structure)
+
+**Session Resume:** Must run from the same working directory as original session
 
 ---
 
