@@ -207,15 +207,6 @@ public struct SessionView: View {
             Spacer()
 
             HStack(spacing: 8) {
-                if mode == .historical && webSocketClient != nil {
-                    Button(action: { resumeSessionInstantly() }) {
-                        Image(systemName: "arrow.clockwise.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Resume session in app")
-                }
-
                 if mode == .historical && onOpenInTerminal != nil {
                     Button {
                         if let detail = sessionDetail {
