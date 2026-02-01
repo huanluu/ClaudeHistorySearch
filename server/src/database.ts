@@ -1,17 +1,51 @@
-import Database from 'better-sqlite3';
+import Database, { type Statement, type Database as DatabaseType } from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 
+// Types for database records
+export interface SessionRecord {
+  id: string;
+  project: string;
+  started_at: number;
+  last_activity_at: number | null;
+  message_count: number;
+  preview: string | null;
+  title: string | null;
+  last_indexed: number | null;
+}
+
+export interface MessageRecord {
+  session_id: string;
+  role: string;
+  content: string;
+  timestamp: number | null;
+  uuid: string;
+}
+
+export interface SearchResultRecord extends MessageRecord {
+  project: string;
+  started_at: number;
+  title: string | null;
+  highlighted_content: string;
+  rank: number;
+}
+
+export interface LastIndexedRecord {
+  last_indexed: number | null;
+}
+
+export type SortOption = 'relevance' | 'date';
+
 const DATA_DIR = join(homedir(), '.claude-history-server');
-const DB_PATH = join(DATA_DIR, 'search.db');
+export const DB_PATH = join(DATA_DIR, 'search.db');
 
 // Ensure data directory exists
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }
 
-const db = new Database(DB_PATH);
+export const db: DatabaseType = new Database(DB_PATH);
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
@@ -37,7 +71,7 @@ db.exec(`
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN last_activity_at INTEGER`);
   console.log('Added last_activity_at column to sessions table');
-} catch (e) {
+} catch {
   // Column already exists, ignore
 }
 
@@ -48,7 +82,7 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT`);
   console.log('Added title column to sessions table');
-} catch (e) {
+} catch {
   // Column already exists, ignore
 }
 
@@ -64,28 +98,28 @@ db.exec(`
   );
 `);
 
-// Prepared statements for common operations
-const insertSession = db.prepare(`
+// Prepared statements with proper typing
+export const insertSession: Statement = db.prepare(`
   INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
-const insertMessage = db.prepare(`
+export const insertMessage: Statement = db.prepare(`
   INSERT INTO messages_fts (session_id, role, content, timestamp, uuid)
   VALUES (?, ?, ?, ?, ?)
 `);
 
-const getSessionById = db.prepare(`
+export const getSessionById: Statement<unknown[], SessionRecord> = db.prepare(`
   SELECT * FROM sessions WHERE id = ?
 `);
 
-const getRecentSessions = db.prepare(`
+export const getRecentSessions: Statement<unknown[], SessionRecord> = db.prepare(`
   SELECT * FROM sessions
   ORDER BY COALESCE(last_activity_at, started_at) DESC
   LIMIT ? OFFSET ?
 `);
 
-const searchMessagesByRelevance = db.prepare(`
+const searchMessagesByRelevance: Statement<unknown[], SearchResultRecord> = db.prepare(`
   SELECT
     messages_fts.session_id,
     messages_fts.role,
@@ -104,7 +138,7 @@ const searchMessagesByRelevance = db.prepare(`
   LIMIT ? OFFSET ?
 `);
 
-const searchMessagesByDate = db.prepare(`
+const searchMessagesByDate: Statement<unknown[], SearchResultRecord> = db.prepare(`
   SELECT
     messages_fts.session_id,
     messages_fts.role,
@@ -124,37 +158,30 @@ const searchMessagesByDate = db.prepare(`
 `);
 
 // Wrapper function to select the appropriate query based on sort option
-function searchMessages(query, limit, offset, sort = 'relevance') {
+export function searchMessages(
+  query: string,
+  limit: number,
+  offset: number,
+  sort: SortOption = 'relevance'
+): SearchResultRecord[] {
   const stmt = sort === 'date' ? searchMessagesByDate : searchMessagesByRelevance;
   return stmt.all(query, limit, offset);
 }
 
-const getMessagesBySessionId = db.prepare(`
+export const getMessagesBySessionId: Statement<unknown[], MessageRecord> = db.prepare(`
   SELECT session_id, role, content, timestamp, uuid
   FROM messages_fts
   WHERE session_id = ?
   ORDER BY timestamp ASC
 `);
 
-const clearSessionMessages = db.prepare(`
+export const clearSessionMessages: Statement = db.prepare(`
   DELETE FROM messages_fts WHERE session_id = ?
 `);
 
-const getSessionLastIndexed = db.prepare(`
+export const getSessionLastIndexed: Statement<unknown[], LastIndexedRecord> = db.prepare(`
   SELECT last_indexed FROM sessions WHERE id = ?
 `);
 
-export {
-  db,
-  insertSession,
-  insertMessage,
-  getSessionById,
-  getRecentSessions,
-  searchMessages,
-  searchMessagesByRelevance,
-  searchMessagesByDate,
-  getMessagesBySessionId,
-  clearSessionMessages,
-  getSessionLastIndexed,
-  DB_PATH
-};
+// Re-export for backwards compatibility in tests
+export { searchMessagesByRelevance, searchMessagesByDate };

@@ -1,5 +1,13 @@
-import express from 'express';
-import { Transport } from './Transport.js';
+import express, { type Application, type RequestHandler, type Router } from 'express';
+import type { Server } from 'http';
+import { Transport, type TransportOptions } from './Transport.js';
+
+/**
+ * Options for configuring HttpTransport
+ */
+export interface HttpTransportOptions extends TransportOptions {
+  host?: string;
+}
 
 /**
  * HttpTransport - Express-based HTTP transport implementation
@@ -9,14 +17,13 @@ import { Transport } from './Transport.js';
  * HTTP server for WebSocket upgrade.
  */
 export class HttpTransport extends Transport {
-  /**
-   * @param {Object} options
-   * @param {number} options.port - Port to listen on
-   * @param {string} options.host - Host to bind to (default: '0.0.0.0')
-   */
-  constructor(options = {}) {
+  private host: string;
+  private app: Application;
+  private server: Server | null;
+
+  constructor(options: HttpTransportOptions = {}) {
     super(options);
-    this.host = options.host || '0.0.0.0';
+    this.host = options.host ?? '0.0.0.0';
     this.app = express();
     this.server = null;
 
@@ -26,7 +33,7 @@ export class HttpTransport extends Transport {
   /**
    * Setup default middleware (JSON parsing, CORS)
    */
-  _setupDefaults() {
+  private _setupDefaults(): void {
     this.app.use(express.json());
 
     // CORS middleware for local development
@@ -35,53 +42,57 @@ export class HttpTransport extends Transport {
       res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, X-API-Key');
       res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
+        res.sendStatus(200);
+        return;
       }
       next();
     });
   }
 
   /**
-   * Register middleware
-   * @param {Function|Object} middleware - Express middleware or router
+   * Register middleware or router
    */
-  use(...args) {
-    this.app.use(...args);
+  use(path: string, handler: RequestHandler | Router): void;
+  use(handler: RequestHandler | Router): void;
+  use(...args: unknown[]): void {
+    // TypeScript requires explicit handling of overloads
+    if (args.length === 1) {
+      this.app.use(args[0] as RequestHandler | Router);
+    } else if (args.length === 2) {
+      this.app.use(args[0] as string, args[1] as RequestHandler | Router);
+    }
   }
 
   /**
    * Get the Express app instance (for advanced configuration)
-   * @returns {express.Application}
    */
-  getApp() {
+  getApp(): Application {
     return this.app;
   }
 
   /**
    * Get the underlying HTTP server instance
-   * @returns {http.Server|null}
    */
-  getServer() {
+  getServer(): Server | null {
     return this.server;
   }
 
   /**
    * Start the HTTP server
-   * @returns {Promise<void>}
    */
-  async start() {
+  async start(): Promise<void> {
     if (this.isRunning) {
       throw new Error('Transport is already running');
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       try {
         this.server = this.app.listen(this.port, this.host, () => {
           this.isRunning = true;
           resolve();
         });
 
-        this.server.on('error', (err) => {
+        this.server.on('error', (err: Error) => {
           this.isRunning = false;
           reject(err);
         });
@@ -93,15 +104,14 @@ export class HttpTransport extends Transport {
 
   /**
    * Stop the HTTP server
-   * @returns {Promise<void>}
    */
-  async stop() {
+  async stop(): Promise<void> {
     if (!this.isRunning || !this.server) {
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      this.server.close((err) => {
+    return new Promise<void>((resolve, reject) => {
+      this.server!.close((err?: Error) => {
         this.isRunning = false;
         this.server = null;
         if (err) {

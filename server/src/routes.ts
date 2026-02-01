@@ -1,19 +1,60 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import {
   getRecentSessions,
   getSessionById,
   getMessagesBySessionId,
-  searchMessages
+  searchMessages,
+  type SessionRecord,
+  type MessageRecord,
+  type SearchResultRecord,
+  type SortOption
 } from './database.js';
 import { indexAllSessions } from './indexer.js';
 
 const router = Router();
 
+// API Response types
+interface SessionResponse {
+  id: string;
+  project: string;
+  startedAt: number;
+  messageCount: number;
+  preview: string | null;
+  title: string | null;
+}
+
+interface MessageResponse {
+  uuid: string;
+  role: string;
+  content: string;
+  timestamp: number | null;
+}
+
+interface PaginationResponse {
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+interface SearchResultResponse {
+  sessionId: string;
+  project: string;
+  sessionStartedAt: number;
+  title: string | null;
+  message: {
+    uuid: string;
+    role: string;
+    content: string;
+    highlightedContent: string;
+    timestamp: number | null;
+  };
+}
+
 /**
  * GET /health
  * Health check endpoint
  */
-router.get('/health', (req, res) => {
+router.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString()
@@ -25,15 +66,15 @@ router.get('/health', (req, res) => {
  * List recent sessions with pagination
  * Query params: limit (default 20), offset (default 0)
  */
-router.get('/sessions', (req, res) => {
+router.get('/sessions', (req: Request, res: Response) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-    const offset = parseInt(req.query.offset) || 0;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
 
-    const sessions = getRecentSessions.all(limit, offset);
+    const sessions = getRecentSessions.all(limit, offset) as SessionRecord[];
 
     res.json({
-      sessions: sessions.map(s => ({
+      sessions: sessions.map((s): SessionResponse => ({
         id: s.id,
         project: s.project,
         startedAt: s.started_at,
@@ -45,7 +86,7 @@ router.get('/sessions', (req, res) => {
         limit,
         offset,
         hasMore: sessions.length === limit
-      }
+      } as PaginationResponse
     });
   } catch (error) {
     console.error('Error fetching sessions:', error);
@@ -57,16 +98,17 @@ router.get('/sessions', (req, res) => {
  * GET /sessions/:id
  * Get full conversation for a session
  */
-router.get('/sessions/:id', (req, res) => {
+router.get('/sessions/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const session = getSessionById.get(id);
+    const session = getSessionById.get(id) as SessionRecord | undefined;
     if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+      res.status(404).json({ error: 'Session not found' });
+      return;
     }
 
-    const messages = getMessagesBySessionId.all(id);
+    const messages = getMessagesBySessionId.all(id) as MessageRecord[];
 
     res.json({
       session: {
@@ -76,8 +118,8 @@ router.get('/sessions/:id', (req, res) => {
         messageCount: session.message_count,
         preview: session.preview,
         title: session.title
-      },
-      messages: messages.map(m => ({
+      } as SessionResponse,
+      messages: messages.map((m): MessageResponse => ({
         uuid: m.uuid,
         role: m.role,
         content: m.content,
@@ -96,16 +138,21 @@ router.get('/sessions/:id', (req, res) => {
  * Query params: q (search query), limit (default 50), offset (default 0), sort (relevance|date)
  * Returns only the best-matching message per session
  */
-router.get('/search', (req, res) => {
+router.get('/search', (req: Request, res: Response) => {
   try {
-    const query = req.query.q;
+    const query = req.query.q as string;
     if (!query || query.trim().length === 0) {
-      return res.status(400).json({ error: 'Search query is required' });
+      res.status(400).json({ error: 'Search query is required' });
+      return;
     }
 
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const offset = parseInt(req.query.offset) || 0;
-    const sort = req.query.sort === 'date' ? 'date' : 'relevance';
+    const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+    const offsetParam = Array.isArray(req.query.offset) ? req.query.offset[0] : req.query.offset;
+    const sortParam = Array.isArray(req.query.sort) ? req.query.sort[0] : req.query.sort;
+
+    const limit = Math.min(parseInt(limitParam as string) || 50, 200);
+    const offset = parseInt(offsetParam as string) || 0;
+    const sort: SortOption = sortParam === 'date' ? 'date' : 'relevance';
 
     // Escape special FTS5 characters and format query with prefix matching
     const sanitizedQuery = query
@@ -116,7 +163,8 @@ router.get('/search', (req, res) => {
       .join(' ');
 
     if (!sanitizedQuery) {
-      return res.status(400).json({ error: 'Invalid search query' });
+      res.status(400).json({ error: 'Invalid search query' });
+      return;
     }
 
     // Fetch more results than needed to account for deduplication
@@ -125,8 +173,8 @@ router.get('/search', (req, res) => {
 
     // Group by session - keep only the best-matching message per session
     // Results are already ordered by rank, so first occurrence is best match
-    const seenSessions = new Set();
-    const uniqueResults = [];
+    const seenSessions = new Set<string>();
+    const uniqueResults: SearchResultRecord[] = [];
 
     for (const r of allResults) {
       if (!seenSessions.has(r.session_id)) {
@@ -139,7 +187,7 @@ router.get('/search', (req, res) => {
     const paginatedResults = uniqueResults.slice(offset, offset + limit);
 
     res.json({
-      results: paginatedResults.map(r => ({
+      results: paginatedResults.map((r): SearchResultResponse => ({
         sessionId: r.session_id,
         project: r.project,
         sessionStartedAt: r.started_at,
@@ -156,7 +204,7 @@ router.get('/search', (req, res) => {
         limit,
         offset,
         hasMore: uniqueResults.length > offset + limit
-      },
+      } as PaginationResponse,
       query,
       sort
     });
@@ -170,7 +218,7 @@ router.get('/search', (req, res) => {
  * POST /reindex
  * Trigger a full reindex of all sessions
  */
-router.post('/reindex', async (req, res) => {
+router.post('/reindex', async (req: Request, res: Response) => {
   try {
     const force = req.query.force === 'true';
     const result = await indexAllSessions(force);

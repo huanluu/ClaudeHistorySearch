@@ -7,18 +7,73 @@ import {
   insertSession,
   insertMessage,
   clearSessionMessages,
-  getSessionLastIndexed
+  getSessionLastIndexed,
+  type LastIndexedRecord
 } from './database.js';
 
-const CLAUDE_DIR = join(homedir(), '.claude');
-const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
+export const CLAUDE_DIR = join(homedir(), '.claude');
+export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
+
+// Types for JSONL entries
+interface ContentBlock {
+  type: string;
+  text?: string;
+}
+
+interface JsonlEntry {
+  type?: string;
+  sessionId?: string;
+  uuid?: string;
+  cwd?: string;
+  timestamp?: string;
+  message?: {
+    content?: string | ContentBlock[];
+  };
+  isMeta?: boolean;
+}
+
+interface SessionIndexEntry {
+  sessionId?: string;
+  summary?: string;
+}
+
+interface SessionIndexData {
+  entries?: SessionIndexEntry[];
+}
+
+// Types for parsed data
+export interface ParsedMessage {
+  uuid: string;
+  role: string;
+  content: string;
+  timestamp: number | null;
+}
+
+export interface ParsedSession {
+  sessionId: string | null;
+  project: string | null;
+  startedAt: number | null;
+  lastActivityAt: number | null;
+  preview: string | null;
+  messages: ParsedMessage[];
+}
+
+export interface IndexResult {
+  sessionId: string;
+  messageCount: number;
+}
+
+export interface IndexAllResult {
+  indexed: number;
+  skipped: number;
+}
 
 /**
  * Load sessions-index.json from a project directory and return a map of sessionId → title
  */
-function loadSessionsIndex(projectPath) {
+function loadSessionsIndex(projectPath: string): Map<string, string> {
   const indexPath = join(projectPath, 'sessions-index.json');
-  const titleMap = new Map();
+  const titleMap = new Map<string, string>();
 
   if (!existsSync(indexPath)) {
     return titleMap;
@@ -26,10 +81,10 @@ function loadSessionsIndex(projectPath) {
 
   try {
     const content = readFileSync(indexPath, 'utf-8');
-    const data = JSON.parse(content);
+    const data = JSON.parse(content) as SessionIndexData | SessionIndexEntry[];
 
     // Handle both formats: { entries: [...] } or direct array
-    const sessions = data.entries || (Array.isArray(data) ? data : []);
+    const sessions = (data as SessionIndexData).entries || (Array.isArray(data) ? data : []);
 
     for (const session of sessions) {
       if (session.sessionId && session.summary) {
@@ -37,7 +92,8 @@ function loadSessionsIndex(projectPath) {
       }
     }
   } catch (e) {
-    console.error(`Error reading sessions-index.json from ${projectPath}:`, e.message);
+    const error = e as Error;
+    console.error(`Error reading sessions-index.json from ${projectPath}:`, error.message);
   }
 
   return titleMap;
@@ -46,13 +102,13 @@ function loadSessionsIndex(projectPath) {
 /**
  * Extract text content from message content (handles both string and array formats)
  */
-function extractTextContent(content) {
+function extractTextContent(content: string | ContentBlock[] | undefined): string {
   if (typeof content === 'string') {
     return content;
   }
   if (Array.isArray(content)) {
     return content
-      .filter(item => item.type === 'text')
+      .filter((item): item is ContentBlock & { text: string } => item.type === 'text' && typeof item.text === 'string')
       .map(item => item.text)
       .join('\n');
   }
@@ -62,13 +118,13 @@ function extractTextContent(content) {
 /**
  * Parse a JSONL file and extract messages (streaming to handle large files)
  */
-async function parseSessionFile(filePath) {
-  const messages = [];
-  let sessionId = null;
-  let project = null;
-  let earliestTimestamp = null;
-  let latestTimestamp = null;
-  let firstUserMessage = null;
+export async function parseSessionFile(filePath: string): Promise<ParsedSession> {
+  const messages: ParsedMessage[] = [];
+  let sessionId: string | null = null;
+  let project: string | null = null;
+  let earliestTimestamp: number | null = null;
+  let latestTimestamp: number | null = null;
+  let firstUserMessage: string | null = null;
 
   const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
   const rl = createInterface({
@@ -80,7 +136,7 @@ async function parseSessionFile(filePath) {
     if (!line.trim()) continue;
 
     try {
-      const obj = JSON.parse(line);
+      const obj = JSON.parse(line) as JsonlEntry;
 
       // Skip non-message entries
       if (!obj.type || !['user', 'assistant'].includes(obj.type)) {
@@ -125,12 +181,12 @@ async function parseSessionFile(filePath) {
       }
 
       messages.push({
-        uuid: obj.uuid,
+        uuid: obj.uuid || '',
         role,
         content: textContent,
         timestamp
       });
-    } catch (e) {
+    } catch {
       // Skip malformed lines
       continue;
     }
@@ -148,11 +204,12 @@ async function parseSessionFile(filePath) {
 
 /**
  * Index a single session file
- * @param {string} filePath - Path to the JSONL file
- * @param {boolean} forceReindex - Whether to force reindexing even if up to date
- * @param {Map<string, string>} titleMap - Map of sessionId → title from sessions-index.json
  */
-async function indexSessionFile(filePath, forceReindex = false, titleMap = new Map()) {
+export async function indexSessionFile(
+  filePath: string,
+  forceReindex: boolean = false,
+  titleMap: Map<string, string> = new Map()
+): Promise<IndexResult | null> {
   const fileName = basename(filePath, '.jsonl');
 
   // Skip agent files and other non-session files
@@ -165,8 +222,8 @@ async function indexSessionFile(filePath, forceReindex = false, titleMap = new M
   const fileModTime = fileStat.mtimeMs;
 
   if (!forceReindex) {
-    const existing = getSessionLastIndexed.get(fileName);
-    if (existing && existing.last_indexed >= fileModTime) {
+    const existing = getSessionLastIndexed.get(fileName) as LastIndexedRecord | undefined;
+    if (existing && existing.last_indexed && existing.last_indexed >= fileModTime) {
       return null; // Already up to date
     }
   }
@@ -222,7 +279,7 @@ async function indexSessionFile(filePath, forceReindex = false, titleMap = new M
 /**
  * Index all session files in the Claude projects directory
  */
-async function indexAllSessions(forceReindex = false) {
+export async function indexAllSessions(forceReindex: boolean = false): Promise<IndexAllResult> {
   console.log('Starting indexing of Claude sessions...');
 
   if (!existsSync(PROJECTS_DIR)) {
@@ -260,8 +317,9 @@ async function indexAllSessions(forceReindex = false) {
         } else {
           skipped++;
         }
-      } catch (err) {
-        console.error(`Error indexing ${filePath}:`, err.message);
+      } catch (e) {
+        const error = e as Error;
+        console.error(`Error indexing ${filePath}:`, error.message);
         skipped++;
       }
     }
@@ -274,15 +332,7 @@ async function indexAllSessions(forceReindex = false) {
 /**
  * Get project directory path from a file path
  */
-function decodeProjectPath(encodedPath) {
+export function decodeProjectPath(encodedPath: string): string {
   // Convert -Users-huanlu-Developer back to /Users/huanlu/Developer
   return '/' + encodedPath.replace(/-/g, '/').replace(/^\//, '');
 }
-
-export {
-  indexAllSessions,
-  indexSessionFile,
-  parseSessionFile,
-  CLAUDE_DIR,
-  PROJECTS_DIR
-};

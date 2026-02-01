@@ -3,13 +3,18 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
+interface Config {
+  apiKeyHash?: string;
+  apiKeyCreatedAt?: string;
+}
+
 const CONFIG_DIR = join(homedir(), '.claude-history-server');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 /**
  * Ensure the config directory exists
  */
-function ensureConfigDir() {
+function ensureConfigDir(): void {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true });
   }
@@ -18,13 +23,13 @@ function ensureConfigDir() {
 /**
  * Load config from disk
  */
-function loadConfig() {
+function loadConfig(): Config {
   ensureConfigDir();
   if (!existsSync(CONFIG_FILE)) {
     return {};
   }
   try {
-    return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+    return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as Config;
   } catch {
     return {};
   }
@@ -33,7 +38,7 @@ function loadConfig() {
 /**
  * Save config to disk
  */
-function saveConfig(config) {
+function saveConfig(config: Config): void {
   ensureConfigDir();
   writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
@@ -43,7 +48,7 @@ function saveConfig(config) {
  * We use SHA-256 instead of bcrypt for simplicity since API keys are random
  * and don't suffer from dictionary attacks like passwords do
  */
-function hashKey(key) {
+function hashKey(key: string): string {
   return createHash('sha256').update(key).digest('hex');
 }
 
@@ -51,7 +56,7 @@ function hashKey(key) {
  * Generate a new API key
  * Returns the plaintext key (only shown once) and stores the hash
  */
-export function generateApiKey() {
+export function generateApiKey(): string {
   const key = randomBytes(32).toString('hex');
   const hash = hashKey(key);
 
@@ -66,8 +71,8 @@ export function generateApiKey() {
 /**
  * Validate an API key against the stored hash
  */
-export function validateApiKey(key) {
-  if (!key) return false;
+export function validateApiKey(key: string | string[] | undefined): boolean {
+  if (!key || Array.isArray(key)) return false;
 
   const config = loadConfig();
   if (!config.apiKeyHash) return false;
@@ -79,7 +84,7 @@ export function validateApiKey(key) {
 /**
  * Check if an API key has been configured
  */
-export function hasApiKey() {
+export function hasApiKey(): boolean {
   const config = loadConfig();
   return !!config.apiKeyHash;
 }
@@ -87,7 +92,7 @@ export function hasApiKey() {
 /**
  * Remove the API key
  */
-export function removeApiKey() {
+export function removeApiKey(): void {
   const config = loadConfig();
   delete config.apiKeyHash;
   delete config.apiKeyCreatedAt;
@@ -95,7 +100,7 @@ export function removeApiKey() {
 }
 
 // CLI command for generating a key
-if (process.argv[1]?.endsWith('keyManager.js') && process.argv[2] === 'generate') {
+if (process.argv[1]?.endsWith('keyManager.ts') && process.argv[2] === 'generate') {
   const key = generateApiKey();
   console.log('\n=== API Key Generated ===\n');
   console.log(`Your API key: ${key}\n`);

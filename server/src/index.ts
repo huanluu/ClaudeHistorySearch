@@ -1,5 +1,5 @@
 import Bonjour from 'bonjour-service';
-import { watch } from 'chokidar';
+import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
 import routes from './routes.js';
@@ -8,11 +8,11 @@ import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport } from './transport/index.js';
 
-const PORT = process.env.PORT || 3847;
+const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
 
 // Check if macOS firewall stealth mode is enabled (blocks Bonjour discovery)
-function isStealthModeEnabled() {
+function isStealthModeEnabled(): boolean {
   try {
     const output = execSync('/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode', {
       encoding: 'utf-8',
@@ -35,7 +35,7 @@ transport.use(authMiddleware);
 transport.use('/', routes);
 
 // Start server
-async function main() {
+async function main(): Promise<void> {
   await transport.start();
 
   console.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
@@ -54,8 +54,8 @@ async function main() {
   console.log(`Initial index complete: ${result.indexed} sessions indexed\n`);
 
   // Advertise via Bonjour/mDNS (auto-disabled if stealth mode is on)
-  let bonjour = null;
-  let service = null;
+  let bonjour: Bonjour.default | null = null;
+  let service: ReturnType<Bonjour.default['publish']> | null = null;
   const stealthMode = isStealthModeEnabled();
   if (stealthMode) {
     console.log('Bonjour advertisement disabled (firewall stealth mode is on)');
@@ -73,7 +73,7 @@ async function main() {
   }
 
   // Watch for file changes
-  const watcher = watch(`${PROJECTS_DIR}/**/*.jsonl`, {
+  const watcher: FSWatcher = watch(`${PROJECTS_DIR}/**/*.jsonl`, {
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: {
@@ -82,12 +82,12 @@ async function main() {
     }
   });
 
-  watcher.on('change', async (path) => {
+  watcher.on('change', async (path: string) => {
     console.log(`File changed: ${path}`);
     await indexSessionFile(path, true);
   });
 
-  watcher.on('add', async (path) => {
+  watcher.on('add', async (path: string) => {
     console.log(`New file: ${path}`);
     await indexSessionFile(path, false);
   });
@@ -108,11 +108,11 @@ async function main() {
   console.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
 
   // Graceful shutdown
-  const shutdown = async () => {
+  const shutdown = async (): Promise<void> => {
     console.log('\nShutting down...');
     clearInterval(reindexTimer);
-    if (service) service.stop();
-    if (bonjour) bonjour.destroy();
+    service?.stop?.();
+    bonjour?.destroy();
     watcher.close();
     await transport.stop();
     console.log('Server stopped');
@@ -123,7 +123,7 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-main().catch((err) => {
+main().catch((err: Error) => {
   console.error('Failed to start server:', err);
   process.exit(1);
 });
