@@ -17,8 +17,11 @@ struct ClaudeHistorySearchApp: App {
                     // Load API key from keychain
                     apiClient.loadAPIKeyFromKeychain()
 
-                    // Auto-start server discovery if not connected
-                    if serverDiscovery.serverURL == nil {
+                    // If server already discovered, configure WebSocket immediately
+                    if let existingURL = serverDiscovery.serverURL {
+                        configureWebSocket(baseURL: existingURL)
+                    } else {
+                        // Auto-start server discovery if not connected
                         serverDiscovery.startSearching()
 
                         // Try localhost fallback after 3 seconds if still not connected
@@ -64,7 +67,7 @@ struct ClaudeHistorySearchApp: App {
                 try await webSocketClient.connect()
                 print("[WebSocket] Connected successfully")
             } catch {
-                print("[WebSocket] Connection failed: \(error)")
+                print("[ ] Connection failed: \(error)")
             }
         }
     }
