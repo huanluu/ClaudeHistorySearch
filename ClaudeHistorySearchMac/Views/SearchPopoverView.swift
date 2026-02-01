@@ -74,8 +74,7 @@ struct SearchPopoverView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(serverDiscovery)
+            SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)
         }
         .onAppear {
             isSearchFieldFocused = true

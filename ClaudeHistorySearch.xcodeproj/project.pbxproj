@@ -15,7 +15,6 @@
 		A2B3C4D5E6F70001 /* ClaudeHistorySearchMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70001 /* ClaudeHistorySearchMacApp.swift */; };
 		A2B3C4D5E6F70002 /* SearchPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002 /* SearchPopoverView.swift */; };
 		A2B3C4D5E6F70004 /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70004 /* SessionView.swift */; };
-		A2B3C4D5E6F70006 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70006 /* SettingsView.swift */; };
 		A2B3C4D5E6F70007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70007 /* Assets.xcassets */; };
 		A2B3C4D5E6F70008 /* ClaudeHistoryShared in Frameworks */ = {isa = PBXBuildFile; productRef = E1F2A3B4C5D60002 /* ClaudeHistoryShared */; };
 		A2B3C4D5E6F70009 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70008 /* AppDelegate.swift */; };
@@ -29,7 +28,6 @@
 		B2C3D4E5F6A70001 /* ClaudeHistorySearchMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHistorySearchMacApp.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70002 /* SearchPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPopoverView.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70004 /* SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionView.swift; sourceTree = "<group>"; };
-		B2C3D4E5F6A70006 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2C3D4E5F6A70008 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C1D2E3F4A5B60001 /* ClaudeHistorySearch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeHistorySearch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -125,7 +123,6 @@
 			children = (
 				B2C3D4E5F6A70002 /* SearchPopoverView.swift */,
 				B2C3D4E5F6A70004 /* SessionView.swift */,
-				B2C3D4E5F6A70006 /* SettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -251,7 +248,6 @@
 				A2B3C4D5E6F70009 /* AppDelegate.swift in Sources */,
 				A2B3C4D5E6F70002 /* SearchPopoverView.swift in Sources */,
 				A2B3C4D5E6F70004 /* SessionView.swift in Sources */,
-				A2B3C4D5E6F70006 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
