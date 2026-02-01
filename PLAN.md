@@ -31,9 +31,9 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 ## Phase 1: Authentication ✅ Complete
 
 ### 1.1 Server - API Key Middleware
-- [x] Create `server/src/auth/middleware.js` - Express middleware for X-API-Key header validation
-- [x] Create `server/src/auth/keyManager.js` - Generate, validate, store API keys (hashed with SHA-256)
-- [x] Update `server/src/index.js` - Mount auth middleware before routes
+- [x] Create `server/src/auth/middleware.ts` - Express middleware for X-API-Key header validation
+- [x] Create `server/src/auth/keyManager.ts` - Generate, validate, store API keys (hashed with SHA-256)
+- [x] Update `server/src/index.ts` - Mount auth middleware before routes
 - [x] Update `server/package.json` - Add `npm run key:generate` script
 - [x] Add `npm run key:generate` CLI command
 
@@ -66,7 +66,7 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - [x] Create `Shared/Tests/ClaudeHistorySharedTests/MockURLProtocol.swift`
 
 ### 2.3 Verification
-- [x] `npm test` passes (31 tests)
+- [x] `npm test` passes (58 tests: 16 routes + 15 database + 27 indexer)
 - [x] `swift test` passes (16 tests)
 
 ---
@@ -74,9 +74,9 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 ## Phase 3: Architecture Modularity ✅ Complete
 
 ### 3.1 Server Transport Abstraction
-- [x] Create `server/src/transport/Transport.js` - Base class/interface
-- [x] Create `server/src/transport/HttpTransport.js` - Extract Express logic
-- [x] Refactor `server/src/index.js` to use transport abstraction
+- [x] Create `server/src/transport/Transport.ts` - Base class/interface
+- [x] Create `server/src/transport/HttpTransport.ts` - Extract Express logic
+- [x] Refactor `server/src/index.ts` to use transport abstraction
 
 ### 3.2 iOS Network Protocol
 - [x] Create `Shared/Sources/ClaudeHistoryShared/Services/NetworkService.swift` - Protocol
@@ -88,12 +88,32 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ---
 
+## Phase 3.5: TypeScript Migration ✅ Complete
+
+### 3.5.1 Server TypeScript Conversion
+- [x] Add TypeScript, tsx, ts-jest, and type definitions
+- [x] Create `server/tsconfig.json` with strict mode
+- [x] Convert `database.ts` with typed interfaces (SessionRecord, MessageRecord, etc.)
+- [x] Convert `indexer.ts` with types for JSONL parsing
+- [x] Convert `routes.ts` with typed API responses
+- [x] Convert `auth/keyManager.ts` and `auth/middleware.ts`
+- [x] Convert `transport/Transport.ts` and `transport/HttpTransport.ts`
+- [x] Convert `index.ts` main entry point
+- [x] Update Jest config with ts-jest for TypeScript support
+
+### 3.5.2 Verification
+- [x] `npm run typecheck` passes with no errors
+- [x] `npm test` passes (58 tests)
+- [x] Server starts and runs correctly
+
+---
+
 ## Phase 4: WebSocket Infrastructure ⬚ Not Started
 
 ### 4.1 Server WebSocket
 - [ ] Add `ws` package dependency
-- [ ] Create `server/src/transport/WebSocketTransport.js`
-- [ ] Update `server/src/index.js` for HTTP server + WS
+- [ ] Create `server/src/transport/WebSocketTransport.ts`
+- [ ] Update `server/src/index.ts` for HTTP server + WS
 
 ### 4.2 iOS WebSocket Client
 - [ ] Create `Shared/Sources/ClaudeHistoryShared/Services/WebSocketClient.swift`
@@ -107,9 +127,9 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 ## Phase 5: Remote Session Execution ⬚ Not Started
 
 ### 5.1 Server Session Executor
-- [ ] Add `@anthropic-ai/claude-agent-sdk` dependency
-- [ ] Create `server/src/sessions/SessionExecutor.js`
-- [ ] Create `server/src/sessions/SessionStore.js`
+- [ ] Add `@anthropic-ai/claude-code` dependency
+- [ ] Create `server/src/sessions/SessionExecutor.ts`
+- [ ] Create `server/src/sessions/SessionStore.ts`
 
 ### 5.2 iOS Session UI
 - [ ] Create `ClaudeHistorySearch/Views/RemoteSessionView.swift`
@@ -128,7 +148,8 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 | Phase | Status | Completed | Notes |
 |-------|--------|-----------|-------|
 | 1 | Complete | 2026-01-31 | API key auth for server + iOS/macOS Keychain storage |
-| 2 | Complete | 2026-01-31 | Jest + supertest for server (31 tests), Swift Package tests (16 tests) |
+| 2 | Complete | 2026-01-31 | Jest + supertest for server (58 tests), Swift Package tests (16 tests) |
 | 3 | Complete | 2026-01-31 | Transport abstraction (server) + NetworkService protocol (iOS) |
+| 3.5 | Complete | 2026-02-01 | **TypeScript Migration** - Converted all server code to TypeScript |
 | 4 | Not Started | - | |
 | 5 | Not Started | - | |
