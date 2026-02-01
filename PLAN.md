@@ -56,8 +56,8 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ### 2.1 Server Tests
 - [x] Create `server/jest.config.js`
-- [x] Create `server/tests/routes.test.js` - API endpoints + auth
-- [x] Create `server/tests/database.test.js` - FTS5 queries
+- [x] Create `server/tests/routes.test.ts` - API endpoints + auth
+- [x] Create `server/tests/database.test.ts` - FTS5 queries
 - [x] Create `server/tests/__fixtures__/sample-session.jsonl`
 - [x] Add jest and supertest to devDependencies
 
@@ -85,7 +85,7 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - [x] Refactor `APIClient.swift` to conform to protocol
 
 ### 3.3 Tests
-- [x] Create `server/tests/transport.test.js` - HttpTransport tests (21 tests)
+- [x] Create `server/tests/transport.test.ts` - HttpTransport tests (21 tests)
 - [x] Create `Shared/Tests/ClaudeHistorySharedTests/NetworkServiceTests.swift` - Protocol conformance tests (19 tests)
 
 ### 3.4 Verification
@@ -108,9 +108,15 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - [x] Convert `index.ts` main entry point
 - [x] Update Jest config with ts-jest for TypeScript support
 
-### 3.5.2 Verification
+### 3.5.2 Test Files TypeScript Conversion
+- [x] Convert `routes.test.js` → `routes.test.ts` with Express types
+- [x] Convert `database.test.js` → `database.test.ts` with better-sqlite3 types
+- [x] Convert `indexer.test.js` → `indexer.test.ts` with ParsedSession import
+- [x] Convert `transport.test.js` → `transport.test.ts` with Express types
+
+### 3.5.3 Verification
 - [x] `npm run typecheck` passes with no errors
-- [x] `npm test` passes (58 tests)
+- [x] `npm test` passes (79 tests)
 - [x] Server starts and runs correctly
 
 ---

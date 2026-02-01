@@ -1,8 +1,9 @@
 import { HttpTransport } from '../src/transport/index.js';
 import http from 'http';
+import { Router, Request, Response, NextFunction } from 'express';
 
 describe('HttpTransport', () => {
-  let transport;
+  let transport: HttpTransport;
 
   afterEach(async () => {
     // Clean up: stop transport if running
@@ -86,7 +87,7 @@ describe('HttpTransport', () => {
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       expect(address).toBeDefined();
       expect(typeof address.port).toBe('number');
       expect(address.port).toBeGreaterThan(0);
@@ -125,13 +126,13 @@ describe('HttpTransport', () => {
       transport = new HttpTransport({ port: 0 });
 
       let middlewareCalled = false;
-      transport.use((req, res, next) => {
+      transport.use((_req: Request, _res: Response, next: NextFunction) => {
         middlewareCalled = true;
         next();
       });
 
       // Add a test route
-      transport.getApp().get('/test', (req, res) => {
+      transport.getApp().get('/test', (_req: Request, res: Response) => {
         res.json({ ok: true });
       });
 
@@ -139,7 +140,7 @@ describe('HttpTransport', () => {
 
       // Make a request to trigger middleware
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/test`);
 
       expect(middlewareCalled).toBe(true);
@@ -150,9 +151,8 @@ describe('HttpTransport', () => {
       transport = new HttpTransport({ port: 0 });
 
       // Create a mini router
-      const { Router } = await import('express');
       const router = Router();
-      router.get('/hello', (req, res) => {
+      router.get('/hello', (_req: Request, res: Response) => {
         res.json({ message: 'world' });
       });
 
@@ -160,7 +160,7 @@ describe('HttpTransport', () => {
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/api/hello`);
       const data = await response.json();
 
@@ -172,8 +172,8 @@ describe('HttpTransport', () => {
     it('should parse JSON request bodies', async () => {
       transport = new HttpTransport({ port: 0 });
 
-      let receivedBody = null;
-      transport.getApp().post('/echo', (req, res) => {
+      let receivedBody: unknown = null;
+      transport.getApp().post('/echo', (req: Request, res: Response) => {
         receivedBody = req.body;
         res.json(req.body);
       });
@@ -181,8 +181,8 @@ describe('HttpTransport', () => {
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
-      const response = await fetch(`http://127.0.0.1:${address.port}/echo`, {
+      const address = server!.address() as { port: number };
+      await fetch(`http://127.0.0.1:${address.port}/echo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ test: 'data' })
@@ -194,14 +194,14 @@ describe('HttpTransport', () => {
     it('should add CORS headers', async () => {
       transport = new HttpTransport({ port: 0 });
 
-      transport.getApp().get('/cors-test', (req, res) => {
+      transport.getApp().get('/cors-test', (_req: Request, res: Response) => {
         res.json({ ok: true });
       });
 
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/cors-test`);
 
       expect(response.headers.get('access-control-allow-origin')).toBe('*');
@@ -212,7 +212,7 @@ describe('HttpTransport', () => {
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/any-path`, {
         method: 'OPTIONS'
       });
@@ -227,19 +227,19 @@ describe('HttpTransport', () => {
     it('should execute middleware in registration order', async () => {
       transport = new HttpTransport({ port: 0 });
 
-      const executionOrder = [];
+      const executionOrder: string[] = [];
 
-      transport.use((req, res, next) => {
+      transport.use((_req: Request, _res: Response, next: NextFunction) => {
         executionOrder.push('first');
         next();
       });
 
-      transport.use((req, res, next) => {
+      transport.use((_req: Request, _res: Response, next: NextFunction) => {
         executionOrder.push('second');
         next();
       });
 
-      transport.getApp().get('/order-test', (req, res) => {
+      transport.getApp().get('/order-test', (_req: Request, res: Response) => {
         executionOrder.push('handler');
         res.json({ order: executionOrder });
       });
@@ -247,7 +247,7 @@ describe('HttpTransport', () => {
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       await fetch(`http://127.0.0.1:${address.port}/order-test`);
 
       expect(executionOrder).toEqual(['first', 'second', 'handler']);
@@ -256,24 +256,24 @@ describe('HttpTransport', () => {
     it('should allow middleware to short-circuit the chain', async () => {
       transport = new HttpTransport({ port: 0 });
 
-      const executionOrder = [];
+      const executionOrder: string[] = [];
 
-      transport.use((req, res, next) => {
+      transport.use((_req: Request, _res: Response, next: NextFunction) => {
         executionOrder.push('first');
         next();
       });
 
-      transport.use((req, res, next) => {
+      transport.use((_req: Request, res: Response, _next: NextFunction) => {
         executionOrder.push('blocker');
         res.status(403).json({ error: 'Blocked' }); // Don't call next()
       });
 
-      transport.use((req, res, next) => {
+      transport.use((_req: Request, _res: Response, next: NextFunction) => {
         executionOrder.push('never-reached');
         next();
       });
 
-      transport.getApp().get('/blocked', (req, res) => {
+      transport.getApp().get('/blocked', (_req: Request, res: Response) => {
         executionOrder.push('handler');
         res.json({ ok: true });
       });
@@ -281,7 +281,7 @@ describe('HttpTransport', () => {
       await transport.start();
 
       const server = transport.getServer();
-      const address = server.address();
+      const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/blocked`);
 
       expect(response.status).toBe(403);

@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import request from 'supertest';
-import express from 'express';
+import express, { Application, Request, Response, NextFunction } from 'express';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -10,6 +9,11 @@ import { randomBytes, createHash } from 'crypto';
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-${Date.now()}`);
 const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, 'config.json');
 
+interface Config {
+  apiKeyHash?: string;
+  apiKeyCreatedAt?: string;
+}
+
 // Setup test config directory before importing modules
 mkdirSync(TEST_CONFIG_DIR, { recursive: true });
 
@@ -17,10 +21,10 @@ mkdirSync(TEST_CONFIG_DIR, { recursive: true });
 process.env.CLAUDE_HISTORY_CONFIG_DIR = TEST_CONFIG_DIR;
 
 // Helper to create test API key
-function createTestApiKey() {
+function createTestApiKey(): string {
   const key = randomBytes(32).toString('hex');
   const hash = createHash('sha256').update(key).digest('hex');
-  const config = {
+  const config: Config = {
     apiKeyHash: hash,
     apiKeyCreatedAt: new Date().toISOString()
   };
@@ -29,19 +33,19 @@ function createTestApiKey() {
 }
 
 // Helper to remove API key
-function removeTestApiKey() {
+function removeTestApiKey(): void {
   if (existsSync(TEST_CONFIG_FILE)) {
     writeFileSync(TEST_CONFIG_FILE, JSON.stringify({}));
   }
 }
 
 // Create a minimal test app
-function createTestApp(withAuth = true) {
+function createTestApp(withAuth = true): Application {
   const app = express();
   app.use(express.json());
 
   // Simple auth middleware for testing
-  app.use((req, res, next) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path === '/health') {
       return next();
     }
@@ -51,7 +55,7 @@ function createTestApp(withAuth = true) {
     }
 
     // Check if API key is configured
-    let config = {};
+    let config: Config = {};
     try {
       config = JSON.parse(readFileSync(TEST_CONFIG_FILE, 'utf-8'));
     } catch {
@@ -62,7 +66,7 @@ function createTestApp(withAuth = true) {
       return next(); // No key configured, allow all
     }
 
-    const apiKey = req.headers['x-api-key'];
+    const apiKey = req.headers['x-api-key'] as string | undefined;
     if (!apiKey) {
       return res.status(401).json({
         error: 'Unauthorized',
@@ -82,13 +86,13 @@ function createTestApp(withAuth = true) {
   });
 
   // Test routes
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  app.get('/sessions', (req, res) => {
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-    const offset = parseInt(req.query.offset) || 0;
+  app.get('/sessions', (req: Request, res: Response) => {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
     res.json({
       sessions: [
         {
@@ -104,7 +108,7 @@ function createTestApp(withAuth = true) {
     });
   });
 
-  app.get('/sessions/:id', (req, res) => {
+  app.get('/sessions/:id', (req: Request, res: Response) => {
     if (req.params.id === 'not-found') {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -124,13 +128,13 @@ function createTestApp(withAuth = true) {
     });
   });
 
-  app.get('/search', (req, res) => {
-    const query = req.query.q;
+  app.get('/search', (req: Request, res: Response) => {
+    const query = req.query.q as string | undefined;
     if (!query || query.trim().length === 0) {
       return res.status(400).json({ error: 'Search query is required' });
     }
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const offset = parseInt(req.query.offset) || 0;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
     const sort = req.query.sort === 'date' ? 'date' : 'relevance';
 
     res.json({
@@ -155,7 +159,7 @@ function createTestApp(withAuth = true) {
     });
   });
 
-  app.post('/reindex', (req, res) => {
+  app.post('/reindex', (req: Request, res: Response) => {
     const force = req.query.force === 'true';
     res.json({ success: true, indexed: force ? 10 : 5, skipped: 0 });
   });
@@ -164,8 +168,8 @@ function createTestApp(withAuth = true) {
 }
 
 describe('API Routes', () => {
-  let app;
-  let testApiKey;
+  let app: Application;
+  let testApiKey: string;
 
   beforeAll(() => {
     testApiKey = createTestApiKey();
@@ -329,7 +333,7 @@ describe('API Routes', () => {
 });
 
 describe('API without authentication configured', () => {
-  let app;
+  let app: Application;
 
   beforeAll(() => {
     removeTestApiKey();

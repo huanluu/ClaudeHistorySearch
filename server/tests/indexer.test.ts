@@ -1,6 +1,6 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { parseSessionFile } from '../src/indexer.js';
+import { parseSessionFile, ParsedSession } from '../src/indexer.js';
 
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -8,7 +8,7 @@ const FIXTURES_DIR = join(__dirname, '__fixtures__');
 
 describe('parseSessionFile', () => {
   describe('basic parsing with string content', () => {
-    let result;
+    let result: ParsedSession;
 
     beforeAll(async () => {
       result = await parseSessionFile(join(FIXTURES_DIR, 'sample-session.jsonl'));
@@ -51,7 +51,7 @@ describe('parseSessionFile', () => {
   });
 
   describe('array content format', () => {
-    let result;
+    let result: ParsedSession;
 
     beforeAll(async () => {
       result = await parseSessionFile(join(FIXTURES_DIR, 'sample-session-array-content.jsonl'));
@@ -80,7 +80,7 @@ describe('parseSessionFile', () => {
   });
 
   describe('command message handling', () => {
-    let result;
+    let result: ParsedSession;
 
     beforeAll(async () => {
       result = await parseSessionFile(join(FIXTURES_DIR, 'sample-session-with-commands.jsonl'));
@@ -106,7 +106,7 @@ describe('parseSessionFile', () => {
   });
 
   describe('edge cases and error handling', () => {
-    let result;
+    let result: ParsedSession;
 
     beforeAll(async () => {
       result = await parseSessionFile(join(FIXTURES_DIR, 'sample-session-edge-cases.jsonl'));
@@ -138,7 +138,7 @@ describe('parseSessionFile', () => {
   });
 
   describe('empty file handling', () => {
-    let result;
+    let result: ParsedSession;
 
     beforeAll(async () => {
       result = await parseSessionFile(join(FIXTURES_DIR, 'sample-session-empty.jsonl'));
@@ -171,7 +171,7 @@ describe('parseSessionFile', () => {
       // Create a test case using the existing fixture - the preview is short
       // so we verify it doesn't truncate when under 200 chars
       const result = await parseSessionFile(join(FIXTURES_DIR, 'sample-session.jsonl'));
-      expect(result.preview.length).toBeLessThanOrEqual(200);
+      expect(result.preview!.length).toBeLessThanOrEqual(200);
     });
   });
 

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import Database, { Statement } from 'better-sqlite3';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -7,17 +7,57 @@ import { tmpdir } from 'os';
 const TEST_DB_DIR = join(tmpdir(), `claude-history-db-test-${Date.now()}`);
 const TEST_DB_PATH = join(TEST_DB_DIR, 'test.db');
 
-let db;
-let insertSession;
-let insertMessage;
-let getSessionById;
-let getRecentSessions;
-let getMessagesBySessionId;
-let searchMessagesByRelevance;
-let searchMessagesByDate;
-let clearSessionMessages;
+interface SessionRecord {
+  id: string;
+  project: string;
+  started_at: number;
+  last_activity_at: number | null;
+  message_count: number;
+  preview: string | null;
+  title: string | null;
+  last_indexed: number | null;
+}
 
-function setupDatabase() {
+interface MessageRecord {
+  session_id: string;
+  role: string;
+  content: string;
+  timestamp: number;
+  uuid: string;
+}
+
+interface SearchResult extends MessageRecord {
+  project: string;
+  started_at: number;
+  title: string | null;
+  highlighted_content: string;
+  rank: number;
+}
+
+interface ColumnInfo {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: unknown;
+  pk: number;
+}
+
+interface TableInfo {
+  name: string;
+}
+
+let db: Database.Database;
+let insertSession: Statement<unknown[]>;
+let insertMessage: Statement<unknown[]>;
+let getSessionById: Statement<unknown[], SessionRecord>;
+let getRecentSessions: Statement<unknown[], SessionRecord>;
+let getMessagesBySessionId: Statement<unknown[], MessageRecord>;
+let searchMessagesByRelevance: Statement<unknown[], SearchResult>;
+let searchMessagesByDate: Statement<unknown[], SearchResult>;
+let clearSessionMessages: Statement<unknown[]>;
+
+function setupDatabase(): void {
   mkdirSync(TEST_DB_DIR, { recursive: true });
   db = new Database(TEST_DB_PATH);
   db.pragma('journal_mode = WAL');
@@ -119,14 +159,14 @@ function setupDatabase() {
   clearSessionMessages = db.prepare(`DELETE FROM messages_fts WHERE session_id = ?`);
 }
 
-function teardownDatabase() {
+function teardownDatabase(): void {
   if (db) {
     db.close();
   }
   rmSync(TEST_DB_DIR, { recursive: true, force: true });
 }
 
-function seedTestData() {
+function seedTestData(): void {
   const now = Date.now();
 
   // Session 1: React tutorial
@@ -188,7 +228,7 @@ describe('Database Schema', () => {
   });
 
   it('should create sessions table with correct columns', () => {
-    const columns = db.prepare("PRAGMA table_info(sessions)").all();
+    const columns = db.prepare("PRAGMA table_info(sessions)").all() as ColumnInfo[];
     const columnNames = columns.map(c => c.name);
 
     expect(columnNames).toContain('id');
@@ -202,7 +242,7 @@ describe('Database Schema', () => {
   });
 
   it('should create FTS5 virtual table for messages', () => {
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'").all();
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'").all() as TableInfo[];
     expect(tables.length).toBe(1);
   });
 });
@@ -220,10 +260,10 @@ describe('Session Operations', () => {
   it('should insert and retrieve a session', () => {
     const session = getSessionById.get('session-react-001');
     expect(session).toBeDefined();
-    expect(session.id).toBe('session-react-001');
-    expect(session.project).toBe('/Users/test/react-project');
-    expect(session.title).toBe('React Component Tutorial');
-    expect(session.message_count).toBe(4);
+    expect(session!.id).toBe('session-react-001');
+    expect(session!.project).toBe('/Users/test/react-project');
+    expect(session!.title).toBe('React Component Tutorial');
+    expect(session!.message_count).toBe(4);
   });
 
   it('should retrieve recent sessions ordered by last activity', () => {
@@ -270,7 +310,7 @@ describe('FTS5 Full-Text Search', () => {
     expect(results.length).toBeGreaterThan(0);
     const pythonResult = results.find(r => r.session_id === 'session-python-002');
     expect(pythonResult).toBeDefined();
-    expect(pythonResult.highlighted_content).toContain('<mark>');
+    expect(pythonResult!.highlighted_content).toContain('<mark>');
   });
 
   it('should use porter stemmer for stemming', () => {
@@ -349,13 +389,13 @@ describe('Session Message Management', () => {
     insertSession.run('session-upsert', '/test', now, now, 1, 'preview', 'Original Title', now);
 
     let session = getSessionById.get('session-upsert');
-    expect(session.title).toBe('Original Title');
+    expect(session!.title).toBe('Original Title');
 
     // Update the same session
     insertSession.run('session-upsert', '/test', now, now, 2, 'updated preview', 'Updated Title', now);
 
     session = getSessionById.get('session-upsert');
-    expect(session.title).toBe('Updated Title');
-    expect(session.message_count).toBe(2);
+    expect(session!.title).toBe('Updated Title');
+    expect(session!.message_count).toBe(2);
   });
 });

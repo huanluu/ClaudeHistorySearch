@@ -1,6 +1,6 @@
 export default {
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.js'],
+  testMatch: ['**/tests/**/*.test.ts'],
   moduleFileExtensions: ['js', 'ts', 'json'],
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: 'coverage',
