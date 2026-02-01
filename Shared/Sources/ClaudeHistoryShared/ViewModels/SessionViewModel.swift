@@ -212,6 +212,21 @@ public class SessionViewModel: ObservableObject {
         self.error = nil
     }
 
+    /// Prepare for resuming a session without sending a message yet.
+    /// Call this to enter live mode and show the input field for the resumed session.
+    /// - Parameters:
+    ///   - resumeSessionId: The ID of the historical session to resume
+    ///   - workingDir: The working directory for the session
+    public func prepareForResumeSession(resumeSessionId: String, workingDir: String) {
+        self.resumeSessionId = resumeSessionId
+        self.workingDir = workingDir
+        self.mode = .live
+        self.state = .idle
+        self.messages = []
+        self.sessionId = nil
+        self.error = nil
+    }
+
     /// Unified method to send a message, handling both first message (start) and follow-ups.
     /// Use this for chat-like interactions where the view doesn't need to know if it's a new session or follow-up.
     /// - Parameter prompt: The message to send

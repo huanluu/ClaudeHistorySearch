@@ -29,10 +29,6 @@ public struct SessionView: View {
     @State private var isLoading = true
     @State private var error: String?
 
-    // Resume UI state
-    @State private var showingResumeSheet = false
-    @State private var resumePrompt = ""
-
     // Follow-up input state
     @State private var followUpPrompt = ""
 
@@ -121,7 +117,7 @@ public struct SessionView: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 if mode == .historical && webSocketClient != nil {
-                    Button(action: { showingResumeSheet = true }) {
+                    Button(action: { resumeSessionInstantly() }) {
                         Image(systemName: "arrow.clockwise.circle")
                     }
                     .help("Resume session")
@@ -133,9 +129,6 @@ public struct SessionView: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showingResumeSheet) {
-            resumePromptSheet
         }
         .task {
             await loadSession()
@@ -212,7 +205,7 @@ public struct SessionView: View {
 
             HStack(spacing: 8) {
                 if mode == .historical && webSocketClient != nil {
-                    Button(action: { showingResumeSheet = true }) {
+                    Button(action: { resumeSessionInstantly() }) {
                         Image(systemName: "arrow.clockwise.circle")
                     }
                     .buttonStyle(.plain)
@@ -232,9 +225,6 @@ public struct SessionView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .sheet(isPresented: $showingResumeSheet) {
-            resumePromptSheet
-        }
     }
 
     private var macOSLoadingView: some View {
@@ -407,74 +397,6 @@ public struct SessionView: View {
         #endif
     }
 
-    // MARK: - Resume Prompt Sheet
-
-    private var resumePromptSheet: some View {
-        #if os(iOS)
-        NavigationStack {
-            Form {
-                Section {
-                    TextEditor(text: $resumePrompt)
-                        .frame(minHeight: 100)
-                } header: {
-                    Text("Follow-up Prompt")
-                } footer: {
-                    Text("Enter your follow-up message to continue this session")
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Resume Session")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        resumePrompt = ""
-                        showingResumeSheet = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Resume") {
-                        resumeSession()
-                    }
-                    .disabled(resumePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        #else
-        VStack(spacing: 16) {
-            Text("Resume Session")
-                .font(.headline)
-
-            Text("Enter your follow-up message:")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            TextEditor(text: $resumePrompt)
-                .frame(minHeight: 80)
-                .border(Color.gray.opacity(0.3))
-
-            HStack {
-                Button("Cancel") {
-                    resumePrompt = ""
-                    showingResumeSheet = false
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("Resume") {
-                    resumeSession()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(resumePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding()
-        .frame(width: 350, height: 250)
-        #endif
-    }
-
     // MARK: - Data Loading
 
     private func loadSession() async {
@@ -506,36 +428,17 @@ public struct SessionView: View {
         #endif
     }
 
-    private func resumeSession() {
+    /// Instantly switch to live mode for resuming a session.
+    /// The user will see the input field and can type their follow-up message naturally.
+    private func resumeSessionInstantly() {
         guard let detail = sessionDetail else { return }
-        let prompt = resumePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty else { return }
-
-        // Get working directory from session project path
         let workingDir = detail.session.project
 
-        // Close sheet
-        showingResumeSheet = false
+        // Prepare viewModel for resume (sets resumeSessionId so sendMessage routes to sendFollowUp)
+        liveViewModel.prepareForResumeSession(resumeSessionId: sessionId, workingDir: workingDir)
 
-        // Switch to live mode
+        // Switch to live mode - this will show the input field
         mode = .live
-
-        // Start resume via WebSocket
-        Task {
-            do {
-                try await liveViewModel.resumeSession(
-                    resumeSessionId: sessionId,
-                    prompt: prompt,
-                    workingDir: workingDir
-                )
-            } catch {
-                self.error = error.localizedDescription
-                mode = .historical
-            }
-        }
-
-        // Clear prompt for next time
-        resumePrompt = ""
     }
 
     private func sendFollowUp() {
