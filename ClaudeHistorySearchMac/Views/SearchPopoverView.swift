@@ -62,7 +62,7 @@ struct SearchPopoverView: View {
             .navigationDestination(for: NavigationDestination.self) { destination in
                 switch destination {
                 case .sessionDetail(let sessionId, let highlightText, let scrollToMessageId):
-                    SessionDetailView(
+                    SessionView(
                         sessionId: sessionId,
                         highlightText: highlightText,
                         scrollToMessageId: scrollToMessageId,

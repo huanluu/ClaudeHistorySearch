@@ -153,7 +153,7 @@ struct SessionListView: View {
         }
         .listStyle(.plain)
         .navigationDestination(for: Session.self) { session in
-            SessionDetailView(session: session)
+            SessionView(session: session)
         }
     }
 
@@ -226,7 +226,7 @@ struct SessionListView: View {
             } else {
                 ForEach(searchResults) { result in
                     NavigationLink {
-                        SessionDetailView(
+                        SessionView(
                             sessionId: result.sessionId,
                             highlightText: searchText,
                             scrollToMessageId: result.message.uuid

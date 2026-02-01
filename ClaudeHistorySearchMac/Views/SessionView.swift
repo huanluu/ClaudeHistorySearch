@@ -1,7 +1,9 @@
 import SwiftUI
 import ClaudeHistoryShared
 
-struct SessionDetailView: View {
+/// Unified session view for macOS that supports both historical and live modes.
+/// In Phase 5: Only historical mode is implemented.
+struct SessionView: View {
     @EnvironmentObject var apiClient: APIClient
 
     let sessionId: String
@@ -9,9 +11,28 @@ struct SessionDetailView: View {
     let scrollToMessageId: String?
     let onBack: () -> Void
 
+    // Session mode (historical for now, live in Phase 6)
+    let mode: SessionMode
+
     @State private var sessionDetail: SessionDetailResponse?
     @State private var isLoading = true
     @State private var error: String?
+
+    // MARK: - Initializers
+
+    /// Initialize for viewing a historical session
+    init(
+        sessionId: String,
+        highlightText: String? = nil,
+        scrollToMessageId: String? = nil,
+        onBack: @escaping () -> Void
+    ) {
+        self.sessionId = sessionId
+        self.highlightText = highlightText
+        self.scrollToMessageId = scrollToMessageId
+        self.onBack = onBack
+        self.mode = .historical
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +47,7 @@ struct SessionDetailView: View {
             } else if let error = error {
                 errorView(error)
             } else if let detail = sessionDetail {
-                conversationView(detail: detail)
+                contentView(detail: detail)
             } else {
                 Text("No data available")
                     .foregroundColor(.secondary)
@@ -112,51 +133,28 @@ struct SessionDetailView: View {
         }
     }
 
-    // MARK: - Conversation View
+    // MARK: - Content View
 
-    private func conversationView(detail: SessionDetailResponse) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Session info
-                    VStack(spacing: 4) {
-                        Text(detail.session.project)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                        Text(detail.session.startedAtDate, style: .date)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("\(detail.messages.count) messages")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 12)
-
-                    Divider()
-                        .padding(.horizontal)
-
-                    // Messages
-                    ForEach(detail.messages) { message in
-                        MessageRowView(message: message, highlightText: highlightText)
-                            .id(message.uuid)
-                    }
-
-                    // Bottom padding
-                    Spacer()
-                        .frame(height: 20)
-                }
-            }
-            .onAppear {
-                if let targetId = scrollToMessageId {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation {
-                            proxy.scrollTo(targetId, anchor: .center)
-                        }
-                    }
-                }
-            }
+    @ViewBuilder
+    private func contentView(detail: SessionDetailResponse) -> some View {
+        switch mode {
+        case .historical:
+            historicalView(detail: detail)
+        case .live:
+            // Phase 6: Live view implementation
+            historicalView(detail: detail)
         }
+    }
+
+    @ViewBuilder
+    private func historicalView(detail: SessionDetailResponse) -> some View {
+        MessageListView(
+            messages: detail.messages,
+            session: detail.session,
+            highlightText: highlightText,
+            scrollToMessageId: scrollToMessageId,
+            style: .compact
+        )
     }
 
     // MARK: - Data Loading
@@ -188,7 +186,7 @@ struct SessionDetailView: View {
 }
 
 #Preview {
-    SessionDetailView(
+    SessionView(
         sessionId: "test",
         highlightText: "SwiftUI",
         scrollToMessageId: nil,

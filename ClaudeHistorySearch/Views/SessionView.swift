@@ -1,52 +1,52 @@
 import SwiftUI
 import ClaudeHistoryShared
 
-struct SessionDetailView: View {
+/// Unified session view that supports both historical and live modes.
+/// In Phase 5: Only historical mode is implemented.
+struct SessionView: View {
     @EnvironmentObject var apiClient: APIClient
 
+    // Session identification
     let session: Session?
     let sessionId: String?
     let highlightText: String?
     let scrollToMessageId: String?
 
+    // Session mode (historical for now, live in Phase 6)
+    let mode: SessionMode
+
     @State private var sessionDetail: SessionDetailResponse?
     @State private var isLoading = true
     @State private var error: String?
 
+    // MARK: - Initializers
+
+    /// Initialize for viewing a historical session with Session object
     init(session: Session) {
         self.session = session
         self.sessionId = session.id
         self.highlightText = nil
         self.scrollToMessageId = nil
+        self.mode = .historical
     }
 
+    /// Initialize for viewing a historical session by ID (from search results)
     init(sessionId: String, highlightText: String? = nil, scrollToMessageId: String? = nil) {
         self.session = nil
         self.sessionId = sessionId
         self.highlightText = highlightText
         self.scrollToMessageId = scrollToMessageId
+        self.mode = .historical
     }
 
     var body: some View {
         Group {
             if isLoading {
-                ProgressView("Loading conversation...")
+                loadingView
             } else if let error = error {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.orange)
-                    Text(error)
-                        .foregroundColor(.secondary)
-                    Button("Retry") {
-                        Task {
-                            await loadSession()
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                }
+                errorView(error)
             } else if let detail = sessionDetail {
-                conversationView(detail: detail)
+                contentView(detail: detail)
             } else {
                 Text("No data available")
                     .foregroundColor(.secondary)
@@ -59,6 +59,8 @@ struct SessionDetailView: View {
         }
     }
 
+    // MARK: - Display Title
+
     private var displayTitle: String {
         if let session = session {
             return session.displayName
@@ -68,49 +70,57 @@ struct SessionDetailView: View {
         return "Conversation"
     }
 
-    @ViewBuilder
-    private func conversationView(detail: SessionDetailResponse) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Header
-                    VStack(spacing: 8) {
-                        Text(detail.session.project)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(detail.session.startedAtDate, style: .date)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text("\(detail.messages.count) messages")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
+    // MARK: - Loading View
 
-                    Divider()
-
-                    // Messages
-                    ForEach(detail.messages) { message in
-                        MessageBubbleView(message: message, highlightText: highlightText)
-                            .id(message.uuid)
-                    }
-
-                    // Bottom padding
-                    Spacer()
-                        .frame(height: 50)
-                }
-            }
-            .onAppear {
-                if let targetId = scrollToMessageId {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        withAnimation {
-                            proxy.scrollTo(targetId, anchor: .center)
-                        }
-                    }
-                }
-            }
+    private var loadingView: some View {
+        VStack {
+            ProgressView("Loading conversation...")
         }
     }
+
+    // MARK: - Error View
+
+    private func errorView(_ error: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundColor(.orange)
+            Text(error)
+                .foregroundColor(.secondary)
+            Button("Retry") {
+                Task {
+                    await loadSession()
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    // MARK: - Content View
+
+    @ViewBuilder
+    private func contentView(detail: SessionDetailResponse) -> some View {
+        switch mode {
+        case .historical:
+            historicalView(detail: detail)
+        case .live:
+            // Phase 6: Live view implementation
+            historicalView(detail: detail)
+        }
+    }
+
+    @ViewBuilder
+    private func historicalView(detail: SessionDetailResponse) -> some View {
+        MessageListView(
+            messages: detail.messages,
+            session: detail.session,
+            highlightText: highlightText,
+            scrollToMessageId: scrollToMessageId,
+            style: .default
+        )
+    }
+
+    // MARK: - Data Loading
 
     private func loadSession() async {
         guard let id = sessionId else {
@@ -134,7 +144,7 @@ struct SessionDetailView: View {
 
 #Preview {
     NavigationStack {
-        SessionDetailView(session: Session(
+        SessionView(session: Session(
             id: "test-id",
             project: "/Users/test/Developer",
             startedAt: Int64(Date().timeIntervalSince1970 * 1000),
