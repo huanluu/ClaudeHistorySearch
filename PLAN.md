@@ -69,6 +69,8 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - [x] `npm test` passes (58 tests: 16 routes + 15 database + 27 indexer)
 - [x] `swift test` passes (16 tests)
 
+**Note:** Test counts updated after Phase 3 tests were added (see Phase 3.3).
+
 ---
 
 ## Phase 3: Architecture Modularity ✅ Complete
@@ -82,9 +84,14 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 - [x] Create `Shared/Sources/ClaudeHistoryShared/Services/NetworkService.swift` - Protocol
 - [x] Refactor `APIClient.swift` to conform to protocol
 
-### 3.3 Verification
+### 3.3 Tests
+- [x] Create `server/tests/transport.test.js` - HttpTransport tests (21 tests)
+- [x] Create `Shared/Tests/ClaudeHistorySharedTests/NetworkServiceTests.swift` - Protocol conformance tests (19 tests)
+
+### 3.4 Verification
 - [x] Existing functionality unchanged
-- [x] Tests still pass (58 server + 16 Swift)
+- [x] `npm test` passes (79 tests: 16 routes + 15 database + 27 indexer + 21 transport)
+- [x] `swift test` passes (35 tests: 16 APIClient + 19 NetworkService)
 
 ---
 
@@ -149,7 +156,9 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 |-------|--------|-----------|-------|
 | 1 | Complete | 2026-01-31 | API key auth for server + iOS/macOS Keychain storage |
 | 2 | Complete | 2026-01-31 | Jest + supertest for server (58 tests), Swift Package tests (16 tests) |
-| 3 | Complete | 2026-01-31 | Transport abstraction (server) + NetworkService protocol (iOS) |
+| 3 | Complete | 2026-01-31 | Transport abstraction (server) + NetworkService protocol (iOS) + tests (21 transport + 19 NetworkService) |
 | 3.5 | Complete | 2026-02-01 | **TypeScript Migration** - Converted all server code to TypeScript |
 | 4 | Not Started | - | |
 | 5 | Not Started | - | |
+
+**Current Test Totals:** 79 server tests + 35 Swift tests = 114 total tests
