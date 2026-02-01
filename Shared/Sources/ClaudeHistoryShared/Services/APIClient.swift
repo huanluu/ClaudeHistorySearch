@@ -15,10 +15,15 @@ public enum SearchSortOption: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-public class APIClient: ObservableObject {
+public class APIClient: ObservableObject, NetworkService {
     @Published public var isLoading = false
     @Published public var error: String?
     @Published public var isAuthenticated = true
+
+    /// Indicates if the client has a server URL configured
+    public var isConnected: Bool {
+        baseURL != nil
+    }
 
     private var baseURL: URL?
     private var apiKey: String?

@@ -1,4 +1,3 @@
-import express from 'express';
 import Bonjour from 'bonjour-service';
 import { watch } from 'chokidar';
 import { execSync } from 'child_process';
@@ -7,6 +6,7 @@ import routes from './routes.js';
 import { DB_PATH } from './database.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
+import { HttpTransport } from './transport/index.js';
 
 const PORT = process.env.PORT || 3847;
 const SERVICE_TYPE = 'claudehistory';
@@ -25,28 +25,19 @@ function isStealthModeEnabled() {
   }
 }
 
-const app = express();
-app.use(express.json());
-
-// CORS middleware for local development
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, X-API-Key');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+// Create HTTP transport
+const transport = new HttpTransport({ port: PORT });
 
 // Authentication middleware
-app.use(authMiddleware);
+transport.use(authMiddleware);
 
 // Mount API routes
-app.use('/', routes);
+transport.use('/', routes);
 
 // Start server
-const server = app.listen(PORT, '0.0.0.0', async () => {
+async function main() {
+  await transport.start();
+
   console.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
 
@@ -117,18 +108,22 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
 
   // Graceful shutdown
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log('\nShutting down...');
     clearInterval(reindexTimer);
     if (service) service.stop();
     if (bonjour) bonjour.destroy();
     watcher.close();
-    server.close(() => {
-      console.log('Server stopped');
-      process.exit(0);
-    });
+    await transport.stop();
+    console.log('Server stopped');
+    process.exit(0);
   };
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+}
+
+main().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
