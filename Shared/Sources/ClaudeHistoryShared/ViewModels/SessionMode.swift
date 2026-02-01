@@ -37,7 +37,10 @@ public enum SessionState: Equatable {
     /// Session is running and streaming output
     case running
 
-    /// Session completed successfully
+    /// Session ready for follow-up input
+    case ready
+
+    /// Session completed and closed
     case completed(exitCode: Int)
 
     /// Session failed with error
@@ -46,10 +49,20 @@ public enum SessionState: Equatable {
     /// Session was cancelled by user
     case cancelled
 
-    /// Whether the session is currently active
+    /// Whether the session is currently active (running)
     public var isActive: Bool {
         switch self {
         case .running:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Whether the session can accept new input
+    public var canSendMessage: Bool {
+        switch self {
+        case .ready, .idle:
             return true
         default:
             return false

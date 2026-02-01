@@ -57,5 +57,15 @@ struct ClaudeHistorySearchApp: App {
     @MainActor
     private func configureWebSocket(baseURL: URL) {
         webSocketClient.configure(baseURL: baseURL, apiKey: apiClient.getAPIKey())
+
+        // Auto-connect WebSocket
+        Task {
+            do {
+                try await webSocketClient.connect()
+                print("[WebSocket] Connected successfully")
+            } catch {
+                print("[WebSocket] Connection failed: \(error)")
+            }
+        }
     }
 }

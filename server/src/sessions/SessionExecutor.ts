@@ -35,22 +35,40 @@ export class SessionExecutor extends EventEmitter {
     // Add prompt and output format
     args.push('-p', options.prompt);
     args.push('--output-format', 'stream-json');
+    args.push('--verbose');  // Required for stream-json with -p
+    // Skip permission prompts for headless operation
+    args.push('--dangerously-skip-permissions');
 
-    // Spawn claude process
+    console.log(`[SessionExecutor] Starting claude with args:`, args);
+    console.log(`[SessionExecutor] Working directory: ${options.workingDir}`);
+
+    console.log(`[SessionExecutor] Args: ${args.join(' ')}`);
+
+    // Spawn claude process with environment variables for non-TTY operation
+    // CI=1, TERM=dumb, NO_COLOR=1 forces claude into non-interactive mode
     this.process = spawn('claude', args, {
       cwd: options.workingDir,
-      env: { ...process.env },
-      stdio: ['pipe', 'pipe', 'pipe']
+      env: {
+        ...process.env,
+        CI: '1',
+        TERM: 'dumb',
+        NO_COLOR: '1'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']  // stdin=ignore for non-interactive
     });
+
+    console.log(`[SessionExecutor] Process spawned with PID: ${this.process.pid}`);
 
     // Handle stdout (JSON lines)
     this.process.stdout?.on('data', (data: Buffer) => {
+      console.log(`[SessionExecutor] stdout: ${data.toString().substring(0, 100)}...`);
       this.handleStdout(data);
     });
 
     // Handle stderr
     this.process.stderr?.on('data', (data: Buffer) => {
       const text = data.toString().trim();
+      console.log(`[SessionExecutor] stderr: ${text}`);
       if (text) {
         this.emit('error', text);
       }
@@ -58,7 +76,14 @@ export class SessionExecutor extends EventEmitter {
 
     // Handle process exit
     this.process.on('exit', (code: number | null) => {
+      console.log(`[SessionExecutor] Process exited with code: ${code}`);
       this.emit('complete', code ?? 0);
+    });
+
+    // Handle spawn errors
+    this.process.on('error', (err) => {
+      console.error(`[SessionExecutor] Spawn error:`, err);
+      this.emit('error', `Failed to start claude: ${err.message}`);
     });
   }
 

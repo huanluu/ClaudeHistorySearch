@@ -33,6 +33,9 @@ public struct SessionView: View {
     @State private var showingResumeSheet = false
     @State private var resumePrompt = ""
 
+    // Follow-up input state
+    @State private var followUpPrompt = ""
+
     // MARK: - Initializers
 
     #if os(iOS)
@@ -345,11 +348,34 @@ public struct SessionView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(statusBarBackground)
+        } else if liveViewModel.state == .ready {
+            // Show input field for follow-up messages
+            HStack(spacing: 8) {
+                TextField("Send a follow-up...", text: $followUpPrompt)
+                    .textFieldStyle(.plain)
+                    .padding(8)
+                    .background(Color.primary.opacity(0.05))
+                    .cornerRadius(8)
+                    .onSubmit {
+                        sendFollowUp()
+                    }
+
+                Button(action: sendFollowUp) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+                .disabled(followUpPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(statusBarBackground)
         } else if case .completed(let exitCode) = liveViewModel.state {
             HStack {
-                Image(systemName: exitCode == 0 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .foregroundStyle(exitCode == 0 ? .green : .orange)
-                Text(exitCode == 0 ? "Session completed" : "Completed with exit code \(exitCode)")
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.orange)
+                Text("Completed with exit code \(exitCode)")
                     .font(.caption)
                 Spacer()
             }
@@ -510,6 +536,22 @@ public struct SessionView: View {
 
         // Clear prompt for next time
         resumePrompt = ""
+    }
+
+    private func sendFollowUp() {
+        let prompt = followUpPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+
+        // Clear input immediately for responsiveness
+        followUpPrompt = ""
+
+        Task {
+            do {
+                try await liveViewModel.sendFollowUp(prompt: prompt)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
 

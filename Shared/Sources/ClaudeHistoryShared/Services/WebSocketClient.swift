@@ -307,10 +307,15 @@ public class WebSocketClient: ObservableObject {
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
         switch message {
         case .string(let text):
+            print("[WebSocketClient] Received text message: \(text.prefix(200))...")
+
             guard let data = text.data(using: .utf8),
                   let wsMessage = try? decoder.decode(WSMessage.self, from: data) else {
+                print("[WebSocketClient] Failed to decode message")
                 return
             }
+
+            print("[WebSocketClient] Decoded message type: \(wsMessage.type)")
 
             switch wsMessage.type {
             case .authResult:
@@ -325,6 +330,7 @@ public class WebSocketClient: ObservableObject {
                 }
             default:
                 // Forward to message handler
+                print("[WebSocketClient] Forwarding to onMessage handler (handler exists: \(onMessage != nil))")
                 onMessage?(wsMessage)
             }
 

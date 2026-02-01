@@ -32,6 +32,9 @@ public class SessionViewModel: ObservableObject {
     /// Current session ID (for live sessions)
     public internal(set) var sessionId: String?
 
+    /// The original Claude session ID being resumed (persists across follow-ups)
+    public internal(set) var resumeSessionId: String?
+
     /// Working directory for the session
     public internal(set) var workingDir: String?
 
@@ -92,6 +95,9 @@ public class SessionViewModel: ObservableObject {
             throw SessionViewModelError.noWebSocketClient
         }
 
+        // Ensure WebSocket is connected
+        try await ensureWebSocketConnected()
+
         // Generate unique session ID
         let newSessionId = UUID().uuidString
         self.sessionId = newSessionId
@@ -99,6 +105,18 @@ public class SessionViewModel: ObservableObject {
         self.state = .running
         self.mode = .live
         self.error = nil
+
+        // Wire up message handler to receive responses
+        setupMessageHandler()
+
+        // Add user's prompt to messages (Claude doesn't echo it back in -p mode)
+        let userMessage = Message(
+            uuid: UUID().uuidString,
+            role: "user",
+            content: prompt,
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        messages.append(userMessage)
 
         // Send session.start message
         let message = WSMessage(
@@ -110,7 +128,9 @@ public class SessionViewModel: ObservableObject {
             ])
         )
 
+        print("[SessionViewModel] Sending session.start for session: \(newSessionId)")
         try await webSocketClient.send(message)
+        print("[SessionViewModel] session.start sent successfully")
     }
 
     /// Resume a historical session with a follow-up prompt
@@ -123,13 +143,29 @@ public class SessionViewModel: ObservableObject {
             throw SessionViewModelError.noWebSocketClient
         }
 
+        // Ensure WebSocket is connected
+        try await ensureWebSocketConnected()
+
         // Generate unique session ID for this interaction
         let newSessionId = UUID().uuidString
         self.sessionId = newSessionId
+        self.resumeSessionId = resumeSessionId  // Store for follow-ups
         self.workingDir = workingDir
         self.state = .running
         self.mode = .live
         self.error = nil
+
+        // Wire up message handler to receive responses
+        setupMessageHandler()
+
+        // Add user's prompt to messages (Claude doesn't echo it back in -p mode)
+        let userMessage = Message(
+            uuid: UUID().uuidString,
+            role: "user",
+            content: prompt,
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        messages.append(userMessage)
 
         // Send session.resume message
         let message = WSMessage(
@@ -142,7 +178,9 @@ public class SessionViewModel: ObservableObject {
             ])
         )
 
+        print("[SessionViewModel] Sending session.resume for session: \(newSessionId), resuming: \(resumeSessionId)")
         try await webSocketClient.send(message)
+        print("[SessionViewModel] session.resume sent successfully")
     }
 
     /// Cancel the currently running session
@@ -161,15 +199,132 @@ public class SessionViewModel: ObservableObject {
         }
     }
 
+    /// Send a follow-up message in the current session
+    public func sendFollowUp(prompt: String) async throws {
+        guard let resumeSessionId = resumeSessionId,
+              let workingDir = workingDir else {
+            throw SessionViewModelError.invalidState("No active session to follow up")
+        }
+
+        guard state.canSendMessage else {
+            throw SessionViewModelError.invalidState("Session is not ready for input")
+        }
+
+        guard let webSocketClient = webSocketClient else {
+            throw SessionViewModelError.noWebSocketClient
+        }
+
+        // Ensure WebSocket is connected
+        try await ensureWebSocketConnected()
+
+        // Generate new session ID for this turn
+        let newSessionId = UUID().uuidString
+        self.sessionId = newSessionId
+        self.state = .running
+        self.error = nil
+
+        // Wire up message handler
+        setupMessageHandler()
+
+        // Add user's prompt to messages
+        let userMessage = Message(
+            uuid: UUID().uuidString,
+            role: "user",
+            content: prompt,
+            timestamp: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        messages.append(userMessage)
+
+        // Send session.resume message (reusing the original resumeSessionId)
+        let message = WSMessage(
+            type: .sessionResume,
+            payload: AnyCodable([
+                "sessionId": newSessionId,
+                "resumeSessionId": resumeSessionId,
+                "prompt": prompt,
+                "workingDir": workingDir
+            ])
+        )
+
+        print("[SessionViewModel] Sending follow-up for session: \(newSessionId), resuming: \(resumeSessionId)")
+        try await webSocketClient.send(message)
+    }
+
+    /// Set up the WebSocket message handler to receive session responses
+    private func setupMessageHandler() {
+        print("[SessionViewModel] Setting up message handler for session: \(sessionId ?? "nil")")
+        webSocketClient?.onMessage = { [weak self] message in
+            print("[SessionViewModel] Received WebSocket message: \(message.type)")
+            Task { @MainActor in
+                self?.handleWebSocketMessage(message)
+            }
+        }
+    }
+
+    /// Ensure WebSocket is connected, attempting reconnection if needed
+    private func ensureWebSocketConnected() async throws {
+        guard let webSocketClient = webSocketClient else {
+            throw SessionViewModelError.noWebSocketClient
+        }
+
+        // If already authenticated, we're good
+        if webSocketClient.state == .authenticated {
+            print("[SessionViewModel] WebSocket already authenticated")
+            return
+        }
+
+        // If disconnected, try to reconnect
+        if webSocketClient.state == .disconnected {
+            print("[SessionViewModel] WebSocket disconnected, attempting reconnection...")
+            do {
+                try await webSocketClient.connect()
+                print("[SessionViewModel] WebSocket reconnection successful")
+            } catch {
+                print("[SessionViewModel] WebSocket reconnection failed: \(error)")
+                throw SessionViewModelError.invalidState("WebSocket connection failed: \(error.localizedDescription)")
+            }
+        }
+
+        // If still connecting, wait a bit
+        if webSocketClient.state == .connecting {
+            print("[SessionViewModel] WebSocket still connecting, waiting...")
+            // Wait up to 5 seconds for authentication
+            for _ in 0..<50 {
+                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                if webSocketClient.state == .authenticated {
+                    print("[SessionViewModel] WebSocket authentication completed")
+                    return
+                }
+                if webSocketClient.state == .disconnected {
+                    throw SessionViewModelError.invalidState("WebSocket connection failed")
+                }
+            }
+            throw SessionViewModelError.invalidState("WebSocket connection timeout")
+        }
+    }
+
     // MARK: - WebSocket Message Handling
 
     /// Handle incoming WebSocket messages
     public func handleWebSocketMessage(_ message: WSMessage) {
-        guard let payload = message.payload?.value as? [String: Any],
-              let messageSessionId = payload["sessionId"] as? String,
-              messageSessionId == self.sessionId else {
+        print("[SessionViewModel] handleWebSocketMessage: type=\(message.type)")
+
+        guard let payload = message.payload?.value as? [String: Any] else {
+            print("[SessionViewModel] No payload in message")
+            return
+        }
+
+        guard let messageSessionId = payload["sessionId"] as? String else {
+            print("[SessionViewModel] No sessionId in payload: \(payload)")
+            return
+        }
+
+        guard messageSessionId == self.sessionId else {
+            print("[SessionViewModel] Session ID mismatch: got \(messageSessionId), expected \(self.sessionId ?? "nil")")
             return  // Ignore messages for other sessions
         }
+
+        print("[SessionViewModel] Processing message for session: \(messageSessionId)")
 
         switch message.type {
         case .sessionOutput:
@@ -182,7 +337,13 @@ public class SessionViewModel: ObservableObject {
 
         case .sessionComplete:
             if let exitCode = payload["exitCode"] as? Int {
-                self.state = .completed(exitCode: exitCode)
+                // If successful (exitCode 0), mark as ready for follow-up
+                // Otherwise mark as completed with error code
+                if exitCode == 0 {
+                    self.state = .ready
+                } else {
+                    self.state = .completed(exitCode: exitCode)
+                }
             }
 
         default:
@@ -192,35 +353,72 @@ public class SessionViewModel: ObservableObject {
 
     /// Handle session output message
     private func handleSessionOutput(_ payload: [String: Any]) {
-        guard let messageData = payload["message"] as? [String: Any] else { return }
+        guard let messageData = payload["message"] as? [String: Any] else {
+            print("[SessionViewModel] handleSessionOutput: no message in payload")
+            return
+        }
 
-        // Parse the Claude output format and convert to Message
-        // The output format from `claude -p --output-format stream-json` varies,
-        // but we'll extract the essentials
-        if let content = extractContent(from: messageData) {
-            let role = (messageData["type"] as? String) ?? "assistant"
-            let uuid = messageData["uuid"] as? String ?? UUID().uuidString
-            let timestamp = messageData["timestamp"] as? Int64
+        let messageType = messageData["type"] as? String ?? "unknown"
+        print("[SessionViewModel] handleSessionOutput: type=\(messageType)")
 
-            let newMessage = Message(
-                uuid: uuid,
-                role: role,
-                content: content,
-                timestamp: timestamp
-            )
-            messages.append(newMessage)
+        // Parse based on message type from Claude's stream-json format
+        switch messageType {
+        case "assistant":
+            // Format: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+            if let innerMessage = messageData["message"] as? [String: Any],
+               let content = extractContent(from: innerMessage) {
+                let uuid = messageData["uuid"] as? String ?? UUID().uuidString
+                let newMessage = Message(
+                    uuid: uuid,
+                    role: "assistant",
+                    content: content,
+                    timestamp: nil
+                )
+                messages.append(newMessage)
+                print("[SessionViewModel] Added assistant message: \(content.prefix(50))...")
+            }
+
+        case "user":
+            // Format: {"type":"user","message":{"content":[{"type":"text","text":"..."}]}}
+            if let innerMessage = messageData["message"] as? [String: Any],
+               let content = extractContent(from: innerMessage) {
+                let uuid = messageData["uuid"] as? String ?? UUID().uuidString
+                let newMessage = Message(
+                    uuid: uuid,
+                    role: "user",
+                    content: content,
+                    timestamp: nil
+                )
+                messages.append(newMessage)
+                print("[SessionViewModel] Added user message: \(content.prefix(50))...")
+            }
+
+        case "result":
+            // Format: {"type":"result","result":"...","subtype":"success"}
+            if let result = messageData["result"] as? String {
+                print("[SessionViewModel] Session result: \(result.prefix(100))...")
+                // Don't add result as a message - it's metadata
+            }
+
+        case "system":
+            // Format: {"type":"system","subtype":"init",...}
+            print("[SessionViewModel] System message: \(messageData["subtype"] ?? "unknown")")
+            // Don't add system messages to the UI
+
+        default:
+            print("[SessionViewModel] Unknown message type: \(messageType)")
         }
     }
 
-    /// Extract text content from Claude output message
-    private func extractContent(from messageData: [String: Any]) -> String? {
-        // Handle different output formats from Claude
-        if let content = messageData["content"] as? String {
+    /// Extract text content from Claude's inner message format
+    private func extractContent(from innerMessage: [String: Any]) -> String? {
+        // Handle string content directly
+        if let content = innerMessage["content"] as? String {
             return content
         }
 
-        // Handle array content format
-        if let contentArray = messageData["content"] as? [[String: Any]] {
+        // Handle array content format: [{"type":"text","text":"..."}]
+        if let contentArray = innerMessage["content"] as? [[String: Any]] {
             let texts = contentArray.compactMap { item -> String? in
                 if item["type"] as? String == "text" {
                     return item["text"] as? String
