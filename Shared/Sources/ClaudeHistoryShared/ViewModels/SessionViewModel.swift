@@ -199,6 +199,38 @@ public class SessionViewModel: ObservableObject {
         }
     }
 
+    /// Prepare for a new session without starting it yet.
+    /// Call this before transitioning to the chat phase of the new session flow.
+    /// - Parameter workingDir: The working directory for the session
+    public func prepareForNewSession(workingDir: String) {
+        self.workingDir = workingDir
+        self.mode = .live
+        self.state = .idle
+        self.messages = []
+        self.sessionId = nil
+        self.resumeSessionId = nil
+        self.error = nil
+    }
+
+    /// Unified method to send a message, handling both first message (start) and follow-ups.
+    /// Use this for chat-like interactions where the view doesn't need to know if it's a new session or follow-up.
+    /// - Parameter prompt: The message to send
+    public func sendMessage(prompt: String) async throws {
+        // Determine if we've already started a session
+        // A session has "started" if we have a resumeSessionId (from resume flow)
+        // or if we have any assistant messages (from startSession)
+        let hasStarted = resumeSessionId != nil || messages.contains { $0.role == "assistant" }
+
+        if hasStarted {
+            try await sendFollowUp(prompt: prompt)
+        } else {
+            guard let workingDir = workingDir else {
+                throw SessionViewModelError.invalidState("Working directory not set")
+            }
+            try await startSession(prompt: prompt, workingDir: workingDir)
+        }
+    }
+
     /// Send a follow-up message in the current session
     public func sendFollowUp(prompt: String) async throws {
         guard let resumeSessionId = resumeSessionId,
@@ -401,8 +433,15 @@ public class SessionViewModel: ObservableObject {
             }
 
         case "system":
-            // Format: {"type":"system","subtype":"init",...}
-            print("[SessionViewModel] System message: \(messageData["subtype"] ?? "unknown")")
+            // Format: {"type":"system","subtype":"init","session_id":"...","cwd":"..."}
+            let subtype = messageData["subtype"] as? String ?? "unknown"
+            print("[SessionViewModel] System message: \(subtype)")
+
+            // Capture the Claude session ID from init message for follow-ups
+            if subtype == "init", let claudeSessionId = messageData["session_id"] as? String {
+                print("[SessionViewModel] Captured Claude session ID: \(claudeSessionId)")
+                self.resumeSessionId = claudeSessionId
+            }
             // Don't add system messages to the UI
 
         default:

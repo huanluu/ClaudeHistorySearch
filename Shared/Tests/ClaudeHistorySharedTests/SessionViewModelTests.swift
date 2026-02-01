@@ -84,7 +84,9 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.error, "Something went wrong")
     }
 
-    func testHandleCompleteMessageSetsCompletedState() {
+    func testHandleCompleteMessageSetsReadyStateForSuccessfulCompletion() {
+        // When a session completes successfully (exitCode 0), we set state to .ready
+        // to enable sending follow-up messages (chat-like experience)
         let wsClient = WebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
@@ -99,11 +101,7 @@ final class SessionViewModelTests: XCTestCase {
 
         viewModel.handleWebSocketMessage(message)
 
-        if case .completed(let exitCode) = viewModel.state {
-            XCTAssertEqual(exitCode, 0)
-        } else {
-            XCTFail("Expected completed state, got \(viewModel.state)")
-        }
+        XCTAssertEqual(viewModel.state, .ready, "Successful completion should set state to .ready for follow-ups")
     }
 
     func testHandleCompleteWithNonZeroExitCode() {

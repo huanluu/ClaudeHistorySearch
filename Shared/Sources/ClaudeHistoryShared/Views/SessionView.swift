@@ -348,8 +348,8 @@ public struct SessionView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(statusBarBackground)
-        } else if liveViewModel.state == .ready {
-            // Show input field for follow-up messages
+        } else if liveViewModel.state.canSendMessage {
+            // Show input field for follow-up messages (works for both .ready and .idle states)
             HStack(spacing: 8) {
                 TextField("Send a follow-up...", text: $followUpPrompt)
                     .textFieldStyle(.plain)
@@ -547,7 +547,8 @@ public struct SessionView: View {
 
         Task {
             do {
-                try await liveViewModel.sendFollowUp(prompt: prompt)
+                // Use unified sendMessage() which handles both new sessions and follow-ups
+                try await liveViewModel.sendMessage(prompt: prompt)
             } catch {
                 self.error = error.localizedDescription
             }

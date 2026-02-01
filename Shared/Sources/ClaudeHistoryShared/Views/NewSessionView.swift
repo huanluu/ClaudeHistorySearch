@@ -1,14 +1,19 @@
 import SwiftUI
 
 /// View for starting a new Claude session.
-/// Provides prompt input and working directory selection.
+/// Two-phase flow: (1) Select working directory, (2) Chat-like interface for messaging.
 public struct NewSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: SessionViewModel
 
-    @State private var prompt: String = ""
-    @State private var workingDir: String = ""
-    @State private var showingDirectoryPicker = false
+    /// Phase tracking: false = setup phase, true = chat phase
+    @State private var hasStarted = false
+
+    /// Working directory input
+    @State private var workingDir: String = "/Volumes/Office/Office2/src"
+
+    /// Message input for chat phase
+    @State private var messagePrompt: String = ""
 
     private let webSocketClient: WebSocketClient
 
@@ -20,45 +25,52 @@ public struct NewSessionView: View {
     public var body: some View {
         #if os(iOS)
         NavigationStack {
-            formContent
-                .navigationTitle("New Session")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
-                            if viewModel.state == .running {
-                                viewModel.cancel()
-                            }
-                            dismiss()
+            Group {
+                if hasStarted {
+                    chatPhaseContent
+                } else {
+                    setupPhaseContent
+                }
+            }
+            .navigationTitle(hasStarted ? "New Session" : "New Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        if viewModel.state == .running {
+                            viewModel.cancel()
                         }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        startButton
+                        dismiss()
                     }
                 }
+                if !hasStarted {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Start") {
+                            startChatPhase()
+                        }
+                        .disabled(!canStartChat)
+                    }
+                }
+            }
         }
         #else
         VStack(spacing: 0) {
             macOSHeader
             Divider()
-            formContent
+            if hasStarted {
+                chatPhaseContent
+            } else {
+                setupPhaseContent
+            }
         }
-        .frame(width: 400, height: 350)
+        .frame(width: 400, height: hasStarted ? 450 : 200)
         #endif
     }
 
-    // MARK: - Form Content
+    // MARK: - Setup Phase (Working Directory Selection)
 
-    private var formContent: some View {
+    private var setupPhaseContent: some View {
         Form {
-            Section {
-                promptEditor
-            } header: {
-                Text("Prompt")
-            } footer: {
-                Text("Enter your message for Claude")
-            }
-
             Section {
                 workingDirField
             } header: {
@@ -66,49 +78,69 @@ public struct NewSessionView: View {
             } footer: {
                 Text("The directory where Claude will execute commands")
             }
-
-            if viewModel.state == .running {
-                Section {
-                    runningStatusView
-                }
-            }
-
-            if case .completed(let exitCode) = viewModel.state {
-                Section {
-                    completedStatusView(exitCode: exitCode)
-                }
-            }
-
-            if let error = viewModel.error {
-                Section {
-                    errorView(error)
-                }
-            }
-
-            if !viewModel.messages.isEmpty {
-                Section("Output") {
-                    messagesView
-                }
-            }
         }
         #if os(iOS)
         .formStyle(.grouped)
         #endif
     }
 
-    // MARK: - Prompt Editor
+    // MARK: - Chat Phase (Message Input)
 
-    private var promptEditor: some View {
-        #if os(iOS)
-        TextEditor(text: $prompt)
-            .frame(minHeight: 100)
-            .disabled(viewModel.state == .running)
-        #else
-        TextEditor(text: $prompt)
-            .frame(minHeight: 80)
-            .font(.body)
-            .disabled(viewModel.state == .running)
-        #endif
+    private var chatPhaseContent: some View {
+        VStack(spacing: 0) {
+            // Messages list
+            if viewModel.messages.isEmpty && viewModel.state == .idle {
+                // Empty state - waiting for first message
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary)
+                    Text("Start the conversation")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Text("Type your message below")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+            } else {
+                // Show messages
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            ForEach(viewModel.messages, id: \.uuid) { message in
+                                MessageBubble(message: message)
+                                    .id(message.uuid)
+                            }
+                        }
+                        .padding()
+                    }
+                    .onChange(of: viewModel.messages.count) { _ in
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.uuid, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Status bar when running
+            if viewModel.state == .running {
+                runningStatusView
+            }
+
+            // Error display
+            if let error = viewModel.error {
+                errorView(error)
+            }
+
+            Divider()
+
+            // Input area
+            chatInputArea
+        }
     }
 
     // MARK: - Working Directory Field
@@ -118,19 +150,46 @@ public struct NewSessionView: View {
         TextField("e.g., ~/Developer/MyProject", text: $workingDir)
             .textContentType(.URL)
             .autocapitalization(.none)
-            .disabled(viewModel.state == .running)
         #else
         HStack {
             TextField("Working Directory", text: $workingDir)
                 .textFieldStyle(.roundedBorder)
-                .disabled(viewModel.state == .running)
 
             Button("Browse...") {
                 selectDirectory()
             }
-            .disabled(viewModel.state == .running)
         }
         #endif
+    }
+
+    // MARK: - Chat Input Area
+
+    private var chatInputArea: some View {
+        HStack(spacing: 8) {
+            TextField("Message Claude...", text: $messagePrompt)
+                .textFieldStyle(.plain)
+                .padding(10)
+                #if os(iOS)
+                .background(Color(.secondarySystemBackground))
+                #else
+                .background(Color(NSColor.controlBackgroundColor))
+                #endif
+                .cornerRadius(20)
+                .onSubmit {
+                    sendMessage()
+                }
+                .disabled(viewModel.state == .running)
+
+            Button(action: sendMessage) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(canSendMessage ? .blue : .gray)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSendMessage)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Status Views
@@ -140,23 +199,23 @@ public struct NewSessionView: View {
             ProgressView()
                 .controlSize(.small)
             Text("Claude is working...")
+                .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
             Button("Cancel") {
                 viewModel.cancel()
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
             .tint(.red)
         }
-    }
-
-    private func completedStatusView(exitCode: Int) -> some View {
-        HStack {
-            Image(systemName: exitCode == 0 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundStyle(exitCode == 0 ? .green : .orange)
-            Text(exitCode == 0 ? "Completed successfully" : "Completed with exit code \(exitCode)")
-            Spacer()
-        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        #if os(iOS)
+        .background(Color(.secondarySystemBackground))
+        #else
+        .background(Color(NSColor.controlBackgroundColor))
+        #endif
     }
 
     private func errorView(_ error: String) -> some View {
@@ -164,38 +223,40 @@ public struct NewSessionView: View {
             Image(systemName: "xmark.circle.fill")
                 .foregroundStyle(.red)
             Text(error)
+                .font(.caption)
                 .foregroundStyle(.red)
             Spacer()
         }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
-    private var messagesView: some View {
-        ForEach(viewModel.messages, id: \.uuid) { message in
+    // MARK: - Message Bubble
+
+    private struct MessageBubble: View {
+        let message: Message
+
+        var body: some View {
             VStack(alignment: .leading, spacing: 4) {
-                Text(message.role == "human" ? "You" : "Claude")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text(message.role == "user" ? "You" : "Claude")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(message.role == "user" ? .blue : .purple)
+                    Spacer()
+                }
                 Text(message.content)
                     .font(.body)
+                    .textSelection(.enabled)
             }
-            .padding(.vertical, 4)
+            .padding(12)
+            #if os(iOS)
+            .background(message.role == "user" ? Color(.systemBlue).opacity(0.1) : Color(.secondarySystemBackground))
+            #else
+            .background(message.role == "user" ? Color.blue.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+            #endif
+            .cornerRadius(12)
         }
-    }
-
-    // MARK: - Start Button
-
-    private var startButton: some View {
-        Button("Start") {
-            startSession()
-        }
-        .disabled(!canStart)
-    }
-
-    private var canStart: Bool {
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !workingDir.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        viewModel.state != .running
     }
 
     // MARK: - macOS Header
@@ -219,9 +280,17 @@ public struct NewSessionView: View {
 
             Spacer()
 
-            startButton
+            if !hasStarted {
+                Button("Start") {
+                    startChatPhase()
+                }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .disabled(!canStartChat)
+            } else {
+                // Empty spacer to maintain layout
+                Color.clear.frame(width: 50)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -239,19 +308,41 @@ public struct NewSessionView: View {
     }
     #endif
 
+    // MARK: - Validation
+
+    private var canStartChat: Bool {
+        !workingDir.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canSendMessage: Bool {
+        !messagePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        viewModel.state != .running
+    }
+
     // MARK: - Actions
 
-    private func startSession() {
-        guard canStart else { return }
+    private func startChatPhase() {
+        guard canStartChat else { return }
+
+        let expandedDir = expandTilde(workingDir.trimmingCharacters(in: .whitespacesAndNewlines))
+        viewModel.prepareForNewSession(workingDir: expandedDir)
+        hasStarted = true
+    }
+
+    private func sendMessage() {
+        let prompt = messagePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+        guard viewModel.state != .running else { return }
+
+        // Clear input immediately for responsiveness
+        messagePrompt = ""
 
         Task {
             do {
-                try await viewModel.startSession(
-                    prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
-                    workingDir: expandTilde(workingDir.trimmingCharacters(in: .whitespacesAndNewlines))
-                )
+                try await viewModel.sendMessage(prompt: prompt)
             } catch {
-                // Error is already handled by viewModel.error
+                // Error is handled by viewModel.error
+                print("[NewSessionView] Error sending message: \(error)")
             }
         }
     }
