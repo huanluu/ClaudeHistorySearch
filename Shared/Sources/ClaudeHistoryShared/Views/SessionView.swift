@@ -12,7 +12,13 @@ public struct SessionView: View {
     private let scrollToMessageId: String?
 
     // Session mode (historical for now, live in Phase 6)
-    private let mode: SessionMode
+    @State private var mode: SessionMode
+
+    // WebSocket client for live sessions (optional)
+    private let webSocketClient: WebSocketClient?
+
+    // ViewModel for live sessions
+    @StateObject private var liveViewModel: SessionViewModel
 
     // macOS-specific: callback for custom navigation
     #if os(macOS)
@@ -23,25 +29,41 @@ public struct SessionView: View {
     @State private var isLoading = true
     @State private var error: String?
 
+    // Resume UI state
+    @State private var showingResumeSheet = false
+    @State private var resumePrompt = ""
+
     // MARK: - Initializers
 
     #if os(iOS)
     /// Initialize for viewing a historical session with Session object (iOS)
-    public init(session: Session) {
+    public init(session: Session, webSocketClient: WebSocketClient? = nil) {
         self.session = session
         self.sessionId = session.id
         self.highlightText = nil
         self.scrollToMessageId = nil
-        self.mode = .historical
+        self._mode = State(initialValue: .historical)
+        self.webSocketClient = webSocketClient
+        if let ws = webSocketClient {
+            _liveViewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: ws))
+        } else {
+            _liveViewModel = StateObject(wrappedValue: SessionViewModel(apiClient: APIClient()))
+        }
     }
 
     /// Initialize for viewing a historical session by ID (iOS - from search results)
-    public init(sessionId: String, highlightText: String? = nil, scrollToMessageId: String? = nil) {
+    public init(sessionId: String, highlightText: String? = nil, scrollToMessageId: String? = nil, webSocketClient: WebSocketClient? = nil) {
         self.session = nil
         self.sessionId = sessionId
         self.highlightText = highlightText
         self.scrollToMessageId = scrollToMessageId
-        self.mode = .historical
+        self._mode = State(initialValue: .historical)
+        self.webSocketClient = webSocketClient
+        if let ws = webSocketClient {
+            _liveViewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: ws))
+        } else {
+            _liveViewModel = StateObject(wrappedValue: SessionViewModel(apiClient: APIClient()))
+        }
     }
     #else
     /// Initialize for viewing a historical session (macOS)
@@ -49,6 +71,7 @@ public struct SessionView: View {
         sessionId: String,
         highlightText: String? = nil,
         scrollToMessageId: String? = nil,
+        webSocketClient: WebSocketClient? = nil,
         onBack: @escaping () -> Void
     ) {
         self.session = nil
@@ -56,7 +79,13 @@ public struct SessionView: View {
         self.highlightText = highlightText
         self.scrollToMessageId = scrollToMessageId
         self.onBack = onBack
-        self.mode = .historical
+        self._mode = State(initialValue: .historical)
+        self.webSocketClient = webSocketClient
+        if let ws = webSocketClient {
+            _liveViewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: ws))
+        } else {
+            _liveViewModel = StateObject(wrappedValue: SessionViewModel(apiClient: APIClient()))
+        }
     }
     #endif
 
@@ -87,13 +116,23 @@ public struct SessionView: View {
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if mode == .historical && webSocketClient != nil {
+                    Button(action: { showingResumeSheet = true }) {
+                        Image(systemName: "arrow.clockwise.circle")
+                    }
+                    .help("Resume session")
+                }
+
                 if let detail = sessionDetail {
                     Button(action: { copyConversation(detail) }) {
                         Image(systemName: "doc.on.doc")
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showingResumeSheet) {
+            resumePromptSheet
         }
         .task {
             await loadSession()
@@ -168,17 +207,31 @@ public struct SessionView: View {
 
             Spacer()
 
-            if let detail = sessionDetail {
-                Button(action: { copyConversation(detail) }) {
-                    Image(systemName: "doc.on.doc")
+            HStack(spacing: 8) {
+                if mode == .historical && webSocketClient != nil {
+                    Button(action: { showingResumeSheet = true }) {
+                        Image(systemName: "arrow.clockwise.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                    .help("Resume session")
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(.secondary)
-                .help("Copy conversation")
+
+                if let detail = sessionDetail {
+                    Button(action: { copyConversation(detail) }) {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                    .help("Copy conversation")
+                }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .sheet(isPresented: $showingResumeSheet) {
+            resumePromptSheet
+        }
     }
 
     private var macOSLoadingView: some View {
@@ -235,15 +288,165 @@ public struct SessionView: View {
                 style: style
             )
         case .live:
-            // Phase 6: Live view implementation
-            MessageListView(
-                messages: detail.messages,
-                session: detail.session,
-                highlightText: highlightText,
-                scrollToMessageId: scrollToMessageId,
-                style: style
-            )
+            // Live mode: show historical messages + live streaming messages
+            VStack(spacing: 0) {
+                // Historical messages (if any)
+                if !detail.messages.isEmpty {
+                    MessageListView(
+                        messages: detail.messages,
+                        session: detail.session,
+                        highlightText: nil,
+                        scrollToMessageId: nil,
+                        style: style
+                    )
+                }
+
+                // Live streaming messages
+                if !liveViewModel.messages.isEmpty {
+                    Divider()
+                    Text("Live Session")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 4)
+                    MessageListView(
+                        messages: liveViewModel.messages,
+                        session: detail.session,
+                        highlightText: nil,
+                        scrollToMessageId: nil,
+                        style: style
+                    )
+                }
+
+                // Status bar
+                liveStatusBar
+            }
         }
+    }
+
+    // MARK: - Live Status Bar
+
+    @ViewBuilder
+    private var liveStatusBar: some View {
+        if liveViewModel.state == .running {
+            HStack {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Claude is working...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") {
+                    liveViewModel.cancel()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.red)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(statusBarBackground)
+        } else if case .completed(let exitCode) = liveViewModel.state {
+            HStack {
+                Image(systemName: exitCode == 0 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(exitCode == 0 ? .green : .orange)
+                Text(exitCode == 0 ? "Session completed" : "Completed with exit code \(exitCode)")
+                    .font(.caption)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(statusBarBackground)
+        } else if let error = liveViewModel.error {
+            HStack {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(statusBarBackground)
+        }
+    }
+
+    // MARK: - Platform-Specific Helpers
+
+    private var statusBarBackground: Color {
+        #if os(iOS)
+        Color(.secondarySystemBackground)
+        #else
+        Color(NSColor.controlBackgroundColor)
+        #endif
+    }
+
+    // MARK: - Resume Prompt Sheet
+
+    private var resumePromptSheet: some View {
+        #if os(iOS)
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $resumePrompt)
+                        .frame(minHeight: 100)
+                } header: {
+                    Text("Follow-up Prompt")
+                } footer: {
+                    Text("Enter your follow-up message to continue this session")
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Resume Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        resumePrompt = ""
+                        showingResumeSheet = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Resume") {
+                        resumeSession()
+                    }
+                    .disabled(resumePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        #else
+        VStack(spacing: 16) {
+            Text("Resume Session")
+                .font(.headline)
+
+            Text("Enter your follow-up message:")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $resumePrompt)
+                .frame(minHeight: 80)
+                .border(Color.gray.opacity(0.3))
+
+            HStack {
+                Button("Cancel") {
+                    resumePrompt = ""
+                    showingResumeSheet = false
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Resume") {
+                    resumeSession()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(resumePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 350, height: 250)
+        #endif
     }
 
     // MARK: - Data Loading
@@ -275,6 +478,38 @@ public struct SessionView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         #endif
+    }
+
+    private func resumeSession() {
+        guard let detail = sessionDetail else { return }
+        let prompt = resumePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+
+        // Get working directory from session project path
+        let workingDir = detail.session.project
+
+        // Close sheet
+        showingResumeSheet = false
+
+        // Switch to live mode
+        mode = .live
+
+        // Start resume via WebSocket
+        Task {
+            do {
+                try await liveViewModel.resumeSession(
+                    resumeSessionId: sessionId,
+                    prompt: prompt,
+                    workingDir: workingDir
+                )
+            } catch {
+                self.error = error.localizedDescription
+                mode = .historical
+            }
+        }
+
+        // Clear prompt for next time
+        resumePrompt = ""
     }
 }
 
