@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     let serverDiscovery = ServerDiscovery()
     let apiClient = APIClient()
+    let webSocketClient = WebSocketClient()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -60,6 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = SearchPopoverView()
             .environmentObject(serverDiscovery)
             .environmentObject(apiClient)
+            .environmentObject(webSocketClient)
 
         popover.contentViewController = NSHostingController(rootView: contentView)
     }
@@ -133,6 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func autoConnect() async {
         if let existingURL = serverDiscovery.serverURL {
             apiClient.setBaseURL(existingURL)
+            configureWebSocket(baseURL: existingURL)
             return
         }
 
@@ -143,6 +146,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let healthy = try await apiClient.checkHealth()
             if healthy {
                 serverDiscovery.setManualURL("http://localhost:3847")
+                configureWebSocket(baseURL: localhostURL)
                 return
             }
         } catch {
@@ -154,6 +158,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let url = serverDiscovery.serverURL {
             apiClient.setBaseURL(url)
+            configureWebSocket(baseURL: url)
         }
+    }
+
+    private func configureWebSocket(baseURL: URL) {
+        webSocketClient.configure(baseURL: baseURL, apiKey: apiClient.getAPIKey())
     }
 }

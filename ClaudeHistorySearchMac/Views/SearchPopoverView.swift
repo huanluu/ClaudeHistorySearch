@@ -8,6 +8,7 @@ enum NavigationDestination: Hashable {
 struct SearchPopoverView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
     @EnvironmentObject var apiClient: APIClient
+    @EnvironmentObject var webSocketClient: WebSocketClient
 
     @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var searchText = ""
@@ -17,6 +18,7 @@ struct SearchPopoverView: View {
     @State private var isLoadingSessions = false
     @State private var navigationPath = NavigationPath()
     @State private var showSettings = false
+    @State private var showNewSession = false
 
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -66,6 +68,7 @@ struct SearchPopoverView: View {
                         sessionId: sessionId,
                         highlightText: highlightText,
                         scrollToMessageId: scrollToMessageId,
+                        webSocketClient: webSocketClient,
                         onBack: { navigationPath.removeLast() }
                     )
                     .environmentObject(apiClient)
@@ -75,6 +78,9 @@ struct SearchPopoverView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)
+        }
+        .sheet(isPresented: $showNewSession) {
+            NewSessionView(webSocketClient: webSocketClient)
         }
         .onAppear {
             isSearchFieldFocused = true
@@ -111,6 +117,16 @@ struct SearchPopoverView: View {
             }
 
             Spacer()
+
+            // New session button
+            if serverDiscovery.serverURL != nil {
+                Button(action: { showNewSession = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Start new session")
+            }
 
             // Settings button
             Button(action: { showSettings = true }) {
@@ -387,4 +403,5 @@ struct SearchPopoverView: View {
     SearchPopoverView()
         .environmentObject(ServerDiscovery())
         .environmentObject(APIClient())
+        .environmentObject(WebSocketClient())
 }

@@ -4,6 +4,7 @@ import ClaudeHistoryShared
 struct SessionListView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
     @EnvironmentObject var apiClient: APIClient
+    @EnvironmentObject var webSocketClient: WebSocketClient
 
     @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var sessions: [Session] = []
@@ -15,6 +16,7 @@ struct SessionListView: View {
     @State private var hasMoreSessions = true
     @State private var currentOffset = 0
     @State private var showSettings = false
+    @State private var showNewSession = false
 
     private let pageSize = 20
 
@@ -41,6 +43,13 @@ struct SessionListView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if serverDiscovery.serverURL != nil {
+                        Button(action: { showNewSession = true }) {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showSettings = true }) {
                         Image(systemName: "gearshape")
@@ -49,6 +58,9 @@ struct SessionListView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)
+            }
+            .sheet(isPresented: $showNewSession) {
+                NewSessionView(webSocketClient: webSocketClient)
             }
             .refreshable {
                 await loadSessions(refresh: true)
@@ -151,7 +163,7 @@ struct SessionListView: View {
         }
         .listStyle(.plain)
         .navigationDestination(for: Session.self) { session in
-            SessionView(session: session)
+            SessionView(session: session, webSocketClient: webSocketClient)
         }
     }
 
@@ -227,7 +239,8 @@ struct SessionListView: View {
                         SessionView(
                             sessionId: result.sessionId,
                             highlightText: searchText,
-                            scrollToMessageId: result.message.uuid
+                            scrollToMessageId: result.message.uuid,
+                            webSocketClient: webSocketClient
                         )
                     } label: {
                         SearchResultRowContent(result: result, query: searchText)
@@ -311,4 +324,5 @@ struct SessionListView: View {
     SessionListView()
         .environmentObject(ServerDiscovery())
         .environmentObject(APIClient())
+        .environmentObject(WebSocketClient())
 }

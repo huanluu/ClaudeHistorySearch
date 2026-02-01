@@ -5,12 +5,14 @@ import ClaudeHistoryShared
 struct ClaudeHistorySearchApp: App {
     @StateObject private var serverDiscovery = ServerDiscovery()
     @StateObject private var apiClient = APIClient()
+    @StateObject private var webSocketClient = WebSocketClient()
 
     var body: some Scene {
         WindowGroup {
             SessionListView()
                 .environmentObject(serverDiscovery)
                 .environmentObject(apiClient)
+                .environmentObject(webSocketClient)
                 .task {
                     // Load API key from keychain
                     apiClient.loadAPIKeyFromKeychain()
@@ -26,6 +28,12 @@ struct ClaudeHistorySearchApp: App {
                         }
                     }
                 }
+                .onChange(of: serverDiscovery.serverURL) { _, newURL in
+                    // Configure WebSocket when server URL changes
+                    if let url = newURL {
+                        configureWebSocket(baseURL: url)
+                    }
+                }
         }
     }
 
@@ -38,10 +46,16 @@ struct ClaudeHistorySearchApp: App {
             let healthy = try await apiClient.checkHealth()
             if healthy {
                 serverDiscovery.setManualURL("http://localhost:3847")
+                configureWebSocket(baseURL: localhostURL)
                 print("Connected to localhost:3847")
             }
         } catch {
             print("Localhost fallback failed: \(error)")
         }
+    }
+
+    @MainActor
+    private func configureWebSocket(baseURL: URL) {
+        webSocketClient.configure(baseURL: baseURL, apiKey: apiClient.getAPIKey())
     }
 }
