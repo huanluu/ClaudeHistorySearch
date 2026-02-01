@@ -14,8 +14,7 @@ struct ClaudeHistorySearchApp: App {
                 .environmentObject(apiClient)
                 .environmentObject(webSocketClient)
                 .task {
-                    // Load API key from keychain
-                    apiClient.loadAPIKeyFromKeychain()
+                    // API key is now loaded in APIClient.init() to avoid race conditions
 
                     // If server already discovered, configure WebSocket immediately
                     if let existingURL = serverDiscovery.serverURL {

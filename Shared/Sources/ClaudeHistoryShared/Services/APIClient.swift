@@ -40,7 +40,11 @@ public class APIClient: ObservableObject, NetworkService {
         return URLSession(configuration: config)
     }()
 
-    public init() {}
+    public init() {
+        // Load API key from keychain immediately so it's available when views start making requests
+        // This prevents race conditions where views try to fetch before the App's .task loads the key
+        self.apiKey = KeychainHelper.shared.getAPIKey()
+    }
 
     public func setBaseURL(_ url: URL?) {
         baseURL = url
