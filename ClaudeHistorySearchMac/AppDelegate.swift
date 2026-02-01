@@ -4,6 +4,7 @@ import ClaudeHistoryShared
 
 extension Notification.Name {
     static let popoverDidShow = Notification.Name("popoverDidShow")
+    static let closePopover = Notification.Name("closePopover")
 }
 
 @MainActor
@@ -23,12 +24,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerGlobalHotKey()
         setupEventMonitor()
 
+        // Listen for close popover requests
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClosePopover),
+            name: .closePopover,
+            object: nil
+        )
+
         // Load API key from keychain
         apiClient.loadAPIKeyFromKeychain()
 
         Task {
             await autoConnect()
         }
+    }
+
+    @objc private func handleClosePopover() {
+        closePopover()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

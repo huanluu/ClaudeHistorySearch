@@ -69,7 +69,13 @@ struct SearchPopoverView: View {
                         highlightText: highlightText,
                         scrollToMessageId: scrollToMessageId,
                         webSocketClient: webSocketClient,
-                        onBack: { navigationPath.removeLast() }
+                        onBack: { navigationPath.removeLast() },
+                        onOpenInTerminal: { sessionId, workingDir in
+                            try? TerminalService.shared.openSession(
+                                sessionId: sessionId,
+                                workingDirectory: workingDir
+                            )
+                        }
                     )
                     .environmentObject(apiClient)
                     .toolbar(.hidden)

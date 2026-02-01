@@ -20,9 +20,10 @@ public struct SessionView: View {
     // ViewModel for live sessions
     @StateObject private var liveViewModel: SessionViewModel
 
-    // macOS-specific: callback for custom navigation
+    // macOS-specific: callbacks for custom navigation and terminal opening
     #if os(macOS)
     private let onBack: (() -> Void)?
+    private let onOpenInTerminal: ((String, String) -> Void)?
     #endif
 
     @State private var sessionDetail: SessionDetailResponse?
@@ -71,13 +72,15 @@ public struct SessionView: View {
         highlightText: String? = nil,
         scrollToMessageId: String? = nil,
         webSocketClient: WebSocketClient? = nil,
-        onBack: @escaping () -> Void
+        onBack: @escaping () -> Void,
+        onOpenInTerminal: ((String, String) -> Void)? = nil
     ) {
         self.session = nil
         self.sessionId = sessionId
         self.highlightText = highlightText
         self.scrollToMessageId = scrollToMessageId
         self.onBack = onBack
+        self.onOpenInTerminal = onOpenInTerminal
         self._mode = State(initialValue: .historical)
         self.webSocketClient = webSocketClient
         if let ws = webSocketClient {
@@ -210,7 +213,20 @@ public struct SessionView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.secondary)
-                    .help("Resume session")
+                    .help("Resume session in app")
+                }
+
+                if mode == .historical && onOpenInTerminal != nil {
+                    Button {
+                        if let detail = sessionDetail {
+                            onOpenInTerminal?(sessionId, detail.session.project)
+                        }
+                    } label: {
+                        Image(systemName: "terminal")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundColor(.secondary)
+                    .help("Open in iTerm2")
                 }
 
                 if let detail = sessionDetail {
@@ -427,6 +443,7 @@ public struct SessionView: View {
         NSPasteboard.general.setString(text, forType: .string)
         #endif
     }
+
 
     /// Instantly switch to live mode for resuming a session.
     /// The user will see the input field and can type their follow-up message naturally.
