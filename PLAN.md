@@ -143,22 +143,121 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 
 ---
 
-## Phase 5: Remote Session Execution ⬚ Not Started
+## Phase 5: Refactor Client Views ✅ Complete
 
-### 5.1 Server Session Executor
-- [ ] Add `@anthropic-ai/claude-code` dependency
-- [ ] Create `server/src/sessions/SessionExecutor.ts`
-- [ ] Create `server/src/sessions/SessionStore.ts`
+**Goal**: Restructure iOS/macOS views to prepare for live session support. Share UI code between platforms.
 
-### 5.2 iOS Session UI
-- [ ] Create `ClaudeHistorySearch/Views/RemoteSessionView.swift`
-- [ ] Create `ClaudeHistorySearch/Views/SessionOutputView.swift`
-- [ ] Create `Shared/Sources/ClaudeHistoryShared/Services/SessionManager.swift`
+### 5.1 Tasks
+- [x] Extract `MessageListView` - Shared component for displaying session messages
+- [x] Extract `MessageRow` - Individual message display with configurable style
+- [x] Create `SessionViewModel` - Shell with interface ready for Phase 6
+- [x] Rename `SessionDetailView` → `SessionView` - Unified view for historical + live modes
+- [x] Add `SessionMode` enum - `.historical` vs `.live` (only historical implemented)
+- [x] Add `SessionState` enum - `.idle`, `.running`, `.completed`, `.error`, `.cancelled`
 
-### 5.3 Verification
-- [ ] End-to-end session execution works
-- [ ] Streaming output displays
-- [ ] Cancel functionality works
+### 5.2 Additional Code Sharing (Bonus)
+- [x] Extract `SessionRowContent` - Shared session list row with `.default` / `.compact` styles
+- [x] Extract `SearchResultRowContent` - Shared search result row with highlighting
+- [x] Unify `SettingsView` - Single view with `#if os()` for platform differences
+
+### 5.3 Files
+**New (Shared):**
+- `Shared/Sources/ClaudeHistoryShared/Views/MessageListView.swift`
+- `Shared/Sources/ClaudeHistoryShared/Views/MessageRow.swift`
+- `Shared/Sources/ClaudeHistoryShared/Views/SessionRowContent.swift`
+- `Shared/Sources/ClaudeHistoryShared/Views/SearchResultRowContent.swift`
+- `Shared/Sources/ClaudeHistoryShared/Views/SettingsView.swift`
+- `Shared/Sources/ClaudeHistoryShared/ViewModels/SessionMode.swift`
+- `Shared/Sources/ClaudeHistoryShared/ViewModels/SessionViewModel.swift`
+
+**Renamed:**
+- `ClaudeHistorySearch/Views/SessionDetailView.swift` → `SessionView.swift`
+- `ClaudeHistorySearchMac/Views/SessionDetailView.swift` → `SessionView.swift`
+
+**Deleted (replaced by shared):**
+- `ClaudeHistorySearch/Views/MessageBubbleView.swift`
+- `ClaudeHistorySearchMac/Views/MessageRowView.swift`
+- `ClaudeHistorySearchMac/Views/SearchResultRowView.swift`
+- `ClaudeHistorySearchMac/Views/SettingsView.swift`
+
+### 5.4 Verification
+- [x] All 35 Swift tests pass
+- [x] All 91 server tests pass
+- [x] iOS app builds and works
+- [x] macOS app builds and works
+
+---
+
+## Phase 6: Start New Session (TDD) ⬚ Not Started
+
+**Goal**: Enable starting a NEW Claude session from iOS/macOS app using `claude -p` headless mode.
+
+**Key Decision**: Use `claude -p` subprocess instead of Agent SDK because:
+- Sessions are native Claude Code sessions (saved to `~/.claude/projects/`)
+- Resumable from desktop via `claude --resume`
+- Automatically searchable by ClaudeHistorySearch
+- No SDK dependency needed
+
+### 6.1 TDD Step 1: Write Server Tests FIRST
+- [ ] Create `server/tests/sessions.test.ts` - SessionExecutor + SessionStore tests
+- [ ] Create `server/tests/websocket-sessions.test.ts` - Integration tests
+- [ ] Run tests → See them FAIL (red)
+
+### 6.2 TDD Step 2: Implement Server Features
+- [ ] Create `server/src/sessions/SessionExecutor.ts` - Spawns `claude -p`
+- [ ] Create `server/src/sessions/SessionStore.ts` - Tracks active sessions
+- [ ] Modify `server/src/transport/WebSocketTransport.ts` - Handle session messages
+- [ ] Run tests → See them PASS (green)
+
+### 6.3 TDD Step 3: Write Client Tests FIRST
+- [ ] Create `Shared/Tests/.../SessionViewModelTests.swift`
+- [ ] Run tests → See them FAIL (red)
+
+### 6.4 TDD Step 4: Implement Client Features
+- [ ] Fill in `SessionViewModel.swift` - State, messages, startSession(), cancel()
+- [ ] Create `ClaudeHistorySearch/Views/NewSessionView.swift` - UI for new session
+- [ ] Run tests → See them PASS (green)
+
+### 6.5 Verification
+- [ ] `npm test` passes (~20 new tests)
+- [ ] `swift test` passes (~7 new tests)
+- [ ] Manual E2E: Start session from app, output streams, cancel works
+
+---
+
+## Phase 7: Resume Historical Session (TDD) ⬚ Not Started
+
+**Goal**: Enable resuming a historical session from the session detail view.
+
+```bash
+# Resume command:
+claude --resume <sessionId> -p "follow-up prompt" --output-format stream-json
+```
+
+### 7.1 TDD Step 1: Write Server Tests FIRST
+- [ ] Add resume tests to `server/tests/sessions.test.ts`
+- [ ] Add resume tests to `server/tests/websocket-sessions.test.ts`
+- [ ] Run tests → See them FAIL (red)
+
+### 7.2 TDD Step 2: Implement Server Resume
+- [ ] Modify `SessionExecutor.ts` - Add `resumeSessionId` option + `--resume` flag
+- [ ] Modify `WebSocketTransport.ts` - Handle `session.resume` message
+- [ ] Run tests → See them PASS (green)
+
+### 7.3 TDD Step 3: Write Client Tests FIRST
+- [ ] Add resume tests to `SessionViewModelTests.swift`
+- [ ] Run tests → See them FAIL (red)
+
+### 7.4 TDD Step 4: Implement Client Resume
+- [ ] Add `resumeSession()` to `SessionViewModel.swift`
+- [ ] Add "Resume Session" button to `SessionView.swift`
+- [ ] Run tests → See them PASS (green)
+
+### 7.5 Verification
+- [ ] `npm test` passes (~5 new tests)
+- [ ] `swift test` passes (~3 new tests)
+- [ ] Manual E2E: Browse history → Resume → See historical + new messages
+- [ ] Desktop: `claude --resume <id>` shows continued conversation
 
 ---
 
@@ -171,6 +270,9 @@ Enhance ClaudeHistorySearch with authentication, remote session execution, impro
 | 3 | Complete | 2026-01-31 | Transport abstraction (server) + NetworkService protocol (iOS) + tests (21 transport + 19 NetworkService) |
 | 3.5 | Complete | 2026-02-01 | **TypeScript Migration** - Converted all server code to TypeScript |
 | 4 | Complete | 2026-02-01 | **WebSocket Infrastructure** - ws package, WebSocketTransport, iOS WebSocketClient + 12 tests |
-| 5 | Not Started | - | |
+| 5 | Complete | 2026-02-01 | **View Refactoring + Code Sharing** - MessageRow, MessageListView, SessionViewModel, SessionRowContent, SearchResultRowContent, unified SettingsView |
+| 6 | Not Started | - | Start new session (TDD) |
+| 7 | Not Started | - | Resume historical session (TDD) |
 
 **Current Test Totals:** 91 server tests + 35 Swift tests = 126 total tests
+**Expected After Phase 7:** ~126 server tests + ~45 Swift tests = ~171 total tests
