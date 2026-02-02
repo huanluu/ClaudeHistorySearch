@@ -1,24 +1,27 @@
 # Claude History Search
 
-A local search system for Claude Code session history. Consists of a Node.js server that indexes your Claude Code sessions and an iOS app for searching and browsing them.
+A local search system for Claude Code session history. Consists of a TypeScript server that indexes your Claude Code sessions and iOS/Mac apps for searching, browsing, and running live sessions.
 
 ## Features
 
 - **Full-text search** across all Claude Code conversations using SQLite FTS5
+- **Live sessions** - Start and resume Claude Code sessions from iOS/Mac via WebSocket
 - **Automatic indexing** of session history from `~/.claude/projects/`
 - **Real-time updates** via file watching (new sessions indexed automatically)
-- **Bonjour discovery** - iOS app automatically finds the server on your local network (auto-disabled on Macs with firewall stealth mode)
+- **Bonjour discovery** - Apps automatically find the server on your local network
 - **Remote access** - Access from anywhere via ngrok tunnel
 - **Session browsing** - View all sessions grouped by project with pagination
+- **Cross-platform** - iOS, iPad, and Mac apps with shared codebase
 
 ## Requirements
 
 ### Server
 - Node.js 18.0.0 or higher
 - macOS (for Claude Code session files)
+- Claude CLI installed (for live sessions)
 
-### iOS App
-- iOS 17.0+
+### iOS/Mac Apps
+- iOS 17.0+ / macOS 14.0+
 - Xcode 15+
 
 ## Getting Started
@@ -42,11 +45,23 @@ For development with auto-reload:
 npm run dev
 ```
 
-### 2. Run the iOS App
+### 2. Run the iOS/Mac App
 
-Open `ClaudeHistorySearch.xcodeproj` in Xcode and run on your device or simulator.
+Open `ClaudeHistorySearch.xcodeproj` in Xcode:
+- **iOS**: Select `ClaudeHistorySearch` scheme, run on device or simulator
+- **Mac**: Select `ClaudeHistorySearchMac` scheme, run on Mac
 
 The app will automatically discover the server via Bonjour. You can also manually enter a server URL in Settings.
+
+### 3. Live Sessions (Optional)
+
+The apps support running live Claude Code sessions via WebSocket:
+
+1. Ensure `claude` CLI is installed and in your PATH
+2. Connect to server from the app
+3. Start a new session or resume an existing one
+
+The server spawns Claude CLI processes and streams output back to the app in real-time.
 
 ### Corporate/Work Macs (Stealth Mode)
 
@@ -105,24 +120,30 @@ To access your Claude history from anywhere, use ngrok to create a secure tunnel
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      iOS App (SwiftUI)                       │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │ ServerDiscovery │  │   APIClient     │  │    Views     │ │
-│  │   (Bonjour)     │  │   (HTTP)        │  │  (SwiftUI)   │ │
-│  └────────┬────────┘  └────────┬────────┘  └──────────────┘ │
-└───────────│────────────────────│────────────────────────────┘
-            │                    │
-            └────────┬───────────┘
-                     │ HTTP/Bonjour
+┌─────────────────────────────────────────────────────────────────┐
+│                    iOS / Mac App (SwiftUI)                       │
+│  ┌─────────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ ServerDiscovery │  │  APIClient  │  │  WebSocketClient    │  │
+│  │   (Bonjour)     │  │   (REST)    │  │  (Live Sessions)    │  │
+│  └────────┬────────┘  └──────┬──────┘  └──────────┬──────────┘  │
+│           │                  │                    │              │
+│           │    Shared Swift Package (Models, Services, VMs)     │
+└───────────│──────────────────│────────────────────│──────────────┘
+            │                  │                    │
+            └────────┬─────────┴────────────────────┘
+                     │ HTTP / WebSocket
                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Node.js Server                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐ │
-│  │   Express   │  │   Indexer   │  │  SQLite + FTS5       │ │
-│  │   Routes    │◄─┤   (JSONL)   │─►│  (better-sqlite3)    │ │
-│  └─────────────┘  └──────┬──────┘  └──────────────────────┘ │
-└──────────────────────────│──────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    TypeScript Server                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   Express   │  │  WebSocket  │  │    Session Executor     │  │
+│  │   (REST)    │  │  Transport  │  │    (Claude CLI)         │  │
+│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
+│         │                │                     │                 │
+│  ┌──────┴────────────────┴─────────────────────┴──────────────┐ │
+│  │  Indexer (JSONL) ──► SQLite + FTS5 (better-sqlite3)        │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
                            │
                            ▼
               ~/.claude/projects/**/*.jsonl
@@ -130,13 +151,27 @@ To access your Claude history from anywhere, use ngrok to create a secure tunnel
 
 ## API Endpoints
 
+### REST API
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
 | `/sessions` | GET | List sessions (`limit`, `offset` for pagination) |
 | `/sessions/:id` | GET | Get full conversation by session ID |
-| `/search?q=term` | GET | Full-text search across all messages |
+| `/search?q=term` | GET | Full-text search (`sort=relevance\|date`) |
 | `/reindex` | POST | Trigger reindex (`force=true` to reindex all) |
+
+### WebSocket API (`/ws`)
+
+For live sessions, connect via WebSocket and send JSON messages:
+
+| Message | Direction | Purpose |
+|---------|-----------|---------|
+| `session.start` | → Server | Start new Claude session |
+| `session.resume` | → Server | Resume existing session |
+| `session.cancel` | → Server | Cancel running session |
+| `session.output` | ← Server | Stream session output |
+| `session.complete` | ← Server | Session finished |
 
 ### Example Requests
 
@@ -158,6 +193,28 @@ curl -X POST http://localhost:3847/reindex?force=true
 
 - **Database**: `~/.claude-history-server/search.db`
 - **Source**: `~/.claude/projects/**/*.jsonl`
+
+## Testing
+
+### Server Tests
+```bash
+cd server
+npm test                    # Run all tests (118 tests)
+npm test -- --watch         # Watch mode
+```
+
+### Swift Package Tests
+```bash
+cd Shared
+swift test                  # Run all tests (~60 tests)
+```
+
+Test coverage includes:
+- Server interface binding (ensures server is reachable on network)
+- Network error handling (connection lost, timeout, etc.)
+- Server discovery and URL caching
+- REST API response parsing
+- WebSocket session management
 
 ## Customization
 

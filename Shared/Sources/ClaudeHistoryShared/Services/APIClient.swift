@@ -33,17 +33,22 @@ public class APIClient: ObservableObject, NetworkService {
     }()
 
     // Use a URLSession with no caching to always get fresh data
-    private let session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.urlCache = nil
-        return URLSession(configuration: config)
-    }()
+    private let session: URLSession
 
     public init() {
         // Load API key from keychain immediately so it's available when views start making requests
         // This prevents race conditions where views try to fetch before the App's .task loads the key
         self.apiKey = KeychainHelper.shared.getAPIKey()
+        let config = URLSessionConfiguration.default
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+        self.session = URLSession(configuration: config)
+    }
+
+    /// Test initializer that allows injecting a custom URLSession
+    public init(session: URLSession) {
+        self.apiKey = nil
+        self.session = session
     }
 
     public func setBaseURL(_ url: URL?) {

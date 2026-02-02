@@ -92,6 +92,41 @@ describe('HttpTransport', () => {
       expect(typeof address.port).toBe('number');
       expect(address.port).toBeGreaterThan(0);
     });
+
+    it('should bind to all interfaces (0.0.0.0 or ::) by default', async () => {
+      // This test catches the "network connection lost" bug where server
+      // only bound to localhost, making it unreachable from other devices
+      transport = new HttpTransport({ port: 0 });
+      await transport.start();
+
+      const server = transport.getServer();
+      const address = server!.address() as { address: string; port: number; family: string };
+
+      expect(address).toBeDefined();
+      // Server should bind to all interfaces, not localhost/127.0.0.1
+      // '::' is IPv6 all interfaces, '0.0.0.0' is IPv4 all interfaces
+      expect(['0.0.0.0', '::']).toContain(address.address);
+    });
+
+    it('should be reachable via 127.0.0.1 when bound to all interfaces', async () => {
+      transport = new HttpTransport({ port: 0 });
+
+      transport.getApp().get('/ping', (_req, res) => {
+        res.json({ pong: true });
+      });
+
+      await transport.start();
+
+      const server = transport.getServer();
+      const address = server!.address() as { port: number };
+
+      // Verify we can actually connect via loopback
+      const response = await fetch(`http://127.0.0.1:${address.port}/ping`);
+      expect(response.ok).toBe(true);
+
+      const data = await response.json();
+      expect(data.pong).toBe(true);
+    });
   });
 
   describe('stop', () => {

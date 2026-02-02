@@ -241,6 +241,97 @@ final class APIClientTests: XCTestCase {
         XCTAssertTrue(SearchSortOption.allCases.contains(.date))
     }
 
+    // MARK: - Network Error Tests
+
+    /// Creates an APIClient configured with MockURLProtocol for testing
+    @MainActor
+    private func createMockedClient() -> APIClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let client = APIClient(session: session)
+        client.setBaseURL(URL(string: "http://localhost:3847")!)
+        return client
+    }
+
+    @MainActor
+    func testNetworkConnectionLostError() async {
+        MockURLProtocol.reset()
+        let client = createMockedClient()
+
+        // Configure mock to throw networkConnectionLost error
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.networkConnectionLost)
+        }
+
+        do {
+            _ = try await client.fetchSessions()
+            XCTFail("Should have thrown an error")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .networkConnectionLost)
+            // URLError codes are properly surfaced - the exact message varies by OS version
+        } catch {
+            XCTFail("Unexpected error type: \(type(of: error)) - \(error)")
+        }
+    }
+
+    @MainActor
+    func testTimeoutError() async {
+        MockURLProtocol.reset()
+        let client = createMockedClient()
+
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.timedOut)
+        }
+
+        do {
+            _ = try await client.fetchSessions()
+            XCTFail("Should have thrown an error")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .timedOut)
+        } catch {
+            XCTFail("Unexpected error type: \(type(of: error)) - \(error)")
+        }
+    }
+
+    @MainActor
+    func testCannotConnectToHostError() async {
+        MockURLProtocol.reset()
+        let client = createMockedClient()
+
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.cannotConnectToHost)
+        }
+
+        do {
+            _ = try await client.fetchSessions()
+            XCTFail("Should have thrown an error")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .cannotConnectToHost)
+        } catch {
+            XCTFail("Unexpected error type: \(type(of: error)) - \(error)")
+        }
+    }
+
+    @MainActor
+    func testNotConnectedToInternetError() async {
+        MockURLProtocol.reset()
+        let client = createMockedClient()
+
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        do {
+            _ = try await client.fetchSessions()
+            XCTFail("Should have thrown an error")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .notConnectedToInternet)
+        } catch {
+            XCTFail("Unexpected error type: \(type(of: error)) - \(error)")
+        }
+    }
+
     // MARK: - Date Conversion Tests
 
     func testSessionStartedAtDate() {
