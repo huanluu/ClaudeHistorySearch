@@ -37,11 +37,54 @@ public class ServerDiscovery: ObservableObject {
     private let cachedURLKey = "cachedServerURL"
 
     public init() {
-        // Try to restore cached server URL
+        // Try to restore cached server URL (will verify in verifyAndConnect)
         if let cached = UserDefaults.standard.string(forKey: cachedURLKey),
            let url = URL(string: cached) {
             self.serverURL = url
             self.connectionStatus = .connected(url.host ?? "unknown")
+        }
+    }
+
+    /// Verify cached URL works, if not try Bonjour discovery
+    /// Call this on app launch to ensure connection is valid
+    public func verifyAndConnect() {
+        Task {
+            // If we have a cached URL, verify it first
+            if let url = serverURL {
+                if await verifyServerHealth(url: url) {
+                    // Cached URL works, we're good
+                    connectionStatus = .connected(url.host ?? "unknown")
+                    return
+                } else {
+                    // Cached URL failed, clear it and try Bonjour
+                    print("Cached URL \(url) failed health check, trying Bonjour...")
+                    serverURL = nil
+                }
+            }
+
+            // No cached URL or it failed, try Bonjour
+            startSearching()
+        }
+    }
+
+    /// Check if server is reachable at the given URL
+    private func verifyServerHealth(url: URL) async -> Bool {
+        let healthURL = url.appendingPathComponent("health")
+        do {
+            let (data, response) = try await URLSession.shared.data(from: healthURL)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return false
+            }
+            // Verify it's actually our server
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["status"] as? String == "ok" {
+                return true
+            }
+            return false
+        } catch {
+            print("Health check failed: \(error)")
+            return false
         }
     }
 

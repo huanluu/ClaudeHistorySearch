@@ -16,14 +16,18 @@ struct ClaudeHistorySearchApp: App {
                 .task {
                     // API key is now loaded in APIClient.init() to avoid race conditions
 
-                    // If server already discovered, configure WebSocket immediately
-                    if let existingURL = serverDiscovery.serverURL {
-                        configureWebSocket(baseURL: existingURL)
-                    } else {
-                        // Auto-start server discovery if not connected
-                        serverDiscovery.startSearching()
+                    // Verify cached URL or discover via Bonjour
+                    // This handles corpnet where Bonjour is blocked but cached IP works
+                    serverDiscovery.verifyAndConnect()
 
-                        // Try localhost fallback after 3 seconds if still not connected
+                    // Wait for connection to establish
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+
+                    // If we have a URL now, configure WebSocket
+                    if let url = serverDiscovery.serverURL {
+                        configureWebSocket(baseURL: url)
+                    } else {
+                        // Try localhost as last resort (for local development)
                         try? await Task.sleep(nanoseconds: 3_000_000_000)
                         if serverDiscovery.serverURL == nil {
                             await tryLocalhostFallback()
