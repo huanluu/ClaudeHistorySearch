@@ -208,6 +208,22 @@ public struct SettingsView: View {
                 serverDiscovery.setManualURL(manualURL)
             }
             .disabled(manualURL.isEmpty)
+
+            // Show last cached URL for easy reference/editing
+            if let cachedURL = serverDiscovery.serverURL, manualURL.isEmpty {
+                Text("Last: \(cachedURL.absoluteString)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .onTapGesture {
+                        manualURL = cachedURL.absoluteString
+                    }
+            }
+        }
+        .onAppear {
+            // Pre-fill with cached URL if empty
+            if manualURL.isEmpty, let cached = serverDiscovery.serverURL {
+                manualURL = cached.absoluteString
+            }
         }
     }
 
