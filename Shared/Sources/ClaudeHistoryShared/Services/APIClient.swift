@@ -144,6 +144,18 @@ public class APIClient: ObservableObject, NetworkService {
         return try decoder.decode(SearchResponse.self, from: data)
     }
 
+    // MARK: - Session Actions
+
+    public func markSessionAsRead(id: String) async throws {
+        guard let baseURL = baseURL else { throw APIError.noServer }
+        let url = baseURL.appendingPathComponent("sessions").appendingPathComponent(id).appendingPathComponent("read")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        addAuthHeader(to: &request)
+        let (_, response) = try await session.data(for: request)
+        try validateResponse(response)
+    }
+
     // MARK: - Health
 
     public func checkHealth() async throws -> Bool {

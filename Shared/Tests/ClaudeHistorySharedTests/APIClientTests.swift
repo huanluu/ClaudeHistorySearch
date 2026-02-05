@@ -332,6 +332,103 @@ final class APIClientTests: XCTestCase {
         }
     }
 
+    // MARK: - Mark As Read Tests
+
+    @MainActor
+    func testMarkSessionAsRead() async throws {
+        MockURLProtocol.reset()
+        let client = createMockedClient()
+        client.setAPIKey("test-key-123")
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            )!
+            return (response, Data())
+        }
+
+        try await client.markSessionAsRead(id: "session-abc")
+
+        // Verify correct URL
+        let lastRequest = MockURLProtocol.lastRequest
+        XCTAssertNotNil(lastRequest)
+        XCTAssertEqual(lastRequest?.url?.path, "/sessions/session-abc/read")
+        XCTAssertEqual(lastRequest?.httpMethod, "POST")
+
+        // Verify auth header included
+        XCTAssertEqual(MockURLProtocol.lastRequestHeader("X-API-Key"), "test-key-123")
+    }
+
+    @MainActor
+    func testMarkSessionAsReadNotFoundError() async {
+        MockURLProtocol.reset()
+        let client = createMockedClient()
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 404,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            )!
+            return (response, Data())
+        }
+
+        do {
+            try await client.markSessionAsRead(id: "nonexistent-session")
+            XCTFail("Should have thrown notFound error")
+        } catch let error as APIError {
+            XCTAssertEqual(error.errorDescription, "Resource not found")
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    // MARK: - Session Heartbeat Fields Tests
+
+    func testSessionParsingWithHeartbeatFields() throws {
+        let json = """
+        {
+            "id": "session-hb",
+            "project": "/Users/test/project",
+            "startedAt": 1705320000000,
+            "messageCount": 3,
+            "preview": "Heartbeat session",
+            "title": "Auto Analysis",
+            "isAutomatic": true,
+            "isUnread": true
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let session = try JSONDecoder().decode(Session.self, from: data)
+
+        XCTAssertEqual(session.isAutomatic, true)
+        XCTAssertEqual(session.isUnread, true)
+    }
+
+    func testSessionParsingWithoutHeartbeatFields() throws {
+        // Backward compatibility: older sessions without isAutomatic/isUnread
+        let json = """
+        {
+            "id": "session-old",
+            "project": "/Users/test/project",
+            "startedAt": 1705320000000,
+            "messageCount": 5,
+            "preview": "Old session"
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let session = try JSONDecoder().decode(Session.self, from: data)
+
+        XCTAssertNil(session.isAutomatic)
+        XCTAssertNil(session.isUnread)
+    }
+
     // MARK: - Date Conversion Tests
 
     func testSessionStartedAtDate() {

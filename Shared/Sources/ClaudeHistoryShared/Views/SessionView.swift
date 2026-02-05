@@ -412,6 +412,10 @@ public struct SessionView: View {
 
         do {
             sessionDetail = try await apiClient.fetchSession(id: sessionId)
+            // Mark unread sessions as read (fire-and-forget)
+            if session?.isUnread == true || sessionDetail?.session.isUnread == true {
+                Task { try? await apiClient.markSessionAsRead(id: sessionId) }
+            }
         } catch {
             self.error = error.localizedDescription
         }
