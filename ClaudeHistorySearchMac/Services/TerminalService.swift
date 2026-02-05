@@ -6,6 +6,8 @@ import AppKit
 class TerminalService {
     static let shared = TerminalService()
 
+    private init() {}
+
     private let iTermBundleId = "com.googlecode.iterm2"
 
     /// Starts a new Claude session in iTerm2 with the office alias
@@ -29,7 +31,19 @@ class TerminalService {
 
         // Escape single quotes in the directory path for safe shell usage
         let escapedDir = workingDirectory.replacingOccurrences(of: "'", with: "'\\''")
-        let command = "cd '\(escapedDir)' && claude --resume \(sessionId)"
+
+        // Check if this is an Office enlistment (configured in Settings)
+        let officeEnlistmentPath = UserDefaults.standard.string(forKey: "officeEnlistmentPath")
+        let isOfficeEnlistment = officeEnlistmentPath.map { !$0.isEmpty && workingDirectory.contains($0) } ?? false
+
+        // Build the command: optionally run 'office' first to prepare enlistment
+        let claudeCommand = "claude --resume \(sessionId) --dangerously-skip-permissions"
+        let command: String
+        if isOfficeEnlistment {
+            command = "office && cd '\(escapedDir)' && \(claudeCommand)"
+        } else {
+            command = "cd '\(escapedDir)' && \(claudeCommand)"
+        }
 
         if isITerm2Available() {
             try executeInITerm2(command: command)

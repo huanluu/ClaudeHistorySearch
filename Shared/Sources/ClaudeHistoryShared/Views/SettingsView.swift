@@ -12,6 +12,10 @@ public struct SettingsView: View {
     @State private var showAPIKey = false
     @State private var apiKeyStatus: APIKeyStatus = .unknown
 
+    #if os(macOS)
+    @AppStorage("officeEnlistmentPath") private var officeEnlistmentPath = ""
+    #endif
+
     public init(serverDiscovery: ServerDiscovery, apiClient: APIClient) {
         self.serverDiscovery = serverDiscovery
         self.apiClient = apiClient
@@ -51,7 +55,7 @@ public struct SettingsView: View {
             formContent
                 .formStyle(.grouped)
         }
-        .frame(width: 350, height: 520)
+        .frame(width: 350, height: 600)
         #endif
     }
 
@@ -64,6 +68,9 @@ public struct SettingsView: View {
             authenticationSection
             manualConnectionSection
             aboutSection
+            #if os(macOS)
+            terminalSection
+            #endif
         }
     }
 
@@ -247,6 +254,21 @@ public struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - Terminal Section (macOS only)
+
+    #if os(macOS)
+    @ViewBuilder
+    private var terminalSection: some View {
+        Section("Terminal") {
+            TextField("Office Enlistment Path", text: $officeEnlistmentPath)
+                .textFieldStyle(.roundedBorder)
+            Text("When resuming sessions in this path, 'office' command runs first to prepare the enlistment.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+    #endif
 
     // MARK: - Helpers
 
