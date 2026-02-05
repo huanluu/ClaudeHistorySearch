@@ -7,14 +7,18 @@ public struct Session: Identifiable, Codable, Hashable, Sendable {
     public let messageCount: Int
     public let preview: String
     public let title: String?
+    public let isAutomatic: Bool?
+    public let isUnread: Bool?
 
-    public init(id: String, project: String, startedAt: Int64, messageCount: Int, preview: String, title: String? = nil) {
+    public init(id: String, project: String, startedAt: Int64, messageCount: Int, preview: String, title: String? = nil, isAutomatic: Bool? = nil, isUnread: Bool? = nil) {
         self.id = id
         self.project = project
         self.startedAt = startedAt
         self.messageCount = messageCount
         self.preview = preview
         self.title = title
+        self.isAutomatic = isAutomatic
+        self.isUnread = isUnread
     }
 
     public var startedAtDate: Date {

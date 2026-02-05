@@ -13,6 +13,14 @@ export interface SessionRecord {
   preview: string | null;
   title: string | null;
   last_indexed: number | null;
+  is_automatic: number;
+  is_unread: number;
+}
+
+export interface HeartbeatStateRecord {
+  key: string;
+  last_changed: string | null;
+  last_processed: number | null;
 }
 
 export interface MessageRecord {
@@ -86,6 +94,31 @@ try {
   // Column already exists, ignore
 }
 
+// Migration: add is_automatic column for heartbeat sessions
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN is_automatic INTEGER DEFAULT 0`);
+  console.log('Added is_automatic column to sessions table');
+} catch {
+  // Column already exists, ignore
+}
+
+// Migration: add is_unread column for heartbeat sessions
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN is_unread INTEGER DEFAULT 0`);
+  console.log('Added is_unread column to sessions table');
+} catch {
+  // Column already exists, ignore
+}
+
+// Create heartbeat_state table for tracking processed items
+db.exec(`
+  CREATE TABLE IF NOT EXISTS heartbeat_state (
+    key TEXT PRIMARY KEY,
+    last_changed TEXT,
+    last_processed INTEGER
+  );
+`);
+
 // Create FTS5 virtual table for full-text search
 db.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
@@ -100,8 +133,8 @@ db.exec(`
 
 // Prepared statements with proper typing
 export const insertSession: Statement = db.prepare(`
-  INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 export const insertMessage: Statement = db.prepare(`
@@ -185,3 +218,21 @@ export const getSessionLastIndexed: Statement<unknown[], LastIndexedRecord> = db
 
 // Re-export for backwards compatibility in tests
 export { searchMessagesByRelevance, searchMessagesByDate };
+
+// Heartbeat-related prepared statements
+export const markSessionAsRead: Statement = db.prepare(`
+  UPDATE sessions SET is_unread = 0 WHERE id = ?
+`);
+
+export const getHeartbeatState: Statement<unknown[], HeartbeatStateRecord> = db.prepare(`
+  SELECT * FROM heartbeat_state WHERE key = ?
+`);
+
+export const upsertHeartbeatState: Statement = db.prepare(`
+  INSERT OR REPLACE INTO heartbeat_state (key, last_changed, last_processed)
+  VALUES (?, ?, ?)
+`);
+
+export const getAllHeartbeatState: Statement<unknown[], HeartbeatStateRecord> = db.prepare(`
+  SELECT * FROM heartbeat_state
+`);

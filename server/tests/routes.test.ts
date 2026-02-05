@@ -101,7 +101,19 @@ function createTestApp(withAuth = true): Application {
           startedAt: Date.now(),
           messageCount: 4,
           preview: 'Test session preview',
-          title: 'Test Session'
+          title: 'Test Session',
+          isAutomatic: false,
+          isUnread: false
+        },
+        {
+          id: 'test-heartbeat-session',
+          project: '/test/project',
+          startedAt: Date.now(),
+          messageCount: 2,
+          preview: '[Heartbeat] Analyze Work Item #12345',
+          title: null,
+          isAutomatic: true,
+          isUnread: true
         }
       ],
       pagination: { limit, offset, hasMore: false }
@@ -162,6 +174,38 @@ function createTestApp(withAuth = true): Application {
   app.post('/reindex', (req: Request, res: Response) => {
     const force = req.query.force === 'true';
     res.json({ success: true, indexed: force ? 10 : 5, skipped: 0 });
+  });
+
+  // Track which sessions have been marked as read (for testing)
+  const readSessions = new Set<string>();
+
+  app.post('/sessions/:id/read', (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (id === 'not-found') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    readSessions.add(id);
+    res.json({ success: true });
+  });
+
+  app.post('/heartbeat', (_req: Request, res: Response) => {
+    res.json({
+      tasksProcessed: 2,
+      sessionsCreated: 1,
+      sessionIds: ['mock-session-abc123'],
+      errors: []
+    });
+  });
+
+  app.get('/heartbeat/status', (_req: Request, res: Response) => {
+    res.json({
+      enabled: true,
+      intervalMs: 3600000,
+      workingDirectory: '/test/project',
+      state: [
+        { key: 'workitem:12345', lastChanged: '2024-01-15T10:00:00Z', lastProcessed: Date.now() }
+      ]
+    });
   });
 
   return app;
@@ -343,5 +387,131 @@ describe('API without authentication configured', () => {
   it('should allow requests when no API key is configured', async () => {
     const res = await request(app).get('/sessions');
     expect(res.status).toBe(200);
+  });
+});
+
+// =============================================================================
+// PHASE 6: New Heartbeat API Routes Tests
+// =============================================================================
+
+describe('Heartbeat API Routes', () => {
+  const HEARTBEAT_TEST_DIR = join(tmpdir(), `claude-history-heartbeat-test-${Date.now()}`);
+  const HEARTBEAT_CONFIG_FILE = join(HEARTBEAT_TEST_DIR, 'config.json');
+  let app: Application;
+  let testApiKey: string;
+
+  function createHeartbeatTestApiKey(): string {
+    mkdirSync(HEARTBEAT_TEST_DIR, { recursive: true });
+    const key = randomBytes(32).toString('hex');
+    const hash = createHash('sha256').update(key).digest('hex');
+    const config: Config = {
+      apiKeyHash: hash,
+      apiKeyCreatedAt: new Date().toISOString()
+    };
+    writeFileSync(HEARTBEAT_CONFIG_FILE, JSON.stringify(config));
+    // Update the env var to point to this test dir
+    process.env.CLAUDE_HISTORY_CONFIG_DIR = HEARTBEAT_TEST_DIR;
+    return key;
+  }
+
+  beforeAll(() => {
+    testApiKey = createHeartbeatTestApiKey();
+    app = createTestApp(true);
+  });
+
+  afterAll(() => {
+    rmSync(HEARTBEAT_TEST_DIR, { recursive: true, force: true });
+  });
+
+  describe('GET /sessions (with heartbeat fields)', () => {
+    it('should include isAutomatic and isUnread fields', async () => {
+      const res = await request(app)
+        .get('/sessions')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body.sessions.length).toBe(2);
+
+      // Regular session
+      const regularSession = res.body.sessions[0];
+      expect(regularSession.isAutomatic).toBe(false);
+      expect(regularSession.isUnread).toBe(false);
+
+      // Heartbeat session
+      const heartbeatSession = res.body.sessions[1];
+      expect(heartbeatSession.isAutomatic).toBe(true);
+      expect(heartbeatSession.isUnread).toBe(true);
+    });
+  });
+
+  describe('POST /sessions/:id/read', () => {
+    it('should mark session as read', async () => {
+      const res = await request(app)
+        .post('/sessions/test-heartbeat-session/read')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should return 404 for non-existent session', async () => {
+      const res = await request(app)
+        .post('/sessions/not-found/read')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('Session not found');
+    });
+  });
+
+  describe('POST /heartbeat', () => {
+    it('should trigger heartbeat and return results', async () => {
+      const res = await request(app)
+        .post('/heartbeat')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body.tasksProcessed).toBeDefined();
+      expect(res.body.sessionsCreated).toBeDefined();
+      expect(res.body.errors).toBeInstanceOf(Array);
+    });
+
+    it('should trigger heartbeat with force (bypasses enabled check)', async () => {
+      // The mock app always returns success, but this validates the route
+      // exists and responds. The real force behavior is tested in heartbeat.test.ts
+      const res = await request(app)
+        .post('/heartbeat')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body.tasksProcessed).toBeDefined();
+      expect(res.body.sessionsCreated).toBeDefined();
+    });
+  });
+
+  describe('GET /heartbeat/status', () => {
+    it('should return heartbeat status', async () => {
+      const res = await request(app)
+        .get('/heartbeat/status')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body.enabled).toBeDefined();
+      expect(res.body.intervalMs).toBeDefined();
+      expect(res.body.workingDirectory).toBeDefined();
+      expect(res.body.state).toBeInstanceOf(Array);
+    });
+
+    it('should return processed items in state', async () => {
+      const res = await request(app)
+        .get('/heartbeat/status')
+        .set('X-API-Key', testApiKey);
+
+      expect(res.status).toBe(200);
+      expect(res.body.state.length).toBeGreaterThan(0);
+      expect(res.body.state[0].key).toContain('workitem');
+      expect(res.body.state[0].lastChanged).toBeDefined();
+      expect(res.body.state[0].lastProcessed).toBeDefined();
+    });
   });
 });

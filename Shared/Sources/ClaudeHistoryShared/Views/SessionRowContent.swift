@@ -11,12 +11,23 @@ public struct SessionRowContent: View {
         self.style = style
     }
 
+    private var isAutomatic: Bool { session.isAutomatic == true }
+    private var isUnread: Bool { session.isUnread == true }
+
     public var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // Chat icon
+            // Blue unread dot
+            if isUnread {
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 6)
+            }
+
+            // Icon: sparkle for automatic sessions, chat bubble for regular
             if style.showIcon {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .foregroundColor(.blue)
+                Image(systemName: isAutomatic ? "sparkles" : "bubble.left.and.bubble.right")
+                    .foregroundColor(isAutomatic ? .orange : .blue)
                     .font(.system(size: 14))
                     .frame(width: 20)
             }
@@ -26,6 +37,7 @@ public struct SessionRowContent: View {
                 HStack {
                     Text(session.displayName)
                         .font(.headline)
+                        .fontWeight(isUnread ? .bold : .regular)
                         .lineLimit(1)
                     Spacer()
                     Text(session.startedAtDate, style: .relative)

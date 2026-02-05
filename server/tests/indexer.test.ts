@@ -1,6 +1,6 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { parseSessionFile, ParsedSession } from '../src/indexer.js';
+import { parseSessionFile, ParsedSession, detectAutomaticSession } from '../src/indexer.js';
 
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -192,5 +192,67 @@ describe('parseSessionFile', () => {
         expect(typeof msg.timestamp).toBe('number');
       });
     });
+  });
+});
+
+// =============================================================================
+// PHASE 5: Automatic Session Detection Tests
+// =============================================================================
+
+describe('detectAutomaticSession', () => {
+  it('should detect session with HEARTBEAT_SESSION marker in first message', async () => {
+    const session = await parseSessionFile(join(FIXTURES_DIR, 'sample-session-heartbeat.jsonl'));
+    const isAutomatic = detectAutomaticSession(session);
+    expect(isAutomatic).toBe(true);
+  });
+
+  it('should detect session with [Heartbeat] in preview', async () => {
+    const session: ParsedSession = {
+      sessionId: 'test-session',
+      project: '/test',
+      startedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      preview: '[Heartbeat] Analyze Work Item #12345',
+      messages: [
+        { uuid: 'msg-1', role: 'user', content: '[Heartbeat] Analyze Work Item #12345', timestamp: Date.now() }
+      ]
+    };
+    const isAutomatic = detectAutomaticSession(session);
+    expect(isAutomatic).toBe(true);
+  });
+
+  it('should NOT detect regular sessions as automatic', async () => {
+    const session = await parseSessionFile(join(FIXTURES_DIR, 'sample-session.jsonl'));
+    const isAutomatic = detectAutomaticSession(session);
+    expect(isAutomatic).toBe(false);
+  });
+
+  it('should NOT detect sessions with "heartbeat" in random context', async () => {
+    // A session mentioning "heartbeat" in normal conversation shouldn't be flagged
+    const session: ParsedSession = {
+      sessionId: 'test-session',
+      project: '/test',
+      startedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      preview: 'How do I implement a heartbeat check in my app?',
+      messages: [
+        { uuid: 'msg-1', role: 'user', content: 'How do I implement a heartbeat check in my app?', timestamp: Date.now() }
+      ]
+    };
+    const isAutomatic = detectAutomaticSession(session);
+    expect(isAutomatic).toBe(false);
+  });
+
+  it('should handle empty session gracefully', () => {
+    const session: ParsedSession = {
+      sessionId: null,
+      project: null,
+      startedAt: null,
+      lastActivityAt: null,
+      preview: null,
+      messages: []
+    };
+    const isAutomatic = detectAutomaticSession(session);
+    expect(isAutomatic).toBe(false);
   });
 });

@@ -1,15 +1,27 @@
 import { Router, type Request, type Response } from 'express';
 import {
+  db,
   getRecentSessions,
   getSessionById,
   getMessagesBySessionId,
   searchMessages,
+  markSessionAsRead,
+  getAllHeartbeatState,
   type SessionRecord,
   type MessageRecord,
   type SearchResultRecord,
-  type SortOption
+  type SortOption,
+  type HeartbeatStateRecord
 } from './database.js';
 import { indexAllSessions } from './indexer.js';
+import { HeartbeatService } from './services/HeartbeatService.js';
+
+// Singleton heartbeat service for API routes
+let heartbeatService: HeartbeatService | null = null;
+
+export function setHeartbeatService(service: HeartbeatService): void {
+  heartbeatService = service;
+}
 
 const router = Router();
 
@@ -21,6 +33,8 @@ interface SessionResponse {
   messageCount: number;
   preview: string | null;
   title: string | null;
+  isAutomatic: boolean;
+  isUnread: boolean;
 }
 
 interface MessageResponse {
@@ -80,7 +94,9 @@ router.get('/sessions', (req: Request, res: Response) => {
         startedAt: s.started_at,
         messageCount: s.message_count,
         preview: s.preview,
-        title: s.title
+        title: s.title,
+        isAutomatic: s.is_automatic === 1,
+        isUnread: s.is_unread === 1
       })),
       pagination: {
         limit,
@@ -117,7 +133,9 @@ router.get('/sessions/:id', (req: Request, res: Response) => {
         startedAt: session.started_at,
         messageCount: session.message_count,
         preview: session.preview,
-        title: session.title
+        title: session.title,
+        isAutomatic: session.is_automatic === 1,
+        isUnread: session.is_unread === 1
       } as SessionResponse,
       messages: messages.map((m): MessageResponse => ({
         uuid: m.uuid,
@@ -229,6 +247,75 @@ router.post('/reindex', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error reindexing:', error);
     res.status(500).json({ error: 'Reindex failed' });
+  }
+});
+
+/**
+ * POST /sessions/:id/read
+ * Mark a session as read (removes unread indicator)
+ */
+router.post('/sessions/:id/read', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if session exists
+    const session = getSessionById.get(id) as SessionRecord | undefined;
+    if (!session) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    // Mark as read
+    markSessionAsRead.run(id);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking session as read:', error);
+    res.status(500).json({ error: 'Failed to mark session as read' });
+  }
+});
+
+/**
+ * POST /heartbeat
+ * Manually trigger a heartbeat run (for testing/debugging)
+ */
+router.post('/heartbeat', async (_req: Request, res: Response) => {
+  try {
+    if (!heartbeatService) {
+      res.status(503).json({ error: 'Heartbeat service not initialized' });
+      return;
+    }
+
+    const result = await heartbeatService.runHeartbeat(true);
+    res.json(result);
+  } catch (error) {
+    console.error('Error running heartbeat:', error);
+    res.status(500).json({ error: 'Heartbeat failed' });
+  }
+});
+
+/**
+ * GET /heartbeat/status
+ * Get the current heartbeat status and state
+ */
+router.get('/heartbeat/status', (_req: Request, res: Response) => {
+  try {
+    const state = getAllHeartbeatState.all() as HeartbeatStateRecord[];
+    const config = heartbeatService?.getConfig();
+
+    res.json({
+      enabled: config?.enabled ?? false,
+      intervalMs: config?.intervalMs ?? 0,
+      workingDirectory: config?.workingDirectory ?? '',
+      state: state.map(s => ({
+        key: s.key,
+        lastChanged: s.last_changed,
+        lastProcessed: s.last_processed
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting heartbeat status:', error);
+    res.status(500).json({ error: 'Failed to get heartbeat status' });
   }
 });
 

@@ -69,6 +69,33 @@ export interface IndexAllResult {
 }
 
 /**
+ * Detect if a session was created by the heartbeat service (automatic)
+ * Detection criteria:
+ * 1. Preview/first message starts with "[Heartbeat]"
+ * 2. First message contains "<!-- HEARTBEAT_SESSION -->"
+ */
+export function detectAutomaticSession(session: ParsedSession): boolean {
+  // Check preview for [Heartbeat] prefix
+  if (session.preview?.startsWith('[Heartbeat]')) {
+    return true;
+  }
+
+  // Check first message for HEARTBEAT_SESSION marker
+  if (session.messages.length > 0) {
+    const firstMessage = session.messages[0];
+    if (firstMessage.content.includes('<!-- HEARTBEAT_SESSION -->')) {
+      return true;
+    }
+    // Also check if first message starts with [Heartbeat]
+    if (firstMessage.content.startsWith('[Heartbeat]')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Load sessions-index.json from a project directory and return a map of sessionId → title
  */
 function loadSessionsIndex(projectPath: string): Map<string, string> {
@@ -230,7 +257,8 @@ export async function indexSessionFile(
 
   console.log(`Indexing: ${filePath}`);
 
-  const { sessionId, project, startedAt, lastActivityAt, preview, messages } = await parseSessionFile(filePath);
+  const parsedSession = await parseSessionFile(filePath);
+  const { sessionId, project, startedAt, lastActivityAt, preview, messages } = parsedSession;
 
   if (!sessionId || messages.length === 0) {
     return null;
@@ -239,12 +267,16 @@ export async function indexSessionFile(
   // Look up title from sessions-index.json
   const title = titleMap.get(sessionId) || null;
 
+  // Detect if this is an automatic (heartbeat) session
+  const isAutomatic = detectAutomaticSession(parsedSession);
+
   // Use transaction for atomic update
   const transaction = db.transaction(() => {
     // Clear existing messages for this session
     clearSessionMessages.run(sessionId);
 
     // Insert session
+    // Automatic sessions are marked as unread so they appear with a badge
     insertSession.run(
       sessionId,
       project || 'Unknown',
@@ -253,7 +285,9 @@ export async function indexSessionFile(
       messages.length,
       preview || '',
       title,
-      Date.now()
+      Date.now(),
+      isAutomatic ? 1 : 0,  // is_automatic
+      isAutomatic ? 1 : 0   // is_unread (new automatic sessions are unread)
     );
 
     // Insert messages

@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from 'crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -73,6 +73,10 @@ export function generateApiKey(): string {
   config.apiKeyCreatedAt = new Date().toISOString();
   saveConfig(config);
 
+  // Save plaintext key to .api-key file for curl testing
+  const apiKeyFile = join(getConfigDir(), '.api-key');
+  writeFileSync(apiKeyFile, key, { mode: 0o600 });
+
   return key;
 }
 
@@ -105,6 +109,12 @@ export function removeApiKey(): void {
   delete config.apiKeyHash;
   delete config.apiKeyCreatedAt;
   saveConfig(config);
+
+  // Remove .api-key file if it exists
+  const apiKeyFile = join(getConfigDir(), '.api-key');
+  if (existsSync(apiKeyFile)) {
+    unlinkSync(apiKeyFile);
+  }
 }
 
 // CLI command for generating a key
@@ -112,6 +122,7 @@ if (process.argv[1]?.endsWith('keyManager.ts') && process.argv[2] === 'generate'
   const key = generateApiKey();
   console.log('\n=== API Key Generated ===\n');
   console.log(`Your API key: ${key}\n`);
-  console.log('IMPORTANT: Save this key securely. It will not be shown again.\n');
+  console.log(`Plaintext saved to: ${join(getConfigDir(), '.api-key')}`);
   console.log(`Config stored at: ${getConfigFile()}\n`);
+  console.log('Usage: curl -H "X-API-Key: $(cat ~/.claude-history-server/.api-key)" http://localhost:3847/heartbeat\n');
 }

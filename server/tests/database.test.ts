@@ -72,7 +72,9 @@ function setupDatabase(): void {
       message_count INTEGER DEFAULT 0,
       preview TEXT,
       title TEXT,
-      last_indexed INTEGER
+      last_indexed INTEGER,
+      is_automatic INTEGER DEFAULT 0,
+      is_unread INTEGER DEFAULT 0
     );
 
     CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project);
@@ -94,8 +96,8 @@ function setupDatabase(): void {
 
   // Prepare statements
   insertSession = db.prepare(`
-    INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insertMessage = db.prepare(`
@@ -178,7 +180,9 @@ function seedTestData(): void {
     4,
     'How do I create a React component?',
     'React Component Tutorial',
-    now
+    now,
+    0,  // is_automatic
+    0   // is_unread
   );
 
   insertMessage.run('session-react-001', 'user', 'How do I create a React component?', now - 86400000, 'msg-001');
@@ -195,7 +199,9 @@ function seedTestData(): void {
     2,
     'Why is my Python code throwing an error?',
     'Python Debugging Session',
-    now
+    now,
+    0,  // is_automatic
+    0   // is_unread
   );
 
   insertMessage.run('session-python-002', 'user', 'Why is my Python code throwing an error? I get TypeError: cannot unpack non-iterable NoneType object', now - 172800000, 'msg-005');
@@ -210,7 +216,9 @@ function seedTestData(): void {
     3,
     'How do async/await work?',
     'JavaScript Async Tutorial',
-    now
+    now,
+    0,  // is_automatic
+    0   // is_unread
   );
 
   insertMessage.run('session-js-003', 'user', 'How do async/await work in JavaScript?', now - 3600000, 'msg-007');
@@ -386,13 +394,13 @@ describe('Session Message Management', () => {
     const now = Date.now();
 
     // Insert a session
-    insertSession.run('session-upsert', '/test', now, now, 1, 'preview', 'Original Title', now);
+    insertSession.run('session-upsert', '/test', now, now, 1, 'preview', 'Original Title', now, 0, 0);
 
     let session = getSessionById.get('session-upsert');
     expect(session!.title).toBe('Original Title');
 
     // Update the same session
-    insertSession.run('session-upsert', '/test', now, now, 2, 'updated preview', 'Updated Title', now);
+    insertSession.run('session-upsert', '/test', now, now, 2, 'updated preview', 'Updated Title', now, 0, 0);
 
     session = getSessionById.get('session-upsert');
     expect(session!.title).toBe('Updated Title');

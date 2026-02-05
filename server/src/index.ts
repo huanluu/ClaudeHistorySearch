@@ -2,11 +2,12 @@ import Bonjour from 'bonjour-service';
 import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
-import routes from './routes.js';
+import routes, { setHeartbeatService } from './routes.js';
 import { DB_PATH } from './database.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
+import { HeartbeatService } from './services/HeartbeatService.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
@@ -140,10 +141,59 @@ async function main(): Promise<void> {
   }, REINDEX_INTERVAL);
   console.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
 
+  // Heartbeat service for automated work item analysis
+  const heartbeatService = new HeartbeatService();
+  setHeartbeatService(heartbeatService);  // Make available to API routes
+  const heartbeatConfig = heartbeatService.getConfig();
+
+  let heartbeatTimer: NodeJS.Timeout | null = null;
+
+  if (heartbeatConfig.enabled) {
+    // Run heartbeat periodically
+    heartbeatTimer = setInterval(async () => {
+      console.log('Running heartbeat...');
+      try {
+        const heartbeatResult = await heartbeatService.runHeartbeat();
+        if (heartbeatResult.sessionsCreated > 0) {
+          console.log(`Heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
+        } else {
+          console.log('Heartbeat: no changes detected');
+        }
+        if (heartbeatResult.errors.length > 0) {
+          console.error('Heartbeat errors:', heartbeatResult.errors);
+        }
+      } catch (error) {
+        console.error('Heartbeat error:', error);
+      }
+    }, heartbeatConfig.intervalMs);
+
+    // Run once on startup (delayed to let indexer initialize)
+    setTimeout(async () => {
+      console.log('Running initial heartbeat...');
+      try {
+        const heartbeatResult = await heartbeatService.runHeartbeat();
+        console.log(`Initial heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
+        if (heartbeatResult.errors.length > 0) {
+          console.error('Initial heartbeat errors:', heartbeatResult.errors);
+        }
+      } catch (error) {
+        console.error('Initial heartbeat error:', error);
+      }
+    }, 5000);
+
+    console.log(`Heartbeat scheduled every ${heartbeatConfig.intervalMs / 1000 / 60} minutes`);
+    console.log(`Heartbeat working directory: ${heartbeatConfig.workingDirectory}\n`);
+  } else {
+    console.log('Heartbeat: disabled\n');
+  }
+
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
     console.log('\nShutting down...');
     clearInterval(reindexTimer);
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+    }
     service?.stop?.();
     bonjour?.destroy();
     watcher.close();

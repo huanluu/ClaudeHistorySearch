@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"heartbeat-session-001","cwd":"/Users/test/project","uuid":"msg-001","timestamp":"2025-01-20T10:00:00Z","message":{"content":"<!-- HEARTBEAT_SESSION -->\n[Heartbeat] Analyze Work Item #12345\n\nWork Item Details:\n- ID: 12345\n- Title: Fix login bug\n- State: Active"}}
+{"type":"assistant","sessionId":"heartbeat-session-001","uuid":"msg-002","timestamp":"2025-01-20T10:01:00Z","message":{"content":"I'll analyze this work item in the context of the codebase..."}}
