@@ -111,6 +111,33 @@ Trigger a full reindex of all sessions.
 curl -X POST "http://localhost:3847/reindex?force=true"
 ```
 
+## Heartbeat Service
+
+The heartbeat service periodically checks for new/updated Azure DevOps work items and spawns Claude in headless mode to analyze them in the context of your codebase.
+
+### Configuration
+
+- **`~/.claude-history-server/config.json`** — Heartbeat settings (interval, working directory, enabled)
+- **`~/.claude-history-server/HEARTBEAT.md`** — Feature flags via Markdown checkboxes
+
+### Current Design Limitations
+
+**HEARTBEAT.md acts as a single on/off switch, not granular task control.** The individual checkbox items (e.g. "Fetch work items", "Analyze with codebase context", "Create report") are parsed but not meaningfully differentiated. The code checks if *any* checked task is in the "Work Items" section or mentions "work item" — then runs the same hardcoded pipeline:
+
+1. **Fetch** — Deterministic code runs `az boards work-item query` and diffs against SQLite state
+2. **Analyze** — Spawns Claude headless with a hardcoded prompt template (not derived from HEARTBEAT.md text)
+3. **Report** — Not a separate step; just instructions baked into the prompt
+
+To revisit: make HEARTBEAT.md a true task-level config where each checkbox controls a distinct behavior, or pass the task descriptions to the model as part of the prompt.
+
+### Heartbeat API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/heartbeat` | POST | Trigger heartbeat manually (works even if disabled in config) |
+| `/heartbeat/status` | GET | Return heartbeat state |
+| `/sessions/:id/read` | POST | Mark a session as read |
+
 ## Data Storage
 
 - Database: `~/.claude-history-server/search.db`
