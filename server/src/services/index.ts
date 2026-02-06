@@ -8,3 +8,5 @@ export {
   CommandExecutor,
   getConfigDir
 } from './HeartbeatService.js';
+
+export { ConfigService } from './ConfigService.js';

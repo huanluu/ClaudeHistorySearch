@@ -5,7 +5,7 @@ import { validateApiKey, hasApiKey } from './keyManager.js';
  * Paths that don't require authentication
  * - /health is needed for Bonjour health checks
  */
-const PUBLIC_PATHS = ['/health'];
+const PUBLIC_PATHS = ['/health', '/admin'];
 
 /**
  * Express middleware for API key authentication

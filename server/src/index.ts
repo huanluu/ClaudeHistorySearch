@@ -2,13 +2,14 @@ import Bonjour from 'bonjour-service';
 import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
-import routes, { setHeartbeatService } from './routes.js';
+import routes, { setHeartbeatService, setConfigService, setOnConfigChanged } from './routes.js';
 import { DB_PATH } from './database.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
 import { HeartbeatService } from './services/HeartbeatService.js';
 import { logger } from './logger.js';
+import { ConfigService } from './services/ConfigService.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
@@ -145,15 +146,31 @@ async function main(): Promise<void> {
   // Heartbeat service for automated work item analysis
   const heartbeatService = new HeartbeatService();
   setHeartbeatService(heartbeatService);  // Make available to API routes
-  const heartbeatConfig = heartbeatService.getConfig();
+
+  // Config service for admin UI
+  const configService = new ConfigService();
+  setConfigService(configService);
 
   let heartbeatTimer: NodeJS.Timeout | null = null;
   let heartbeatRunCount = 0;
 
-  if (heartbeatConfig.enabled) {
+  function restartHeartbeatTimer(): void {
+    // Clear existing timer
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+    heartbeatRunCount = 0;
+
+    const config = heartbeatService.getConfig();
+    if (!config.enabled) {
+      logger.log('Heartbeat rescheduled: disabled');
+      return;
+    }
+
     const runHeartbeatOnce = async (label: string): Promise<void> => {
       heartbeatRunCount++;
-      logger.log(`${label} (run ${heartbeatRunCount}${heartbeatConfig.maxRuns > 0 ? `/${heartbeatConfig.maxRuns}` : ''})...`);
+      logger.log(`${label} (run ${heartbeatRunCount}${config.maxRuns > 0 ? `/${config.maxRuns}` : ''})...`);
       try {
         const heartbeatResult = await heartbeatService.runHeartbeat();
         if (heartbeatResult.sessionsCreated > 0) {
@@ -169,8 +186,8 @@ async function main(): Promise<void> {
       }
 
       // Stop scheduling if maxRuns reached
-      if (heartbeatConfig.maxRuns > 0 && heartbeatRunCount >= heartbeatConfig.maxRuns) {
-        logger.log(`Heartbeat: maxRuns (${heartbeatConfig.maxRuns}) reached, stopping scheduled heartbeats`);
+      if (config.maxRuns > 0 && heartbeatRunCount >= config.maxRuns) {
+        logger.log(`Heartbeat: maxRuns (${config.maxRuns}) reached, stopping scheduled heartbeats`);
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
@@ -180,21 +197,39 @@ async function main(): Promise<void> {
 
     // Run heartbeat periodically
     heartbeatTimer = setInterval(() => {
-      if (heartbeatConfig.maxRuns > 0 && heartbeatRunCount >= heartbeatConfig.maxRuns) {
+      if (config.maxRuns > 0 && heartbeatRunCount >= config.maxRuns) {
         return; // Guard against race with clearInterval
       }
       runHeartbeatOnce('Running heartbeat');
-    }, heartbeatConfig.intervalMs);
+    }, config.intervalMs);
 
     // Run once on startup (delayed to let indexer initialize)
     setTimeout(() => {
       runHeartbeatOnce('Running initial heartbeat');
     }, 5000);
 
-    logger.log(`Heartbeat scheduled every ${heartbeatConfig.intervalMs / 1000 / 60} minutes`);
-    if (heartbeatConfig.maxRuns > 0) {
-      logger.log(`Heartbeat max runs: ${heartbeatConfig.maxRuns}`);
+    logger.log(`Heartbeat rescheduled every ${config.intervalMs / 1000 / 60} minutes`);
+    if (config.maxRuns > 0) {
+      logger.log(`Heartbeat max runs: ${config.maxRuns}`);
     }
+  }
+
+  // Wire config change handler to restart heartbeat timer
+  setOnConfigChanged((section: string) => {
+    if (section === 'heartbeat') {
+      // Read the updated config from disk and apply to heartbeat service
+      const updatedSection = configService.getSection('heartbeat');
+      if (updatedSection) {
+        heartbeatService.updateConfig(updatedSection as Partial<import('./services/HeartbeatService.js').HeartbeatConfig>);
+      }
+      restartHeartbeatTimer();
+    }
+  });
+
+  const heartbeatConfig = heartbeatService.getConfig();
+
+  if (heartbeatConfig.enabled) {
+    restartHeartbeatTimer();
     logger.log(`Heartbeat working directory: ${heartbeatConfig.workingDirectory}\n`);
   } else {
     logger.log('Heartbeat: disabled\n');

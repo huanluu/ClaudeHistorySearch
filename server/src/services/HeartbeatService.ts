@@ -128,6 +128,14 @@ export class HeartbeatService {
   }
 
   /**
+   * Update configuration at runtime (hot reload).
+   * Merges partial values into the current config.
+   */
+  updateConfig(partial: Partial<HeartbeatConfig>): void {
+    this.config = { ...this.config, ...partial };
+  }
+
+  /**
    * Load configuration from config.json with environment variable overrides
    */
   private loadConfig(): HeartbeatConfig {
