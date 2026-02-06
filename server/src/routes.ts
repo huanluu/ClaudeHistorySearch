@@ -15,6 +15,7 @@ import {
 } from './database.js';
 import { indexAllSessions } from './indexer.js';
 import { HeartbeatService } from './services/HeartbeatService.js';
+import { logger } from './logger.js';
 
 // Singleton heartbeat service for API routes
 let heartbeatService: HeartbeatService | null = null;
@@ -105,7 +106,7 @@ router.get('/sessions', (req: Request, res: Response) => {
       } as PaginationResponse
     });
   } catch (error) {
-    console.error('Error fetching sessions:', error);
+    logger.error('Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
   }
 });
@@ -145,7 +146,7 @@ router.get('/sessions/:id', (req: Request, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('Error fetching session:', error);
+    logger.error('Error fetching session:', error);
     res.status(500).json({ error: 'Failed to fetch session' });
   }
 });
@@ -227,7 +228,7 @@ router.get('/search', (req: Request, res: Response) => {
       sort
     });
   } catch (error) {
-    console.error('Error searching:', error);
+    logger.error('Error searching:', error);
     res.status(500).json({ error: 'Search failed' });
   }
 });
@@ -245,7 +246,7 @@ router.post('/reindex', async (req: Request, res: Response) => {
       ...result
     });
   } catch (error) {
-    console.error('Error reindexing:', error);
+    logger.error('Error reindexing:', error);
     res.status(500).json({ error: 'Reindex failed' });
   }
 });
@@ -270,7 +271,7 @@ router.post('/sessions/:id/read', (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error marking session as read:', error);
+    logger.error('Error marking session as read:', error);
     res.status(500).json({ error: 'Failed to mark session as read' });
   }
 });
@@ -289,7 +290,7 @@ router.post('/heartbeat', async (_req: Request, res: Response) => {
     const result = await heartbeatService.runHeartbeat(true);
     res.json(result);
   } catch (error) {
-    console.error('Error running heartbeat:', error);
+    logger.error('Error running heartbeat:', error);
     res.status(500).json({ error: 'Heartbeat failed' });
   }
 });
@@ -314,7 +315,7 @@ router.get('/heartbeat/status', (_req: Request, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('Error getting heartbeat status:', error);
+    logger.error('Error getting heartbeat status:', error);
     res.status(500).json({ error: 'Failed to get heartbeat status' });
   }
 });

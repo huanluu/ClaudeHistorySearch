@@ -8,6 +8,7 @@ import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
 import { HeartbeatService } from './services/HeartbeatService.js';
+import { logger } from './logger.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
@@ -42,8 +43,8 @@ transport.use('/', routes);
 async function main(): Promise<void> {
   await transport.start();
 
-  console.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
-  console.log(`Database: ${DB_PATH}`);
+  logger.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
+  logger.log(`Database: ${DB_PATH}`);
 
   // Initialize WebSocket transport (attached to HTTP server)
   const httpServer = transport.getServer();
@@ -53,13 +54,13 @@ async function main(): Promise<void> {
       path: '/ws',
       pingInterval: 30000,
       onConnection: (ws: AuthenticatedWebSocket) => {
-        console.log(`[WebSocket] Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
+        logger.log(`[WebSocket] Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
       },
       onDisconnection: (ws: AuthenticatedWebSocket) => {
-        console.log(`[WebSocket] Client disconnected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
+        logger.log(`[WebSocket] Client disconnected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
       },
       onMessage: (ws: AuthenticatedWebSocket, message: WSMessage) => {
-        console.log(`[WebSocket] Message from ${ws.clientId}:`, message.type);
+        logger.log(`[WebSocket] Message from ${ws.clientId}:`, message.type);
         // Handle application-level messages here
         // For now, just echo back
         if (message.type === 'message') {
@@ -72,27 +73,27 @@ async function main(): Promise<void> {
       }
     });
     wsTransport.start();
-    console.log(`WebSocket server available at ws://0.0.0.0:${PORT}/ws`);
+    logger.log(`WebSocket server available at ws://0.0.0.0:${PORT}/ws`);
   }
 
   // API key status
   if (hasApiKey()) {
-    console.log('Authentication: API key required');
+    logger.log('Authentication: API key required');
   } else {
-    console.log('Authentication: No API key configured (run "npm run key:generate" to secure the server)');
+    logger.log('Authentication: No API key configured (run "npm run key:generate" to secure the server)');
   }
 
   // Initial indexing
-  console.log('\nStarting initial index...');
+  logger.log('\nStarting initial index...');
   const result = await indexAllSessions();
-  console.log(`Initial index complete: ${result.indexed} sessions indexed\n`);
+  logger.log(`Initial index complete: ${result.indexed} sessions indexed\n`);
 
   // Advertise via Bonjour/mDNS (auto-disabled if stealth mode is on)
   let bonjour: Bonjour.default | null = null;
   let service: ReturnType<Bonjour.default['publish']> | null = null;
   const stealthMode = isStealthModeEnabled();
   if (stealthMode) {
-    console.log('Bonjour advertisement disabled (firewall stealth mode is on)');
+    logger.log('Bonjour advertisement disabled (firewall stealth mode is on)');
   } else {
     bonjour = new Bonjour.default();
     service = bonjour.publish({
@@ -103,7 +104,7 @@ async function main(): Promise<void> {
         version: '1.0.0'
       }
     });
-    console.log(`Bonjour service advertised as _${SERVICE_TYPE}._tcp on port ${PORT}`);
+    logger.log(`Bonjour service advertised as _${SERVICE_TYPE}._tcp on port ${PORT}`);
   }
 
   // Watch for file changes
@@ -117,29 +118,29 @@ async function main(): Promise<void> {
   });
 
   watcher.on('change', async (path: string) => {
-    console.log(`File changed: ${path}`);
+    logger.log(`File changed: ${path}`);
     await indexSessionFile(path, true);
   });
 
   watcher.on('add', async (path: string) => {
-    console.log(`New file: ${path}`);
+    logger.log(`New file: ${path}`);
     await indexSessionFile(path, false);
   });
 
-  console.log('Watching for file changes...\n');
+  logger.log('Watching for file changes...\n');
 
   // Periodic reindex to catch any missed files (watcher can be unreliable)
   const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
   const reindexTimer = setInterval(async () => {
-    console.log('Running periodic reindex...');
+    logger.log('Running periodic reindex...');
     const reindexResult = await indexAllSessions();
     if (reindexResult.indexed > 0) {
-      console.log(`Periodic reindex: ${reindexResult.indexed} new sessions indexed`);
+      logger.log(`Periodic reindex: ${reindexResult.indexed} new sessions indexed`);
     } else {
-      console.log('Periodic reindex: no new sessions');
+      logger.log('Periodic reindex: no new sessions');
     }
   }, REINDEX_INTERVAL);
-  console.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
+  logger.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
 
   // Heartbeat service for automated work item analysis
   const heartbeatService = new HeartbeatService();
@@ -147,49 +148,61 @@ async function main(): Promise<void> {
   const heartbeatConfig = heartbeatService.getConfig();
 
   let heartbeatTimer: NodeJS.Timeout | null = null;
+  let heartbeatRunCount = 0;
 
   if (heartbeatConfig.enabled) {
-    // Run heartbeat periodically
-    heartbeatTimer = setInterval(async () => {
-      console.log('Running heartbeat...');
+    const runHeartbeatOnce = async (label: string): Promise<void> => {
+      heartbeatRunCount++;
+      logger.log(`${label} (run ${heartbeatRunCount}${heartbeatConfig.maxRuns > 0 ? `/${heartbeatConfig.maxRuns}` : ''})...`);
       try {
         const heartbeatResult = await heartbeatService.runHeartbeat();
         if (heartbeatResult.sessionsCreated > 0) {
-          console.log(`Heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
+          logger.log(`Heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
         } else {
-          console.log('Heartbeat: no changes detected');
+          logger.log('Heartbeat: no changes detected');
         }
         if (heartbeatResult.errors.length > 0) {
-          console.error('Heartbeat errors:', heartbeatResult.errors);
+          logger.error('Heartbeat errors:', heartbeatResult.errors);
         }
       } catch (error) {
-        console.error('Heartbeat error:', error);
+        logger.error('Heartbeat error:', error);
       }
+
+      // Stop scheduling if maxRuns reached
+      if (heartbeatConfig.maxRuns > 0 && heartbeatRunCount >= heartbeatConfig.maxRuns) {
+        logger.log(`Heartbeat: maxRuns (${heartbeatConfig.maxRuns}) reached, stopping scheduled heartbeats`);
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+      }
+    };
+
+    // Run heartbeat periodically
+    heartbeatTimer = setInterval(() => {
+      if (heartbeatConfig.maxRuns > 0 && heartbeatRunCount >= heartbeatConfig.maxRuns) {
+        return; // Guard against race with clearInterval
+      }
+      runHeartbeatOnce('Running heartbeat');
     }, heartbeatConfig.intervalMs);
 
     // Run once on startup (delayed to let indexer initialize)
-    setTimeout(async () => {
-      console.log('Running initial heartbeat...');
-      try {
-        const heartbeatResult = await heartbeatService.runHeartbeat();
-        console.log(`Initial heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
-        if (heartbeatResult.errors.length > 0) {
-          console.error('Initial heartbeat errors:', heartbeatResult.errors);
-        }
-      } catch (error) {
-        console.error('Initial heartbeat error:', error);
-      }
+    setTimeout(() => {
+      runHeartbeatOnce('Running initial heartbeat');
     }, 5000);
 
-    console.log(`Heartbeat scheduled every ${heartbeatConfig.intervalMs / 1000 / 60} minutes`);
-    console.log(`Heartbeat working directory: ${heartbeatConfig.workingDirectory}\n`);
+    logger.log(`Heartbeat scheduled every ${heartbeatConfig.intervalMs / 1000 / 60} minutes`);
+    if (heartbeatConfig.maxRuns > 0) {
+      logger.log(`Heartbeat max runs: ${heartbeatConfig.maxRuns}`);
+    }
+    logger.log(`Heartbeat working directory: ${heartbeatConfig.workingDirectory}\n`);
   } else {
-    console.log('Heartbeat: disabled\n');
+    logger.log('Heartbeat: disabled\n');
   }
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
-    console.log('\nShutting down...');
+    logger.log('\nShutting down...');
     clearInterval(reindexTimer);
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -199,7 +212,7 @@ async function main(): Promise<void> {
     watcher.close();
     await wsTransport?.stop();
     await transport.stop();
-    console.log('Server stopped');
+    logger.log('Server stopped');
     process.exit(0);
   };
 
@@ -208,6 +221,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: Error) => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server:', err);
   process.exit(1);
 });

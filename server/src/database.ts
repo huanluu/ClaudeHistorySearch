@@ -2,6 +2,7 @@ import Database, { type Statement, type Database as DatabaseType } from 'better-
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
+import { logger } from './logger.js';
 
 // Types for database records
 export interface SessionRecord {
@@ -78,7 +79,7 @@ db.exec(`
 // Migration: add last_activity_at column if it doesn't exist (for existing databases)
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN last_activity_at INTEGER`);
-  console.log('Added last_activity_at column to sessions table');
+  logger.log('Added last_activity_at column to sessions table');
 } catch {
   // Column already exists, ignore
 }
@@ -89,7 +90,7 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_
 // Migration: add title column if it doesn't exist (for existing databases)
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT`);
-  console.log('Added title column to sessions table');
+  logger.log('Added title column to sessions table');
 } catch {
   // Column already exists, ignore
 }
@@ -97,7 +98,7 @@ try {
 // Migration: add is_automatic column for heartbeat sessions
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN is_automatic INTEGER DEFAULT 0`);
-  console.log('Added is_automatic column to sessions table');
+  logger.log('Added is_automatic column to sessions table');
 } catch {
   // Column already exists, ignore
 }
@@ -105,7 +106,7 @@ try {
 // Migration: add is_unread column for heartbeat sessions
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN is_unread INTEGER DEFAULT 0`);
-  console.log('Added is_unread column to sessions table');
+  logger.log('Added is_unread column to sessions table');
 } catch {
   // Column already exists, ignore
 }

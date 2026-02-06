@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
+import { logger } from '../logger.js';
 
 export interface SessionStartOptions {
   prompt: string;
@@ -39,10 +40,10 @@ export class SessionExecutor extends EventEmitter {
     // Skip permission prompts for headless operation
     args.push('--dangerously-skip-permissions');
 
-    console.log(`[SessionExecutor] Starting claude with args:`, args);
-    console.log(`[SessionExecutor] Working directory: ${options.workingDir}`);
+    logger.log(`[SessionExecutor] Starting claude with args:`, args);
+    logger.log(`[SessionExecutor] Working directory: ${options.workingDir}`);
 
-    console.log(`[SessionExecutor] Args: ${args.join(' ')}`);
+    logger.log(`[SessionExecutor] Args: ${args.join(' ')}`);
 
     // Spawn claude process with environment variables for non-TTY operation
     // CI=1, TERM=dumb, NO_COLOR=1 forces claude into non-interactive mode
@@ -57,18 +58,18 @@ export class SessionExecutor extends EventEmitter {
       stdio: ['ignore', 'pipe', 'pipe']  // stdin=ignore for non-interactive
     });
 
-    console.log(`[SessionExecutor] Process spawned with PID: ${this.process.pid}`);
+    logger.log(`[SessionExecutor] Process spawned with PID: ${this.process.pid}`);
 
     // Handle stdout (JSON lines)
     this.process.stdout?.on('data', (data: Buffer) => {
-      console.log(`[SessionExecutor] stdout: ${data.toString().substring(0, 100)}...`);
+      logger.verbose(`[SessionExecutor] stdout: ${data.toString().substring(0, 100)}...`);
       this.handleStdout(data);
     });
 
     // Handle stderr
     this.process.stderr?.on('data', (data: Buffer) => {
       const text = data.toString().trim();
-      console.log(`[SessionExecutor] stderr: ${text}`);
+      logger.verbose(`[SessionExecutor] stderr: ${text}`);
       if (text) {
         this.emit('error', text);
       }
@@ -76,13 +77,13 @@ export class SessionExecutor extends EventEmitter {
 
     // Handle process exit
     this.process.on('exit', (code: number | null) => {
-      console.log(`[SessionExecutor] Process exited with code: ${code}`);
+      logger.log(`[SessionExecutor] Process exited with code: ${code}`);
       this.emit('complete', code ?? 0);
     });
 
     // Handle spawn errors
     this.process.on('error', (err) => {
-      console.error(`[SessionExecutor] Spawn error:`, err);
+      logger.error(`[SessionExecutor] Spawn error:`, err);
       this.emit('error', `Failed to start claude: ${err.message}`);
     });
   }

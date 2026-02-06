@@ -3,6 +3,7 @@ import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
 import { validateApiKey, hasApiKey } from '../auth/keyManager.js';
 import { SessionStore, SessionExecutor } from '../sessions/index.js';
+import { logger } from '../logger.js';
 
 /**
  * Message types for WebSocket communication
@@ -135,14 +136,14 @@ export class WebSocketTransport {
 
     this.wss.on('connection', this._handleConnection.bind(this));
     this.wss.on('error', (error) => {
-      console.error('[WebSocket] Server error:', error);
+      logger.error('[WebSocket] Server error:', error);
     });
 
     // Start ping interval
     this._startPingInterval();
 
     this.isRunning = true;
-    console.log(`[WebSocket] Server started on path ${this.path}`);
+    logger.log(`[WebSocket] Server started on path ${this.path}`);
   }
 
   /**
@@ -253,7 +254,7 @@ export class WebSocketTransport {
     authenticatedWs.clientId = this._generateClientId();
 
     this.clients.add(authenticatedWs);
-    console.log(`[WebSocket] Client connected: ${authenticatedWs.clientId}`);
+    logger.log(`[WebSocket] Client connected: ${authenticatedWs.clientId}`);
 
     // Send auth success
     this.send(authenticatedWs, {
@@ -272,7 +273,7 @@ export class WebSocketTransport {
     // Handle close
     ws.on('close', () => {
       this.clients.delete(authenticatedWs);
-      console.log(`[WebSocket] Client disconnected: ${authenticatedWs.clientId}`);
+      logger.log(`[WebSocket] Client disconnected: ${authenticatedWs.clientId}`);
 
       // Cancel all sessions for this client
       const sessions = this.sessionStore.removeByClient(authenticatedWs.clientId);
@@ -285,7 +286,7 @@ export class WebSocketTransport {
 
     // Handle errors
     ws.on('error', (error) => {
-      console.error(`[WebSocket] Client error (${authenticatedWs.clientId}):`, error);
+      logger.error(`[WebSocket] Client error (${authenticatedWs.clientId}):`, error);
     });
 
     // Handle pong responses
@@ -326,7 +327,7 @@ export class WebSocketTransport {
       // Delegate other messages to handler
       this.onMessage?.(ws, message);
     } catch (error) {
-      console.error('[WebSocket] Failed to parse message:', error);
+      logger.error('[WebSocket] Failed to parse message:', error);
       this.send(ws, {
         type: 'error',
         payload: { message: 'Invalid message format' }
@@ -338,7 +339,7 @@ export class WebSocketTransport {
    * Handle session.start message
    */
   private _handleSessionStart(ws: AuthenticatedWebSocket, payload: SessionStartPayload): void {
-    console.log(`[WebSocket] session.start received: sessionId=${payload.sessionId}, prompt="${payload.prompt.substring(0, 50)}..."`);
+    logger.log(`[WebSocket] session.start received: sessionId=${payload.sessionId}, prompt="${payload.prompt.substring(0, 50)}..."`);
     const executor = this.sessionStore.create(payload.sessionId, ws.clientId);
     this._wireSessionEvents(ws, executor, payload.sessionId);
 
@@ -346,14 +347,14 @@ export class WebSocketTransport {
       prompt: payload.prompt,
       workingDir: payload.workingDir
     });
-    console.log(`[WebSocket] session.start: executor started`);
+    logger.log(`[WebSocket] session.start: executor started`);
   }
 
   /**
    * Handle session.resume message
    */
   private _handleSessionResume(ws: AuthenticatedWebSocket, payload: SessionResumePayload): void {
-    console.log(`[WebSocket] session.resume received: sessionId=${payload.sessionId}, resumeSessionId=${payload.resumeSessionId}`);
+    logger.log(`[WebSocket] session.resume received: sessionId=${payload.sessionId}, resumeSessionId=${payload.resumeSessionId}`);
     const executor = this.sessionStore.create(payload.sessionId, ws.clientId);
     this._wireSessionEvents(ws, executor, payload.sessionId);
 
@@ -362,7 +363,7 @@ export class WebSocketTransport {
       workingDir: payload.workingDir,
       resumeSessionId: payload.resumeSessionId
     });
-    console.log(`[WebSocket] session.resume: executor started`);
+    logger.log(`[WebSocket] session.resume: executor started`);
   }
 
   /**
@@ -379,10 +380,10 @@ export class WebSocketTransport {
    * Wire up session executor events to WebSocket messages
    */
   private _wireSessionEvents(ws: AuthenticatedWebSocket, executor: SessionExecutor, sessionId: string): void {
-    console.log(`[WebSocket] Wiring session events for: ${sessionId}`);
+    logger.log(`[WebSocket] Wiring session events for: ${sessionId}`);
 
     executor.on('message', (message: unknown) => {
-      console.log(`[WebSocket] session.output for ${sessionId}:`, JSON.stringify(message).substring(0, 100));
+      logger.log(`[WebSocket] session.output for ${sessionId}:`, JSON.stringify(message).substring(0, 100));
       this.send(ws, {
         type: 'session.output',
         payload: { sessionId, message } as SessionOutputPayload
@@ -390,7 +391,7 @@ export class WebSocketTransport {
     });
 
     executor.on('error', (error: string) => {
-      console.log(`[WebSocket] session.error for ${sessionId}: ${error}`);
+      logger.log(`[WebSocket] session.error for ${sessionId}: ${error}`);
       this.send(ws, {
         type: 'session.error',
         payload: { sessionId, error } as SessionErrorPayload
@@ -398,7 +399,7 @@ export class WebSocketTransport {
     });
 
     executor.on('complete', (exitCode: number) => {
-      console.log(`[WebSocket] session.complete for ${sessionId}: exitCode=${exitCode}`);
+      logger.log(`[WebSocket] session.complete for ${sessionId}: exitCode=${exitCode}`);
       this.send(ws, {
         type: 'session.complete',
         payload: { sessionId, exitCode } as SessionCompletePayload

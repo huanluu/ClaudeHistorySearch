@@ -10,6 +10,7 @@ import {
   getSessionLastIndexed,
   type LastIndexedRecord
 } from './database.js';
+import { logger } from './logger.js';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
@@ -120,7 +121,7 @@ function loadSessionsIndex(projectPath: string): Map<string, string> {
     }
   } catch (e) {
     const error = e as Error;
-    console.error(`Error reading sessions-index.json from ${projectPath}:`, error.message);
+    logger.error(`Error reading sessions-index.json from ${projectPath}:`, error.message);
   }
 
   return titleMap;
@@ -255,7 +256,7 @@ export async function indexSessionFile(
     }
   }
 
-  console.log(`Indexing: ${filePath}`);
+  logger.log(`Indexing: ${filePath}`);
 
   const parsedSession = await parseSessionFile(filePath);
   const { sessionId, project, startedAt, lastActivityAt, preview, messages } = parsedSession;
@@ -314,10 +315,10 @@ export async function indexSessionFile(
  * Index all session files in the Claude projects directory
  */
 export async function indexAllSessions(forceReindex: boolean = false): Promise<IndexAllResult> {
-  console.log('Starting indexing of Claude sessions...');
+  logger.log('Starting indexing of Claude sessions...');
 
   if (!existsSync(PROJECTS_DIR)) {
-    console.log('Projects directory not found:', PROJECTS_DIR);
+    logger.log('Projects directory not found:', PROJECTS_DIR);
     return { indexed: 0, skipped: 0 };
   }
 
@@ -353,13 +354,13 @@ export async function indexAllSessions(forceReindex: boolean = false): Promise<I
         }
       } catch (e) {
         const error = e as Error;
-        console.error(`Error indexing ${filePath}:`, error.message);
+        logger.error(`Error indexing ${filePath}:`, error.message);
         skipped++;
       }
     }
   }
 
-  console.log(`Indexing complete: ${indexed} sessions indexed, ${skipped} skipped`);
+  logger.log(`Indexing complete: ${indexed} sessions indexed, ${skipped} skipped`);
   return { indexed, skipped };
 }
 

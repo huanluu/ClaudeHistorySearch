@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { execSync, spawn, ChildProcess } from 'child_process';
+import { logger } from '../logger.js';
 
 /**
  * Configuration for the heartbeat service
@@ -11,6 +12,7 @@ export interface HeartbeatConfig {
   intervalMs: number;
   workingDirectory: string;
   maxItems: number;  // Maximum work items to process per heartbeat (0 = unlimited)
+  maxRuns: number;   // Maximum scheduled heartbeat runs (0 = unlimited)
 }
 
 /**
@@ -134,7 +136,8 @@ export class HeartbeatService {
       enabled: true,
       intervalMs: 3600000, // 1 hour
       workingDirectory: process.cwd(),
-      maxItems: 0  // 0 = unlimited
+      maxItems: 0,  // 0 = unlimited
+      maxRuns: 0    // 0 = unlimited
     };
 
     // Load from config file if it exists
@@ -157,10 +160,13 @@ export class HeartbeatService {
           if (typeof fileConfig.heartbeat.maxItems === 'number') {
             config.maxItems = fileConfig.heartbeat.maxItems;
           }
+          if (typeof fileConfig.heartbeat.maxRuns === 'number') {
+            config.maxRuns = fileConfig.heartbeat.maxRuns;
+          }
         }
       } catch (error) {
         // Malformed config file - use defaults
-        console.warn(`Warning: Could not parse config.json: ${(error as Error).message}`);
+        logger.warn(`Warning: Could not parse config.json: ${(error as Error).message}`);
       }
     }
 
@@ -181,6 +187,12 @@ export class HeartbeatService {
       const parsed = parseInt(process.env.HEARTBEAT_MAX_ITEMS, 10);
       if (!isNaN(parsed)) {
         config.maxItems = parsed;
+      }
+    }
+    if (process.env.HEARTBEAT_MAX_RUNS !== undefined) {
+      const parsed = parseInt(process.env.HEARTBEAT_MAX_RUNS, 10);
+      if (!isNaN(parsed)) {
+        config.maxRuns = parsed;
       }
     }
 
