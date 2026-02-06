@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { Router, type Request, type Response } from 'express';
 import {
   db,
@@ -15,12 +18,32 @@ import {
 } from './database.js';
 import { indexAllSessions } from './indexer.js';
 import { HeartbeatService } from './services/HeartbeatService.js';
+import { ConfigService } from './services/ConfigService.js';
+
+// Read admin.html at module load
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const adminHtml = readFileSync(join(__dirname, 'admin', 'admin.html'), 'utf-8');
 
 // Singleton heartbeat service for API routes
 let heartbeatService: HeartbeatService | null = null;
 
 export function setHeartbeatService(service: HeartbeatService): void {
   heartbeatService = service;
+}
+
+// Config service for admin UI
+let configService: ConfigService | null = null;
+
+export function setConfigService(service: ConfigService): void {
+  configService = service;
+}
+
+// Callback to restart heartbeat timer after config change
+let onConfigChanged: ((section: string) => void) | null = null;
+
+export function setOnConfigChanged(callback: (section: string) => void): void {
+  onConfigChanged = callback;
 }
 
 const router = Router();
@@ -316,6 +339,84 @@ router.get('/heartbeat/status', (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting heartbeat status:', error);
     res.status(500).json({ error: 'Failed to get heartbeat status' });
+  }
+});
+
+/**
+ * GET /admin
+ * Serve the admin control panel HTML page
+ */
+router.get('/admin', (_req: Request, res: Response) => {
+  res.type('html').send(adminHtml);
+});
+
+/**
+ * GET /api/config
+ * Return all editable config sections
+ */
+router.get('/api/config', (_req: Request, res: Response) => {
+  try {
+    if (!configService) {
+      res.status(503).json({ error: 'Config service not initialized' });
+      return;
+    }
+    res.json(configService.getAllEditableSections());
+  } catch (error) {
+    console.error('Error reading config:', error);
+    res.status(500).json({ error: 'Failed to read config' });
+  }
+});
+
+/**
+ * GET /api/config/:section
+ * Return a single editable config section
+ */
+router.get('/api/config/:section', (req: Request, res: Response) => {
+  try {
+    if (!configService) {
+      res.status(503).json({ error: 'Config service not initialized' });
+      return;
+    }
+    const sectionName = req.params.section as string;
+    const section = configService.getSection(sectionName);
+    if (section === null) {
+      res.status(404).json({ error: `Unknown section: ${sectionName}` });
+      return;
+    }
+    res.json(section);
+  } catch (error) {
+    console.error('Error reading config section:', error);
+    res.status(500).json({ error: 'Failed to read config section' });
+  }
+});
+
+/**
+ * PUT /api/config/:section
+ * Update a single editable config section
+ */
+router.put('/api/config/:section', (req: Request, res: Response) => {
+  try {
+    if (!configService) {
+      res.status(503).json({ error: 'Config service not initialized' });
+      return;
+    }
+
+    const sectionName = req.params.section as string;
+    const validationError = configService.updateSection(sectionName, req.body);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
+      return;
+    }
+
+    // Trigger hot reload callback
+    if (onConfigChanged) {
+      onConfigChanged(sectionName);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating config section:', error);
+    res.status(500).json({ error: 'Failed to update config section' });
   }
 });
 

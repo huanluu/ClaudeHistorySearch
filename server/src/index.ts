@@ -2,12 +2,13 @@ import Bonjour from 'bonjour-service';
 import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
-import routes, { setHeartbeatService } from './routes.js';
+import routes, { setHeartbeatService, setConfigService, setOnConfigChanged } from './routes.js';
 import { DB_PATH } from './database.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
 import { HeartbeatService } from './services/HeartbeatService.js';
+import { ConfigService } from './services/ConfigService.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
@@ -144,12 +145,26 @@ async function main(): Promise<void> {
   // Heartbeat service for automated work item analysis
   const heartbeatService = new HeartbeatService();
   setHeartbeatService(heartbeatService);  // Make available to API routes
-  const heartbeatConfig = heartbeatService.getConfig();
+
+  // Config service for admin UI
+  const configService = new ConfigService();
+  setConfigService(configService);
 
   let heartbeatTimer: NodeJS.Timeout | null = null;
 
-  if (heartbeatConfig.enabled) {
-    // Run heartbeat periodically
+  function restartHeartbeatTimer(): void {
+    // Clear existing timer
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+
+    const config = heartbeatService.getConfig();
+    if (!config.enabled) {
+      console.log('Heartbeat rescheduled: disabled');
+      return;
+    }
+
     heartbeatTimer = setInterval(async () => {
       console.log('Running heartbeat...');
       try {
@@ -165,7 +180,27 @@ async function main(): Promise<void> {
       } catch (error) {
         console.error('Heartbeat error:', error);
       }
-    }, heartbeatConfig.intervalMs);
+    }, config.intervalMs);
+
+    console.log(`Heartbeat rescheduled every ${config.intervalMs / 1000 / 60} minutes`);
+  }
+
+  // Wire config change handler to restart heartbeat timer
+  setOnConfigChanged((section: string) => {
+    if (section === 'heartbeat') {
+      // Read the updated config from disk and apply to heartbeat service
+      const updatedSection = configService.getSection('heartbeat');
+      if (updatedSection) {
+        heartbeatService.updateConfig(updatedSection as Partial<import('./services/HeartbeatService.js').HeartbeatConfig>);
+      }
+      restartHeartbeatTimer();
+    }
+  });
+
+  const heartbeatConfig = heartbeatService.getConfig();
+
+  if (heartbeatConfig.enabled) {
+    restartHeartbeatTimer();
 
     // Run once on startup (delayed to let indexer initialize)
     setTimeout(async () => {
@@ -181,7 +216,6 @@ async function main(): Promise<void> {
       }
     }, 5000);
 
-    console.log(`Heartbeat scheduled every ${heartbeatConfig.intervalMs / 1000 / 60} minutes`);
     console.log(`Heartbeat working directory: ${heartbeatConfig.workingDirectory}\n`);
   } else {
     console.log('Heartbeat: disabled\n');
