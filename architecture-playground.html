@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeHistorySearch — Architecture Explorer</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --border: #0f3460;
+    --text: #e0e0e0;
+    --text-dim: #8899aa;
+    --accent: #e94560;
+    --blue: #3b82f6;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --red: #ef4444;
+    --orange: #f97316;
+    --gray: #6b7280;
+    --cyan: #22d3ee;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 1fr auto; height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { grid-row: 1/3; background: var(--panel); border-right: 1px solid var(--border); overflow-y: auto; padding: 16px; }
+  .sidebar h1 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #fff; }
+  .sidebar .subtitle { font-size: 11px; color: var(--text-dim); margin-bottom: 16px; }
+
+  .section { margin-bottom: 18px; }
+  .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 8px; }
+
+  /* Preset buttons */
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; }
+  .preset-btn { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+  .preset-btn:hover { border-color: var(--accent); color: #fff; }
+  .preset-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Checkboxes */
+  .checkbox-group { display: flex; flex-direction: column; gap: 5px; }
+  .checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+  .checkbox-item input { display: none; }
+  .check-box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+  .checkbox-item input:checked + .check-box { border-color: currentColor; }
+  .checkbox-item input:checked + .check-box::after { content: '✓'; font-size: 10px; font-weight: 700; }
+  .color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Comments */
+  .comments-section { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .comment-count { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+  .comment-item { background: var(--bg); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 11px; position: relative; }
+  .comment-target { font-weight: 600; color: var(--cyan); font-size: 10px; }
+  .comment-file { color: var(--text-dim); font-size: 10px; font-family: monospace; }
+  .comment-text { margin-top: 4px; color: var(--text); line-height: 1.4; }
+  .comment-delete { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; }
+  .comment-delete:hover { color: var(--red); }
+  .no-comments { font-size: 11px; color: var(--text-dim); font-style: italic; }
+
+  /* Canvas area */
+  .canvas-area { position: relative; overflow: hidden; background: var(--bg); }
+  .canvas-area svg { width: 100%; height: 100%; }
+
+  /* Zoom controls */
+  .zoom-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; z-index: 10; }
+  .zoom-btn { background: var(--panel); border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  .zoom-btn:hover { border-color: var(--accent); color: #fff; }
+
+  /* Legend */
+  .legend { position: absolute; bottom: 12px; left: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; z-index: 10; }
+  .legend-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); margin-bottom: 6px; }
+  .legend-items { display: flex; flex-wrap: wrap; gap: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-dim); }
+  .legend-line { width: 20px; height: 2px; }
+
+  /* Prompt bar */
+  .prompt-bar { grid-column: 2; background: var(--panel); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px; max-height: 150px; overflow-y: auto; }
+  .prompt-text { flex: 1; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--text); line-height: 1.5; white-space: pre-wrap; min-height: 20px; }
+  .prompt-placeholder { color: var(--text-dim); font-style: italic; }
+  .copy-btn { background: var(--accent); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .copy-btn:hover { filter: brightness(1.15); }
+  .copy-btn.copied { background: var(--green); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 380px; max-width: 90vw; }
+  .modal h3 { font-size: 14px; margin-bottom: 2px; }
+  .modal .modal-file { font-size: 11px; color: var(--text-dim); font-family: monospace; margin-bottom: 12px; }
+  .modal textarea { width: 100%; height: 80px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: system-ui; font-size: 12px; padding: 8px; resize: vertical; outline: none; }
+  .modal textarea:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; }
+  .modal-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; border: none; }
+  .modal-btn.cancel { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+  .modal-btn.save { background: var(--accent); color: #fff; }
+
+  /* Tooltip */
+  .tooltip { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 11px; z-index: 50; pointer-events: none; max-width: 250px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
+  .tooltip .tt-label { font-weight: 600; color: #fff; }
+  .tooltip .tt-file { color: var(--text-dim); font-family: monospace; font-size: 10px; }
+  .tooltip .tt-desc { margin-top: 4px; color: var(--text); line-height: 1.3; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <h1>ClaudeHistorySearch</h1>
+    <div class="subtitle">Architecture Explorer · Click nodes to comment</div>
+
+    <div class="section">
+      <div class="section-title">View Presets</div>
+      <div class="presets" id="presets"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Layers</div>
+      <div class="checkbox-group" id="layers"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Connection Types</div>
+      <div class="checkbox-group" id="connectionTypes"></div>
+    </div>
+
+    <div class="comments-section">
+      <div class="section-title">Comments (<span id="commentCount">0</span>)</div>
+      <div id="commentsList"></div>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-area" id="canvasArea">
+    <div class="zoom-controls">
+      <button class="zoom-btn" onclick="zoom(0.1)">+</button>
+      <button class="zoom-btn" onclick="zoom(-0.1)">−</button>
+      <button class="zoom-btn" onclick="resetZoom()" style="font-size:11px">⟲</button>
+    </div>
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="legend" id="legend"></div>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <!-- Prompt -->
+  <div class="prompt-bar">
+    <div class="prompt-text" id="promptText"><span class="prompt-placeholder">Click components to add architectural feedback…</span></div>
+    <button class="copy-btn" id="copyBtn" onclick="copyPrompt()">Copy Prompt</button>
+  </div>
+</div>
+
+<!-- Comment Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle"></h3>
+    <div class="modal-file" id="modalFile"></div>
+    <textarea id="modalInput" placeholder="What would you like to change or improve here?"></textarea>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn save" onclick="saveComment()">Add Comment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Data Model ───────────────────────────────────────────────
+
+const LAYERS = {
+  'ios':       { label: 'iOS App',        color: '#3b82f6', fill: '#1e3a5f' },
+  'mac':       { label: 'Mac App',        color: '#8b5cf6', fill: '#2d1f5e' },
+  'shared':    { label: 'Shared Package', color: '#22d3ee', fill: '#0e3740' },
+  'server':    { label: 'Server Core',    color: '#f59e0b', fill: '#3d2e0a' },
+  'transport': { label: 'Transport',      color: '#10b981', fill: '#0a3024' },
+  'sessions':  { label: 'Sessions',       color: '#f472b6', fill: '#3d1a2e' },
+  'auth':      { label: 'Auth',           color: '#ef4444', fill: '#3d1414' },
+  'services':  { label: 'Services',       color: '#a78bfa', fill: '#271f48' },
+  'data':      { label: 'Data/Storage',   color: '#6b7280', fill: '#1f2937' },
+};
+
+const CONN_TYPES = {
+  'data-flow':  { label: 'Data Flow',    color: '#3b82f6', dash: '' },
+  'api-call':   { label: 'API Call',     color: '#10b981', dash: '6,3' },
+  'websocket':  { label: 'WebSocket',    color: '#f472b6', dash: '8,4' },
+  'event':      { label: 'Event/Signal', color: '#ef4444', dash: '4,4' },
+  'import':     { label: 'Import/Use',   color: '#6b7280', dash: '2,2' },
+};
+
+const nodes = [
+  // iOS App (row 0)
+  { id: 'ios-app',       label: 'App Entry',          subtitle: 'ClaudeHistorySearch/App.swift',           x: 60,  y: 40,  w: 135, h: 44, layer: 'ios', desc: 'iOS app entry. Creates StateObjects for ServerDiscovery, APIClient, WebSocketClient. Auto-connects via Bonjour or localhost fallback.' },
+  { id: 'ios-list',      label: 'SessionListView',    subtitle: 'ClaudeHistorySearch/Views/',              x: 220, y: 40,  w: 145, h: 44, layer: 'ios', desc: 'Main iOS view. Search with 300ms debounce, pagination, date grouping, pull-to-refresh, new session sheet.' },
+
+  // Mac App (row 0, right)
+  { id: 'mac-delegate',  label: 'AppDelegate',        subtitle: 'Mac/AppDelegate.swift',                  x: 510, y: 40,  w: 135, h: 44, layer: 'mac', desc: 'Menu bar app with NSStatusItem popover. Global hotkey Cmd+Shift+C. Click-outside-to-close. Auto-connects to server.' },
+  { id: 'mac-popover',   label: 'SearchPopoverView',  subtitle: 'Mac/Views/SearchPopoverView.swift',      x: 670, y: 40,  w: 155, h: 44, layer: 'mac', desc: 'Popover UI: search, recent sessions, results. NavigationStack with TerminalService integration (open in iTerm2).' },
+  { id: 'mac-terminal',  label: 'TerminalService',    subtitle: 'Mac/Services/TerminalService.swift',     x: 850, y: 40,  w: 140, h: 44, layer: 'mac', desc: 'Opens sessions in iTerm2 via AppleScript. Supports new session and resume. Falls back to Terminal.app.' },
+
+  // Shared — Views (row 1)
+  { id: 'session-view',  label: 'SessionView',        subtitle: 'Shared/Views/SessionView.swift',         x: 60,  y: 120, w: 130, h: 44, layer: 'shared', desc: 'Platform-adaptive session viewer. Historical + live modes, resume button, follow-up input, copy conversation.' },
+  { id: 'message-list',  label: 'MessageListView',    subtitle: 'Shared/Views/MessageListView.swift',     x: 210, y: 120, w: 145, h: 44, layer: 'shared', desc: 'Scrollable message list with auto-scroll, session header, scroll-to-message on appear.' },
+  { id: 'message-row',   label: 'MessageRow',         subtitle: 'Shared/Views/MessageRow.swift',          x: 375, y: 120, w: 120, h: 44, layer: 'shared', desc: 'Chat bubble UI. User=blue, assistant=gray. Text highlighting with yellow. Truncation for long messages.' },
+  { id: 'new-session',   label: 'NewSessionView',     subtitle: 'Shared/Views/NewSessionView.swift',      x: 515, y: 120, w: 140, h: 44, layer: 'shared', desc: 'Two-phase flow: directory setup → live chat. NSOpenPanel on macOS. Live message streaming.' },
+  { id: 'settings-view', label: 'SettingsView',       subtitle: 'Shared/Views/SettingsView.swift',        x: 675, y: 120, w: 130, h: 44, layer: 'shared', desc: 'Server connection, API key management via Keychain, manual URL entry.' },
+
+  // Shared — ViewModels & Services (row 2)
+  { id: 'session-vm',    label: 'SessionViewModel',   subtitle: 'Shared/ViewModels/SessionViewModel.swift', x: 60,  y: 200, w: 155, h: 44, layer: 'shared', desc: 'Dual-mode state manager. Historical (API) or live (WebSocket). Handles start, resume, follow-up. Parses stream-json.' },
+  { id: 'api-client',    label: 'APIClient',          subtitle: 'Shared/Services/APIClient.swift',        x: 240, y: 200, w: 120, h: 44, layer: 'shared', desc: 'REST client: fetchSessions, search, markAsRead. Injectable URLSession. API key from Keychain. No caching.' },
+  { id: 'ws-client',     label: 'WebSocketClient',    subtitle: 'Shared/Services/WebSocketClient.swift',  x: 385, y: 200, w: 150, h: 44, layer: 'shared', desc: 'WebSocket client for live sessions. Ping/pong keepalive (30s). Auth via query param. Message type routing.' },
+  { id: 'discovery',     label: 'ServerDiscovery',    subtitle: 'Shared/Services/ServerDiscovery.swift',  x: 560, y: 200, w: 145, h: 44, layer: 'shared', desc: 'Bonjour/NWBrowser discovery for _claudehistory._tcp. Caches URL in UserDefaults. Health check verification.' },
+  { id: 'keychain',      label: 'KeychainHelper',     subtitle: 'Shared/Security/KeychainHelper.swift',   x: 730, y: 200, w: 135, h: 44, layer: 'shared', desc: 'Singleton for API key storage. kSecAttrAccessibleWhenUnlocked. Service: com.claudehistorysearch.apikey.' },
+
+  // Server — Core (row 3)
+  { id: 'server-index',  label: 'Server Entry',       subtitle: 'server/src/index.ts',                    x: 60,  y: 310, w: 130, h: 44, layer: 'server', desc: 'Express app entry. Bonjour advertisement, file watcher (chokidar) on ~/.claude/projects/**/*.jsonl. Periodic reindex every 5 min.' },
+  { id: 'routes',        label: 'Routes',             subtitle: 'server/src/routes.ts',                   x: 210, y: 310, w: 110, h: 44, layer: 'server', desc: 'REST API: /sessions, /search, /reindex, /heartbeat, /admin, /api/config. FTS5 query sanitization, search deduplication.' },
+  { id: 'indexer',       label: 'Indexer',            subtitle: 'server/src/indexer.ts',                  x: 340, y: 310, w: 110, h: 44, layer: 'server', desc: 'JSONL parser. Streams readline, extracts metadata, loads sessions-index.json for titles, detects automatic sessions.' },
+  { id: 'logger',        label: 'Logger',             subtitle: 'server/src/logger.ts',                   x: 470, y: 310, w: 110, h: 44, layer: 'server', desc: 'Dual console+file logger. Writes to ~/.claude-history-server/server.log. 10MB rotation. Never crashes.' },
+
+  // Server — Transport (row 4)
+  { id: 'http-transport', label: 'HttpTransport',     subtitle: 'server/src/transport/HttpTransport.ts',  x: 60,  y: 390, w: 145, h: 44, layer: 'transport', desc: 'Express HTTP server. Binds 0.0.0.0 for network access. CORS middleware. JSON body parsing.' },
+  { id: 'ws-transport',   label: 'WebSocketTransport',subtitle: 'server/src/transport/WebSocketTransport.ts', x: 230, y: 390, w: 175, h: 44, layer: 'transport', desc: 'WebSocket server (ws library). Auth via query param. Ping/pong 30s keepalive. Session lifecycle: start/resume/cancel.' },
+
+  // Server — Sessions (row 4, right)
+  { id: 'executor',      label: 'SessionExecutor',    subtitle: 'server/src/sessions/SessionExecutor.ts', x: 510, y: 390, w: 155, h: 44, layer: 'sessions', desc: 'Spawns claude CLI: -p --output-format stream-json --verbose. Env: CI=1, TERM=dumb, NO_COLOR=1. Parses JSON lines, emits events.' },
+  { id: 'session-store', label: 'SessionStore',       subtitle: 'server/src/sessions/SessionStore.ts',    x: 690, y: 390, w: 140, h: 44, layer: 'sessions', desc: 'Maps sessionId→Executor and clientId→sessions. Cleanup on client disconnect.' },
+
+  // Server — Auth (row 5 left)
+  { id: 'auth-mw',       label: 'Auth Middleware',    subtitle: 'server/src/auth/middleware.ts',           x: 60,  y: 470, w: 145, h: 44, layer: 'auth', desc: 'Express middleware. Validates X-API-Key header. Public paths: /health, /admin. Passthrough if no key configured.' },
+  { id: 'key-mgr',       label: 'Key Manager',        subtitle: 'server/src/auth/keyManager.ts',          x: 230, y: 470, w: 135, h: 44, layer: 'auth', desc: 'SHA-256 hash storage. Config at ~/.claude-history-server/config.json. Plaintext .api-key file (0o600) for testing.' },
+
+  // Server — Services (row 5 right)
+  { id: 'heartbeat',     label: 'HeartbeatService',   subtitle: 'server/src/services/HeartbeatService.ts',x: 470, y: 470, w: 155, h: 44, layer: 'services', desc: 'Reads HEARTBEAT.md checklist. Queries Azure DevOps work items. Spawns Claude sessions for new/updated items. Fire-and-forget.' },
+  { id: 'config-svc',    label: 'ConfigService',      subtitle: 'server/src/services/ConfigService.ts',   x: 650, y: 470, w: 140, h: 44, layer: 'services', desc: 'Allowlist-based config validation. Only heartbeat section editable. Field schemas with type/min/max. Read-modify-write.' },
+
+  // Data layer (row 6)
+  { id: 'database',      label: 'SQLite + FTS5',      subtitle: 'server/src/database.ts',                 x: 60,  y: 550, w: 135, h: 44, layer: 'data', desc: 'better-sqlite3 with FTS5 virtual table. WAL mode. BM25 ranking. Porter stemmer. Highlight with <mark> tags.' },
+  { id: 'jsonl-files',   label: 'JSONL Files',        subtitle: '~/.claude/projects/**/*.jsonl',           x: 250, y: 550, w: 145, h: 44, layer: 'data', desc: 'Raw Claude session files. Each line is a JSON message. File watcher triggers reindex on change.' },
+  { id: 'config-file',   label: 'Config Files',       subtitle: '~/.claude-history-server/',               x: 450, y: 550, w: 140, h: 44, layer: 'data', desc: 'config.json (API key hash, heartbeat config), server.log, search.db, .api-key file.' },
+  { id: 'bonjour',       label: 'Bonjour/mDNS',       subtitle: '_claudehistory._tcp',                    x: 640, y: 550, w: 140, h: 44, layer: 'data', desc: 'Network service advertisement. Server publishes, iOS/Mac clients discover. Enables zero-config LAN connectivity.' },
+];
+
+const connections = [
+  // iOS → Shared
+  { from: 'ios-app',      to: 'discovery',     type: 'import',    label: 'creates' },
+  { from: 'ios-app',      to: 'api-client',    type: 'import',    label: 'creates' },
+  { from: 'ios-app',      to: 'ws-client',     type: 'import',    label: 'creates' },
+  { from: 'ios-list',     to: 'session-view',  type: 'data-flow', label: 'navigates' },
+
+  // Mac → Shared
+  { from: 'mac-delegate', to: 'discovery',     type: 'import',    label: 'creates' },
+  { from: 'mac-delegate', to: 'api-client',    type: 'import',    label: 'creates' },
+  { from: 'mac-popover',  to: 'session-view',  type: 'data-flow', label: 'navigates' },
+  { from: 'mac-popover',  to: 'mac-terminal',  type: 'api-call',  label: 'open' },
+
+  // Shared views → VMs/services
+  { from: 'session-view', to: 'session-vm',    type: 'data-flow', label: 'observes' },
+  { from: 'session-view', to: 'message-list',  type: 'data-flow', label: 'renders' },
+  { from: 'message-list', to: 'message-row',   type: 'data-flow', label: 'rows' },
+  { from: 'new-session',  to: 'session-vm',    type: 'data-flow', label: 'observes' },
+  { from: 'settings-view',to: 'discovery',     type: 'api-call',  label: 'configure' },
+  { from: 'settings-view',to: 'keychain',      type: 'api-call',  label: 'save key' },
+
+  // VM → services
+  { from: 'session-vm',   to: 'api-client',    type: 'api-call',  label: 'REST calls' },
+  { from: 'session-vm',   to: 'ws-client',     type: 'websocket', label: 'live session' },
+  { from: 'api-client',   to: 'keychain',      type: 'import',    label: 'load key' },
+
+  // Client → Server (network)
+  { from: 'api-client',   to: 'http-transport',type: 'api-call',  label: 'HTTP REST' },
+  { from: 'ws-client',    to: 'ws-transport',  type: 'websocket', label: 'WebSocket' },
+  { from: 'discovery',    to: 'bonjour',       type: 'event',     label: 'discover' },
+
+  // Server core
+  { from: 'server-index', to: 'http-transport',type: 'import',    label: 'creates' },
+  { from: 'server-index', to: 'routes',        type: 'import',    label: 'mounts' },
+  { from: 'server-index', to: 'indexer',       type: 'api-call',  label: 'triggers' },
+  { from: 'server-index', to: 'heartbeat',     type: 'api-call',  label: 'schedules' },
+  { from: 'server-index', to: 'bonjour',       type: 'event',     label: 'advertise' },
+  { from: 'server-index', to: 'logger',        type: 'import',    label: 'logs' },
+
+  // Routes → data
+  { from: 'routes',       to: 'database',      type: 'data-flow', label: 'query' },
+  { from: 'routes',       to: 'indexer',       type: 'api-call',  label: 'reindex' },
+  { from: 'routes',       to: 'heartbeat',     type: 'api-call',  label: 'trigger' },
+  { from: 'routes',       to: 'config-svc',    type: 'api-call',  label: 'read/write' },
+
+  // Transport
+  { from: 'http-transport',to: 'auth-mw',      type: 'data-flow', label: 'middleware' },
+  { from: 'ws-transport', to: 'executor',      type: 'api-call',  label: 'spawn' },
+  { from: 'ws-transport', to: 'session-store', type: 'data-flow', label: 'track' },
+  { from: 'ws-transport', to: 'key-mgr',       type: 'api-call',  label: 'validate' },
+
+  // Sessions
+  { from: 'session-store',to: 'executor',      type: 'import',    label: 'manages' },
+
+  // Auth
+  { from: 'auth-mw',      to: 'key-mgr',       type: 'api-call',  label: 'validate' },
+
+  // Services
+  { from: 'heartbeat',    to: 'database',      type: 'data-flow', label: 'state' },
+  { from: 'config-svc',   to: 'config-file',   type: 'data-flow', label: 'read/write' },
+  { from: 'key-mgr',      to: 'config-file',   type: 'data-flow', label: 'hash store' },
+
+  // Data
+  { from: 'indexer',      to: 'jsonl-files',   type: 'data-flow', label: 'parse' },
+  { from: 'indexer',      to: 'database',      type: 'data-flow', label: 'write' },
+  { from: 'database',     to: 'config-file',   type: 'import',    label: 'search.db' },
+];
+
+// ─── State ────────────────────────────────────────────────────
+
+const DEFAULTS = {
+  layers: Object.fromEntries(Object.keys(LAYERS).map(k => [k, true])),
+  connTypes: Object.fromEntries(Object.keys(CONN_TYPES).map(k => [k, true])),
+  preset: 'full',
+};
+
+const state = {
+  layers: { ...DEFAULTS.layers },
+  connTypes: { ...DEFAULTS.connTypes },
+  preset: 'full',
+  zoom: 1,
+  panX: 0, panY: 0,
+  comments: [],
+  modalNode: null,
+};
+
+const PRESETS = {
+  'full':      { label: 'Full System',   layers: Object.keys(LAYERS), conns: Object.keys(CONN_TYPES) },
+  'clients':   { label: 'Client Apps',   layers: ['ios','mac','shared'], conns: ['data-flow','import','api-call'] },
+  'server':    { label: 'Server Only',   layers: ['server','transport','sessions','auth','services','data'], conns: Object.keys(CONN_TYPES) },
+  'data-flow': { label: 'Data Pipeline', layers: ['server','data','shared','transport'], conns: ['data-flow'] },
+  'live':      { label: 'Live Sessions', layers: ['shared','transport','sessions','data'], conns: ['websocket','api-call','data-flow'] },
+};
+
+// ─── Pan & Zoom ───────────────────────────────────────────────
+
+let isPanning = false, panStartX = 0, panStartY = 0;
+
+function zoom(delta) {
+  state.zoom = Math.max(0.4, Math.min(2.5, state.zoom + delta));
+  renderDiagram();
+}
+function resetZoom() {
+  state.zoom = 1; state.panX = 0; state.panY = 0;
+  renderDiagram();
+}
+
+document.getElementById('canvasArea').addEventListener('mousedown', e => {
+  if (e.target.closest('.zoom-btn') || e.target.closest('.legend')) return;
+  if (e.button === 1 || (e.button === 0 && e.altKey)) { isPanning = true; panStartX = e.clientX - state.panX; panStartY = e.clientY - state.panY; e.preventDefault(); }
+});
+document.addEventListener('mousemove', e => {
+  if (!isPanning) return;
+  state.panX = e.clientX - panStartX; state.panY = e.clientY - panStartY;
+  renderDiagram();
+});
+document.addEventListener('mouseup', () => { isPanning = false; });
+document.getElementById('canvasArea').addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom(e.deltaY > 0 ? -0.05 : 0.05);
+}, { passive: false });
+
+// ─── Rendering ────────────────────────────────────────────────
+
+function renderDiagram() {
+  const svg = document.getElementById('canvas');
+  const rect = document.getElementById('canvasArea').getBoundingClientRect();
+
+  // Build defs
+  let defs = '<defs>';
+  Object.entries(CONN_TYPES).forEach(([key, ct]) => {
+    defs += `<marker id="arrow-${key}" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="${ct.color}" opacity="0.8"/></marker>`;
+  });
+  defs += '</defs>';
+
+  const visibleNodes = nodes.filter(n => state.layers[n.layer]);
+  const visibleIds = new Set(visibleNodes.map(n => n.id));
+  const visibleConns = connections.filter(c =>
+    state.connTypes[c.type] && visibleIds.has(c.from) && visibleIds.has(c.to)
+  );
+
+  const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const commentTargets = new Set(state.comments.map(c => c.target));
+
+  // Transform
+  const tx = state.panX + 20;
+  const ty = state.panY + 10;
+
+  let content = defs;
+  content += `<g transform="translate(${tx},${ty}) scale(${state.zoom})">`;
+
+  // Draw connections
+  visibleConns.forEach(c => {
+    const from = nodeMap[c.from], to = nodeMap[c.to];
+    const x1 = from.x + from.w / 2, y1 = from.y + from.h;
+    const x2 = to.x + to.w / 2, y2 = to.y;
+
+    // Adaptive connection direction
+    let path;
+    const dy = y2 - (y1);
+    const dx = x2 - x1;
+
+    if (Math.abs(dy) < 10) {
+      // Same row — connect horizontally
+      const sx = from.x + from.w, sy = from.y + from.h / 2;
+      const ex = to.x, ey = to.y + to.h / 2;
+      if (sx > ex) {
+        // Target is to the left
+        const sxr = from.x, exr = to.x + to.w;
+        const cp = Math.abs(exr - sxr) / 3 + 30;
+        path = `M${sxr},${sy} C${sxr - cp},${sy} ${exr + cp},${ey} ${exr},${ey}`;
+      } else {
+        const cp = Math.abs(ex - sx) / 3 + 20;
+        path = `M${sx},${sy} C${sx + cp},${sy} ${ex - cp},${ey} ${ex},${ey}`;
+      }
+    } else if (dy > 0) {
+      // Target is below
+      const cp = Math.max(Math.abs(dy) / 2, 30);
+      path = `M${x1},${y1} C${x1},${y1 + cp} ${x2},${y2 - cp} ${x2},${y2}`;
+    } else {
+      // Target is above — connect from top to bottom
+      const sy = from.y, ey = to.y + to.h;
+      const cp = Math.max(Math.abs(dy) / 2, 30);
+      path = `M${x1},${sy} C${x1},${sy - cp} ${x2},${ey + cp} ${x2},${ey}`;
+    }
+
+    const ct = CONN_TYPES[c.type];
+    const dashAttr = ct.dash ? ` stroke-dasharray="${ct.dash}"` : '';
+    content += `<path d="${path}" fill="none" stroke="${ct.color}" stroke-width="1.5" opacity="0.5" marker-end="url(#arrow-${c.type})"${dashAttr}/>`;
+
+    // Label at midpoint
+    if (c.label) {
+      const mx = (x1 + x2) / 2 + (dx > 100 ? dx * 0.1 : 0);
+      const my = (y1 + y2) / 2;
+      content += `<text x="${mx}" y="${my - 4}" fill="${ct.color}" font-size="8" text-anchor="middle" opacity="0.7">${c.label}</text>`;
+    }
+  });
+
+  // Draw nodes
+  visibleNodes.forEach(n => {
+    const lc = LAYERS[n.layer];
+    const hasComment = commentTargets.has(n.id);
+    const stroke = hasComment ? '#22d3ee' : lc.color;
+    const strokeW = hasComment ? 2.5 : 1.5;
+
+    content += `<g class="node" data-id="${n.id}" style="cursor:pointer">`;
+    content += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="${lc.fill}" stroke="${stroke}" stroke-width="${strokeW}" opacity="0.95"/>`;
+    content += `<text x="${n.x + n.w/2}" y="${n.y + 18}" fill="#fff" font-size="11" font-weight="600" text-anchor="middle">${n.label}</text>`;
+    content += `<text x="${n.x + n.w/2}" y="${n.y + 32}" fill="${LAYERS[n.layer].color}" font-size="8" text-anchor="middle" opacity="0.7">${n.subtitle.length > 28 ? '…' + n.subtitle.slice(-26) : n.subtitle}</text>`;
+    if (hasComment) {
+      content += `<circle cx="${n.x + n.w - 6}" cy="${n.y + 6}" r="5" fill="#22d3ee"/>`;
+      content += `<text x="${n.x + n.w - 6}" y="${n.y + 9.5}" fill="#000" font-size="7" font-weight="700" text-anchor="middle">${state.comments.filter(c=>c.target===n.id).length}</text>`;
+    }
+    content += `</g>`;
+  });
+
+  content += '</g>';
+  svg.innerHTML = content;
+
+  // Attach node event listeners
+  svg.querySelectorAll('.node').forEach(g => {
+    const id = g.dataset.id;
+    g.addEventListener('click', () => openModal(id));
+    g.addEventListener('mouseenter', e => showTooltip(e, id));
+    g.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+// ─── Tooltip ──────────────────────────────────────────────────
+
+function showTooltip(e, id) {
+  const node = nodes.find(n => n.id === id);
+  if (!node) return;
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = `<div class="tt-label">${node.label}</div><div class="tt-file">${node.subtitle}</div><div class="tt-desc">${node.desc}</div>`;
+  tt.style.display = 'block';
+  const area = document.getElementById('canvasArea').getBoundingClientRect();
+  let x = e.clientX - area.left + 12;
+  let y = e.clientY - area.top + 12;
+  if (x + 260 > area.width) x = x - 270;
+  if (y + 100 > area.height) y = y - 110;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
+}
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+// ─── Modal & Comments ─────────────────────────────────────────
+
+function openModal(id) {
+  const node = nodes.find(n => n.id === id);
+  if (!node) return;
+  state.modalNode = node;
+  document.getElementById('modalTitle').textContent = node.label;
+  document.getElementById('modalFile').textContent = node.subtitle;
+  document.getElementById('modalInput').value = '';
+  document.getElementById('modal').classList.add('show');
+  setTimeout(() => document.getElementById('modalInput').focus(), 50);
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  state.modalNode = null;
+}
+
+function saveComment() {
+  const text = document.getElementById('modalInput').value.trim();
+  if (!text || !state.modalNode) return;
+  state.comments.push({
+    id: Date.now(),
+    target: state.modalNode.id,
+    targetLabel: state.modalNode.label,
+    targetFile: state.modalNode.subtitle,
+    text
+  });
+  closeModal();
+  updateAll();
+}
+
+function deleteComment(id) {
+  state.comments = state.comments.filter(c => c.id !== id);
+  updateAll();
+}
+
+// Handle Enter/Escape in modal
+document.getElementById('modalInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveComment(); }
+  if (e.key === 'Escape') closeModal();
+});
+
+// ─── Sidebar Controls ─────────────────────────────────────────
+
+function buildPresets() {
+  const el = document.getElementById('presets');
+  el.innerHTML = Object.entries(PRESETS).map(([k, p]) =>
+    `<button class="preset-btn ${state.preset === k ? 'active' : ''}" data-preset="${k}">${p.label}</button>`
+  ).join('');
+  el.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+  });
+}
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  state.preset = key;
+  Object.keys(state.layers).forEach(k => state.layers[k] = p.layers.includes(k));
+  Object.keys(state.connTypes).forEach(k => state.connTypes[k] = p.conns.includes(k));
+  buildLayers();
+  buildConnTypes();
+  buildPresets();
+  renderDiagram();
+  updatePrompt();
+}
+
+function buildLayers() {
+  const el = document.getElementById('layers');
+  el.innerHTML = Object.entries(LAYERS).map(([k, l]) =>
+    `<label class="checkbox-item" style="color:${l.color}">
+      <input type="checkbox" ${state.layers[k] ? 'checked' : ''} data-layer="${k}">
+      <span class="check-box" style="border-color:${l.color};color:${l.color}"></span>
+      <span class="color-dot" style="background:${l.color}"></span>
+      ${l.label}
+    </label>`
+  ).join('');
+  el.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      state.layers[inp.dataset.layer] = inp.checked;
+      state.preset = '';
+      buildPresets();
+      renderDiagram();
+      updatePrompt();
+    });
+  });
+}
+
+function buildConnTypes() {
+  const el = document.getElementById('connectionTypes');
+  el.innerHTML = Object.entries(CONN_TYPES).map(([k, ct]) =>
+    `<label class="checkbox-item" style="color:${ct.color}">
+      <input type="checkbox" ${state.connTypes[k] ? 'checked' : ''} data-conn="${k}">
+      <span class="check-box" style="border-color:${ct.color};color:${ct.color}"></span>
+      <span class="color-dot" style="background:${ct.color}"></span>
+      ${ct.label}
+    </label>`
+  ).join('');
+  el.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      state.connTypes[inp.dataset.conn] = inp.checked;
+      state.preset = '';
+      buildPresets();
+      renderDiagram();
+      updatePrompt();
+    });
+  });
+}
+
+function renderComments() {
+  const el = document.getElementById('commentsList');
+  document.getElementById('commentCount').textContent = state.comments.length;
+  if (state.comments.length === 0) {
+    el.innerHTML = '<div class="no-comments">Click any component to add feedback</div>';
+    return;
+  }
+  el.innerHTML = state.comments.map(c =>
+    `<div class="comment-item">
+      <button class="comment-delete" onclick="deleteComment(${c.id})">✕</button>
+      <div class="comment-target">${c.targetLabel}</div>
+      <div class="comment-file">${c.targetFile}</div>
+      <div class="comment-text">${c.text}</div>
+    </div>`
+  ).join('');
+}
+
+// ─── Prompt Output ────────────────────────────────────────────
+
+function updatePrompt() {
+  const el = document.getElementById('promptText');
+  if (state.comments.length === 0) {
+    el.innerHTML = '<span class="prompt-placeholder">Click components to add architectural feedback…</span>';
+    return;
+  }
+
+  const visibleLayers = Object.entries(state.layers).filter(([,v]) => v).map(([k]) => LAYERS[k].label);
+  const allVisible = visibleLayers.length === Object.keys(LAYERS).length;
+
+  let prompt = `This is the ClaudeHistorySearch architecture`;
+  if (!allVisible) {
+    prompt += `, focusing on ${visibleLayers.join(', ')}`;
+  }
+  prompt += '.\n\nFeedback on specific components:\n';
+
+  state.comments.forEach(c => {
+    prompt += `\n**${c.targetLabel}** (${c.targetFile}):\n${c.text}\n`;
+  });
+
+  el.textContent = prompt;
+}
+
+function copyPrompt() {
+  const text = document.getElementById('promptText').textContent;
+  if (text.includes('Click components')) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy Prompt'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+// ─── Legend ────────────────────────────────────────────────────
+
+function renderLegend() {
+  const el = document.getElementById('legend');
+  let html = '<div class="legend-title">Connections</div><div class="legend-items">';
+  Object.entries(CONN_TYPES).forEach(([k, ct]) => {
+    const dashStyle = ct.dash ? `background: repeating-linear-gradient(90deg, ${ct.color} 0, ${ct.color} 4px, transparent 4px, transparent 6px)` : `background: ${ct.color}`;
+    html += `<div class="legend-item"><span class="legend-line" style="${dashStyle}; height: 2px;"></span>${ct.label}</div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ─── Update All ───────────────────────────────────────────────
+
+function updateAll() {
+  renderDiagram();
+  renderComments();
+  updatePrompt();
+}
+
+// ─── Init ─────────────────────────────────────────────────────
+
+buildPresets();
+buildLayers();
+buildConnTypes();
+renderLegend();
+updateAll();
+</script>
+</body>
+</html>
