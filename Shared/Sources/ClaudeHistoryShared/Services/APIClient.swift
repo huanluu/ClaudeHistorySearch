@@ -88,16 +88,20 @@ public class APIClient: ObservableObject, NetworkService {
 
     // MARK: - Sessions
 
-    public func fetchSessions(limit: Int = 20, offset: Int = 0) async throws -> SessionsResponse {
+    public func fetchSessions(limit: Int, offset: Int, automatic: Bool?) async throws -> SessionsResponse {
         guard let baseURL = baseURL else {
             throw APIError.noServer
         }
 
         var components = URLComponents(url: baseURL.appendingPathComponent("sessions"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "offset", value: "\(offset)")
         ]
+        if let automatic = automatic {
+            queryItems.append(URLQueryItem(name: "automatic", value: automatic ? "true" : "false"))
+        }
+        components.queryItems = queryItems
 
         var request = URLRequest(url: components.url!)
         addAuthHeader(to: &request)
@@ -123,18 +127,22 @@ public class APIClient: ObservableObject, NetworkService {
 
     // MARK: - Search
 
-    public func search(query: String, limit: Int = 50, offset: Int = 0, sort: SearchSortOption = .relevance) async throws -> SearchResponse {
+    public func search(query: String, limit: Int, offset: Int, sort: SearchSortOption, automatic: Bool?) async throws -> SearchResponse {
         guard let baseURL = baseURL else {
             throw APIError.noServer
         }
 
         var components = URLComponents(url: baseURL.appendingPathComponent("search"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "offset", value: "\(offset)"),
             URLQueryItem(name: "sort", value: sort.rawValue)
         ]
+        if let automatic = automatic {
+            queryItems.append(URLQueryItem(name: "automatic", value: automatic ? "true" : "false"))
+        }
+        components.queryItems = queryItems
 
         var request = URLRequest(url: components.url!)
         addAuthHeader(to: &request)
@@ -145,6 +153,16 @@ public class APIClient: ObservableObject, NetworkService {
     }
 
     // MARK: - Session Actions
+
+    public func deleteSession(id: String) async throws {
+        guard let baseURL = baseURL else { throw APIError.noServer }
+        let url = baseURL.appendingPathComponent("sessions").appendingPathComponent(id)
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        addAuthHeader(to: &request)
+        let (_, response) = try await session.data(for: request)
+        try validateResponse(response)
+    }
 
     public func markSessionAsRead(id: String) async throws {
         guard let baseURL = baseURL else { throw APIError.noServer }

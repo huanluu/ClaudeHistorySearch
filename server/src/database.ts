@@ -16,6 +16,7 @@ export interface SessionRecord {
   last_indexed: number | null;
   is_automatic: number;
   is_unread: number;
+  is_hidden: number;
 }
 
 export interface HeartbeatStateRecord {
@@ -111,6 +112,14 @@ try {
   // Column already exists, ignore
 }
 
+// Migration: add is_hidden column for soft-delete
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN is_hidden INTEGER DEFAULT 0`);
+  logger.log('Added is_hidden column to sessions table');
+} catch {
+  // Column already exists, ignore
+}
+
 // Create heartbeat_state table for tracking processed items
 db.exec(`
   CREATE TABLE IF NOT EXISTS heartbeat_state (
@@ -149,6 +158,23 @@ export const getSessionById: Statement<unknown[], SessionRecord> = db.prepare(`
 
 export const getRecentSessions: Statement<unknown[], SessionRecord> = db.prepare(`
   SELECT * FROM sessions
+  WHERE is_hidden = 0
+  ORDER BY COALESCE(last_activity_at, started_at) DESC
+  LIMIT ? OFFSET ?
+`);
+
+// For "Sessions" tab — manual sessions only
+export const getManualSessions: Statement<unknown[], SessionRecord> = db.prepare(`
+  SELECT * FROM sessions
+  WHERE is_automatic = 0 AND is_hidden = 0
+  ORDER BY COALESCE(last_activity_at, started_at) DESC
+  LIMIT ? OFFSET ?
+`);
+
+// For "Heartbeat" tab — automatic sessions only
+export const getAutomaticSessions: Statement<unknown[], SessionRecord> = db.prepare(`
+  SELECT * FROM sessions
+  WHERE is_automatic = 1 AND is_hidden = 0
   ORDER BY COALESCE(last_activity_at, started_at) DESC
   LIMIT ? OFFSET ?
 `);
@@ -167,7 +193,7 @@ const searchMessagesByRelevance: Statement<unknown[], SearchResultRecord> = db.p
     bm25(messages_fts) as rank
   FROM messages_fts
   JOIN sessions ON sessions.id = messages_fts.session_id
-  WHERE messages_fts MATCH ?
+  WHERE messages_fts MATCH ? AND sessions.is_automatic = ? AND sessions.is_hidden = 0
   ORDER BY rank
   LIMIT ? OFFSET ?
 `);
@@ -186,7 +212,7 @@ const searchMessagesByDate: Statement<unknown[], SearchResultRecord> = db.prepar
     bm25(messages_fts) as rank
   FROM messages_fts
   JOIN sessions ON sessions.id = messages_fts.session_id
-  WHERE messages_fts MATCH ?
+  WHERE messages_fts MATCH ? AND sessions.is_automatic = ? AND sessions.is_hidden = 0
   ORDER BY sessions.started_at DESC, rank
   LIMIT ? OFFSET ?
 `);
@@ -196,10 +222,12 @@ export function searchMessages(
   query: string,
   limit: number,
   offset: number,
-  sort: SortOption = 'relevance'
+  sort: SortOption = 'relevance',
+  automaticOnly: boolean = false
 ): SearchResultRecord[] {
+  const automaticFlag = automaticOnly ? 1 : 0;
   const stmt = sort === 'date' ? searchMessagesByDate : searchMessagesByRelevance;
-  return stmt.all(query, limit, offset);
+  return stmt.all(query, automaticFlag, limit, offset);
 }
 
 export const getMessagesBySessionId: Statement<unknown[], MessageRecord> = db.prepare(`
@@ -223,6 +251,10 @@ export { searchMessagesByRelevance, searchMessagesByDate };
 // Heartbeat-related prepared statements
 export const markSessionAsRead: Statement = db.prepare(`
   UPDATE sessions SET is_unread = 0 WHERE id = ?
+`);
+
+export const hideSession: Statement = db.prepare(`
+  UPDATE sessions SET is_hidden = 1 WHERE id = ?
 `);
 
 export const getHeartbeatState: Statement<unknown[], HeartbeatStateRecord> = db.prepare(`

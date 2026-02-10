@@ -6,40 +6,61 @@ struct SessionListView: View {
     @EnvironmentObject var apiClient: APIClient
     @EnvironmentObject var webSocketClient: WebSocketClient
 
+    @StateObject private var viewModel: SessionListViewModel
+
     @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
-    @State private var sessions: [Session] = []
-    @State private var isLoading = false
-    @State private var error: String?
     @State private var searchText = ""
-    @State private var searchResults: [SearchResult] = []
-    @State private var isSearching = false
-    @State private var hasMoreSessions = true
-    @State private var currentOffset = 0
     @State private var showSettings = false
     @State private var showNewSession = false
-
-    private let pageSize = 20
 
     private var sortOption: SearchSortOption {
         SearchSortOption(rawValue: sortOptionRaw) ?? .relevance
     }
 
+    init() {
+        // Temporary init — real apiClient is set in .task via viewModel
+        _viewModel = StateObject(wrappedValue: SessionListViewModel(apiClient: APIClient()))
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
-                if serverDiscovery.serverURL == nil {
-                    connectionView
-                } else if !searchText.isEmpty {
-                    searchResultsView
-                } else {
-                    sessionsListView
+            VStack(spacing: 0) {
+                // Tab picker — visible in both session list and search modes
+                if serverDiscovery.serverURL != nil {
+                    Picker("", selection: $viewModel.selectedTab) {
+                        ForEach(SessionListViewModel.Tab.allCases, id: \.self) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .onChange(of: viewModel.selectedTab) { _, newTab in
+                        viewModel.switchTab(to: newTab)
+                        if !searchText.isEmpty {
+                            Task { await viewModel.search(query: searchText, sort: sortOption) }
+                        }
+                    }
+                }
+
+                Group {
+                    if serverDiscovery.serverURL == nil {
+                        connectionView
+                    } else if !searchText.isEmpty {
+                        searchResultsView
+                    } else {
+                        sessionsListView
+                    }
                 }
             }
             .navigationTitle("Claude Sessions")
             .searchable(text: $searchText, prompt: "Search conversations")
             .onChange(of: searchText) { _, newValue in
                 Task {
-                    await performSearch(query: newValue)
+                    // Debounce
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard newValue == searchText else { return }
+                    await viewModel.search(query: newValue, sort: sortOption)
                 }
             }
             .toolbar {
@@ -63,20 +84,22 @@ struct SessionListView: View {
                 NewSessionView(webSocketClient: webSocketClient)
             }
             .refreshable {
-                await loadSessions(refresh: true)
+                await viewModel.loadSessions(refresh: true)
             }
         }
         .task {
             apiClient.setBaseURL(serverDiscovery.serverURL)
-            if serverDiscovery.serverURL != nil && sessions.isEmpty {
-                await loadSessions()
+            // Re-initialize viewModel's apiClient reference
+            viewModel.setAPIClient(apiClient)
+            if serverDiscovery.serverURL != nil && viewModel.sessions.isEmpty {
+                await viewModel.loadSessions()
             }
         }
         .onChange(of: serverDiscovery.serverURL) { _, newURL in
             apiClient.setBaseURL(newURL)
             if newURL != nil {
                 Task {
-                    await loadSessions(refresh: true)
+                    await viewModel.loadSessions(refresh: true)
                 }
             }
         }
@@ -127,15 +150,15 @@ struct SessionListView: View {
 
     private var sessionsListView: some View {
         List {
-            if isLoading && sessions.isEmpty {
+            if viewModel.isLoading && viewModel.sessions.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .listRowSeparator(.hidden)
-            } else if let error = error {
+            } else if let error = viewModel.error {
                 Text(error)
                     .foregroundColor(.red)
                     .listRowSeparator(.hidden)
-            } else if sessions.isEmpty {
+            } else if viewModel.sessions.isEmpty {
                 Text("No sessions found")
                     .foregroundColor(.secondary)
                     .listRowSeparator(.hidden)
@@ -146,14 +169,21 @@ struct SessionListView: View {
                             NavigationLink(value: session) {
                                 SessionRowContent(session: session)
                             }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await viewModel.deleteSession(session) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
 
-                if hasMoreSessions {
+                if viewModel.hasMore {
                     Button("Load More") {
                         Task {
-                            await loadMoreSessions()
+                            await viewModel.loadMore()
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -169,7 +199,7 @@ struct SessionListView: View {
 
     private var groupedSessions: [Date: [Session]] {
         let calendar = Calendar.current
-        return Dictionary(grouping: sessions) { session in
+        return Dictionary(grouping: viewModel.sessions) { session in
             calendar.startOfDay(for: session.startedAtDate)
         }
     }
@@ -200,7 +230,7 @@ struct SessionListView: View {
                         Button {
                             sortOptionRaw = option.rawValue
                             Task {
-                                await performSearch(query: searchText)
+                                await viewModel.search(query: searchText, sort: sortOption)
                             }
                         } label: {
                             HStack {
@@ -225,16 +255,16 @@ struct SessionListView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
 
-            if isSearching {
+            if viewModel.isSearching {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .listRowSeparator(.hidden)
-            } else if searchResults.isEmpty && !searchText.isEmpty {
+            } else if viewModel.searchResults.isEmpty && !searchText.isEmpty {
                 Text("No results for \"\(searchText)\"")
                     .foregroundColor(.secondary)
                     .listRowSeparator(.hidden)
             } else {
-                ForEach(searchResults) { result in
+                ForEach(viewModel.searchResults) { result in
                     NavigationLink {
                         SessionView(
                             sessionId: result.sessionId,
@@ -249,71 +279,6 @@ struct SessionListView: View {
             }
         }
         .listStyle(.plain)
-    }
-
-    // MARK: - Data Loading
-
-    private func loadSessions(refresh: Bool = false) async {
-        guard !isLoading else { return }
-
-        isLoading = true
-        error = nil
-
-        if refresh {
-            currentOffset = 0
-            sessions = []
-        }
-
-        do {
-            let response = try await apiClient.fetchSessions(limit: pageSize, offset: 0)
-            sessions = response.sessions
-            hasMoreSessions = response.pagination.hasMore
-            currentOffset = response.sessions.count
-        } catch {
-            self.error = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    private func loadMoreSessions() async {
-        guard !isLoading && hasMoreSessions else { return }
-
-        isLoading = true
-
-        do {
-            let response = try await apiClient.fetchSessions(limit: pageSize, offset: currentOffset)
-            sessions.append(contentsOf: response.sessions)
-            hasMoreSessions = response.pagination.hasMore
-            currentOffset += response.sessions.count
-        } catch {
-            self.error = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    private func performSearch(query: String) async {
-        guard !query.isEmpty else {
-            searchResults = []
-            return
-        }
-
-        // Debounce
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        guard query == searchText else { return }
-
-        isSearching = true
-
-        do {
-            let response = try await apiClient.search(query: query, sort: sortOption)
-            searchResults = response.results
-        } catch {
-            // Silent fail for search
-            searchResults = []
-        }
-
-        isSearching = false
     }
 }
 

@@ -10,12 +10,10 @@ struct SearchPopoverView: View {
     @EnvironmentObject var apiClient: APIClient
     @EnvironmentObject var webSocketClient: WebSocketClient
 
+    @StateObject private var viewModel: SessionListViewModel
+
     @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var searchText = ""
-    @State private var searchResults: [SearchResult] = []
-    @State private var recentSessions: [Session] = []
-    @State private var isSearching = false
-    @State private var isLoadingSessions = false
     @State private var navigationPath = NavigationPath()
     @State private var showSettings = false
 
@@ -23,6 +21,10 @@ struct SearchPopoverView: View {
 
     private var sortOption: SearchSortOption {
         get { SearchSortOption(rawValue: sortOptionRaw) ?? .relevance }
+    }
+
+    init() {
+        _viewModel = StateObject(wrappedValue: SessionListViewModel(apiClient: APIClient()))
     }
 
     var body: some View {
@@ -38,21 +40,28 @@ struct SearchPopoverView: View {
 
                 Divider()
 
+                // Tab picker
+                if serverDiscovery.serverURL != nil {
+                    tabPickerView
+
+                    Divider()
+                }
+
                 // Content
                 if serverDiscovery.serverURL == nil {
                     disconnectedView
-                } else if isSearching || isLoadingSessions {
+                } else if viewModel.isSearching || (viewModel.isLoading && viewModel.sessions.isEmpty) {
                     loadingView
                 } else if !searchText.isEmpty {
                     // Show search results
-                    if searchResults.isEmpty {
+                    if viewModel.searchResults.isEmpty {
                         noResultsView
                     } else {
                         searchResultsListView
                     }
                 } else {
                     // Show recent sessions
-                    if recentSessions.isEmpty {
+                    if viewModel.sessions.isEmpty {
                         emptySessionsView
                     } else {
                         recentSessionsListView
@@ -86,20 +95,20 @@ struct SearchPopoverView: View {
         }
         .onAppear {
             isSearchFieldFocused = true
-            // Refresh recent sessions each time popover appears
+            viewModel.setAPIClient(apiClient)
             Task {
-                await loadRecentSessions()
+                await viewModel.loadSessions()
             }
         }
         .onChange(of: serverDiscovery.serverURL) { _ in
             Task {
-                await loadRecentSessions()
+                await viewModel.loadSessions(refresh: true)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .popoverDidShow)) { _ in
             isSearchFieldFocused = true
             Task {
-                await loadRecentSessions()
+                await viewModel.loadSessions(refresh: true)
             }
         }
     }
@@ -161,6 +170,26 @@ struct SearchPopoverView: View {
         }
     }
 
+    // MARK: - Tab Picker
+
+    private var tabPickerView: some View {
+        Picker("", selection: $viewModel.selectedTab) {
+            ForEach(SessionListViewModel.Tab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .onChange(of: viewModel.selectedTab) { _ in
+            viewModel.switchTab(to: viewModel.selectedTab)
+            // Re-execute search if active
+            if !searchText.isEmpty {
+                Task { await viewModel.search(query: searchText, sort: sortOption) }
+            }
+        }
+    }
+
     // MARK: - Search Field
 
     private var searchFieldView: some View {
@@ -209,7 +238,7 @@ struct SearchPopoverView: View {
 
                 Button(action: {
                     searchText = ""
-                    searchResults = []
+                    viewModel.searchResults = []
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
@@ -258,7 +287,7 @@ struct SearchPopoverView: View {
             Spacer()
             ProgressView()
                 .scaleEffect(0.8)
-            Text(isSearching ? "Searching..." : "Loading...")
+            Text(viewModel.isSearching ? "Searching..." : "Loading...")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.top, 8)
@@ -307,7 +336,7 @@ struct SearchPopoverView: View {
             LazyVStack(spacing: 0) {
                 // Section header
                 HStack {
-                    Text("Recent Sessions")
+                    Text(viewModel.selectedTab == .heartbeat ? "Heartbeat Sessions" : "Recent Sessions")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.secondary)
@@ -316,7 +345,7 @@ struct SearchPopoverView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
 
-                ForEach(recentSessions) { session in
+                ForEach(viewModel.sessions) { session in
                     Button {
                         navigationPath.append(NavigationDestination.sessionDetail(
                             sessionId: session.id,
@@ -327,6 +356,13 @@ struct SearchPopoverView: View {
                         SessionRowContent(session: session, style: .compact)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            Task { await viewModel.deleteSession(session) }
+                        } label: {
+                            Label("Delete Session", systemImage: "trash")
+                        }
+                    }
                     Divider()
                         .padding(.leading, 12)
                 }
@@ -339,7 +375,7 @@ struct SearchPopoverView: View {
     private var searchResultsListView: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(searchResults) { result in
+                ForEach(viewModel.searchResults) { result in
                     Button {
                         navigationPath.append(NavigationDestination.sessionDetail(
                             sessionId: result.sessionId,
@@ -359,26 +395,11 @@ struct SearchPopoverView: View {
 
     // MARK: - Data Loading
 
-    private func loadRecentSessions() async {
-        guard serverDiscovery.serverURL != nil else { return }
-
-        isLoadingSessions = true
-
-        do {
-            let response = try await apiClient.fetchSessions(limit: 20, offset: 0)
-            recentSessions = response.sessions
-        } catch {
-            recentSessions = []
-        }
-
-        isLoadingSessions = false
-    }
-
     private func performSearch() async {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !query.isEmpty else {
-            searchResults = []
+            viewModel.searchResults = []
             return
         }
 
@@ -386,16 +407,7 @@ struct SearchPopoverView: View {
         try? await Task.sleep(nanoseconds: 300_000_000)
         guard query == searchText.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
 
-        isSearching = true
-
-        do {
-            let response = try await apiClient.search(query: query, sort: sortOption)
-            searchResults = response.results
-        } catch {
-            searchResults = []
-        }
-
-        isSearching = false
+        await viewModel.search(query: query, sort: sortOption)
     }
 }
 

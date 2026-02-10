@@ -35,8 +35,9 @@ public protocol NetworkService: AnyObject {
     /// - Parameters:
     ///   - limit: Maximum number of sessions to return (default: 20)
     ///   - offset: Number of sessions to skip (default: 0)
+    ///   - automatic: Filter by automatic status (nil = all, true = heartbeat only, false = manual only)
     /// - Returns: Sessions response with pagination info
-    func fetchSessions(limit: Int, offset: Int) async throws -> SessionsResponse
+    func fetchSessions(limit: Int, offset: Int, automatic: Bool?) async throws -> SessionsResponse
 
     /// Fetch a single session with all its messages
     /// - Parameter id: The session ID
@@ -51,8 +52,15 @@ public protocol NetworkService: AnyObject {
     ///   - limit: Maximum number of results (default: 50)
     ///   - offset: Number of results to skip (default: 0)
     ///   - sort: Sort order (relevance or date)
+    ///   - automatic: Filter by automatic status (nil = all, true = heartbeat only, false = manual only)
     /// - Returns: Search response with results and pagination
-    func search(query: String, limit: Int, offset: Int, sort: SearchSortOption) async throws -> SearchResponse
+    func search(query: String, limit: Int, offset: Int, sort: SearchSortOption, automatic: Bool?) async throws -> SearchResponse
+
+    // MARK: - Session Actions
+
+    /// Delete (hide) a session
+    /// - Parameter id: The session ID to delete
+    func deleteSession(id: String) async throws
 
     // MARK: - Health Check
 
@@ -63,11 +71,19 @@ public protocol NetworkService: AnyObject {
 
 /// Default parameter values for NetworkService methods
 public extension NetworkService {
-    func fetchSessions(limit: Int = 20, offset: Int = 0) async throws -> SessionsResponse {
-        try await fetchSessions(limit: limit, offset: offset)
+    func fetchSessions() async throws -> SessionsResponse {
+        try await fetchSessions(limit: 20, offset: 0, automatic: nil)
     }
 
-    func search(query: String, limit: Int = 50, offset: Int = 0, sort: SearchSortOption = .relevance) async throws -> SearchResponse {
-        try await search(query: query, limit: limit, offset: offset, sort: sort)
+    func fetchSessions(limit: Int, offset: Int) async throws -> SessionsResponse {
+        try await fetchSessions(limit: limit, offset: offset, automatic: nil)
+    }
+
+    func search(query: String, sort: SearchSortOption = .relevance) async throws -> SearchResponse {
+        try await search(query: query, limit: 50, offset: 0, sort: sort, automatic: nil)
+    }
+
+    func search(query: String, limit: Int, offset: Int, sort: SearchSortOption) async throws -> SearchResponse {
+        try await search(query: query, limit: limit, offset: offset, sort: sort, automatic: nil)
     }
 }

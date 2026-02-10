@@ -5,10 +5,13 @@ import { Router, type Request, type Response } from 'express';
 import {
   db,
   getRecentSessions,
+  getManualSessions,
+  getAutomaticSessions,
   getSessionById,
   getMessagesBySessionId,
   searchMessages,
   markSessionAsRead,
+  hideSession,
   getAllHeartbeatState,
   type SessionRecord,
   type MessageRecord,
@@ -109,7 +112,15 @@ router.get('/sessions', (req: Request, res: Response) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const sessions = getRecentSessions.all(limit, offset) as SessionRecord[];
+    const automaticParam = req.query.automatic as string | undefined;
+    let sessions: SessionRecord[];
+    if (automaticParam === 'true') {
+      sessions = getAutomaticSessions.all(limit, offset) as SessionRecord[];
+    } else if (automaticParam === 'false') {
+      sessions = getManualSessions.all(limit, offset) as SessionRecord[];
+    } else {
+      sessions = getRecentSessions.all(limit, offset) as SessionRecord[];
+    }
 
     res.json({
       sessions: sessions.map((s): SessionResponse => ({
@@ -209,9 +220,13 @@ router.get('/search', (req: Request, res: Response) => {
       return;
     }
 
+    // Parse automatic filter for tab-specific search
+    const automaticSearchParam = req.query.automatic as string | undefined;
+    const automaticOnly = automaticSearchParam === 'true';
+
     // Fetch more results than needed to account for deduplication
     const fetchLimit = (limit + offset) * 3;
-    const allResults = searchMessages(sanitizedQuery, fetchLimit, 0, sort);
+    const allResults = searchMessages(sanitizedQuery, fetchLimit, 0, sort, automaticOnly);
 
     // Group by session - keep only the best-matching message per session
     // Results are already ordered by rank, so first occurrence is best match
@@ -253,6 +268,28 @@ router.get('/search', (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error searching:', error);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+/**
+ * DELETE /sessions/:id
+ * Soft-delete a session by marking it as hidden
+ */
+router.delete('/sessions/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const session = getSessionById.get(id) as SessionRecord | undefined;
+    if (!session) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    hideSession.run(id);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error deleting session:', error);
+    res.status(500).json({ error: 'Failed to delete session' });
   }
 });
 

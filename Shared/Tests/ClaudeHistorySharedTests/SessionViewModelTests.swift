@@ -191,7 +191,7 @@ class MockAPIClient: NetworkService {
 
     func clearAPIKey() throws {}
 
-    func fetchSessions(limit: Int, offset: Int) async throws -> SessionsResponse {
+    func fetchSessions(limit: Int, offset: Int, automatic: Bool?) async throws -> SessionsResponse {
         return SessionsResponse(sessions: [], pagination: Pagination(limit: limit, offset: offset, hasMore: false))
     }
 
@@ -202,9 +202,11 @@ class MockAPIClient: NetworkService {
         )
     }
 
-    func search(query: String, limit: Int, offset: Int, sort: SearchSortOption) async throws -> SearchResponse {
+    func search(query: String, limit: Int, offset: Int, sort: SearchSortOption, automatic: Bool?) async throws -> SearchResponse {
         return SearchResponse(results: [], pagination: Pagination(limit: limit, offset: offset, hasMore: false), query: query)
     }
+
+    func deleteSession(id: String) async throws {}
 
     func checkHealth() async throws -> Bool {
         return true
