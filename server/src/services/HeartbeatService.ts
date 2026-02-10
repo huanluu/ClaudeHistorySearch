@@ -105,6 +105,9 @@ export function getConfigDir(): string {
  * ```
  */
 export class HeartbeatService {
+  /** Maximum number of Claude sessions to spawn per heartbeat run */
+  static readonly MAX_SESSIONS_PER_HEARTBEAT = 3;
+
   private config: HeartbeatConfig;
   private configDir: string;
   private executor: CommandExecutor;
@@ -275,7 +278,7 @@ export class HeartbeatService {
    */
   private fetchWorkItems(): WorkItem[] {
     try {
-      const wiql = "SELECT [System.Id], [System.Title], [System.State], [System.ChangedDate], [System.AssignedTo], [System.Description], [System.WorkItemType] FROM WorkItems WHERE [System.AssignedTo] = @me AND [System.State] <> 'Closed' ORDER BY [System.ChangedDate] DESC";
+      const wiql = "SELECT [System.Id], [System.Title], [System.State], [System.ChangedDate], [System.AssignedTo], [System.Description], [System.WorkItemType] FROM WorkItems WHERE [System.AssignedTo] = @me AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.State] <> 'Resolved' ORDER BY [System.ChangedDate] DESC";
       const output = this.executor.execSync(
         `az boards query --wiql "${wiql}" -o json`,
         { encoding: 'utf-8' }
@@ -463,6 +466,10 @@ Please analyze this work item in the context of the codebase:
         }
 
         for (const item of allItems) {
+          if (result.sessionsCreated >= HeartbeatService.MAX_SESSIONS_PER_HEARTBEAT) {
+            logger.log(`Heartbeat session limit reached (${HeartbeatService.MAX_SESSIONS_PER_HEARTBEAT}), deferring ${allItems.length - allItems.indexOf(item)} remaining items to next run`);
+            break;
+          }
           try {
             const sessionId = await this.runClaudeAnalysis(item);
             // Record as processed
