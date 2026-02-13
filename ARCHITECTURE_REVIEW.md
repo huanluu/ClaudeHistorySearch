@@ -4,7 +4,7 @@
 
 Claude History Search is a sophisticated client-server system for indexing, searching, and executing Claude Code sessions. The system demonstrates strong architectural fundamentals with clean separation of concerns, comprehensive testing, and thoughtful technical choices. This review identifies 7 areas done well and 10 areas for improvement.
 
-**Overall Architecture Rating: 7.5/10**
+**Overall Architecture Rating: 8.5/10**
 
 ---
 
@@ -725,7 +725,7 @@ app.use((req, res, next) => {
 
 **Total Weighted Score: 4.23/5 (84.6%)**
 
-**Mapped to 10-point scale: 7.5/10**
+**Mapped to 10-point scale: 8.5/10**
 
 ---
 
