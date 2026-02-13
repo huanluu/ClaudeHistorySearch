@@ -3,7 +3,7 @@ import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
 import { createRouter, setHeartbeatService, setConfigService, setOnConfigChanged } from './routes.js';
-import { createSessionRepository, DB_PATH } from './database/index.js';
+import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
@@ -163,7 +163,8 @@ async function main(): Promise<void> {
   logger.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
 
   // Heartbeat service for automated work item analysis
-  const heartbeatService = new HeartbeatService();
+  const heartbeatRepo = createHeartbeatRepository();
+  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo);
   setHeartbeatService(heartbeatService);  // Make available to API routes
 
   // Config service for admin UI (created earlier for security config)

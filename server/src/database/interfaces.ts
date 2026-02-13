@@ -1,4 +1,4 @@
-import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord } from './connection.js';
+import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord } from './connection.js';
 
 export interface IndexSessionParams {
   sessionId: string;
@@ -29,4 +29,10 @@ export interface SessionRepository {
   // Indexing (indexer)
   getSessionLastIndexed(id: string): LastIndexedRecord | undefined;
   indexSession(params: IndexSessionParams): void;
+}
+
+export interface HeartbeatRepository {
+  getState(key: string): HeartbeatStateRecord | undefined;
+  upsertState(key: string, lastChanged: string, lastProcessed: number): void;
+  getAllState(): HeartbeatStateRecord[];
 }
