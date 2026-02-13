@@ -124,6 +124,25 @@ The plist uses `KeepAlive > SuccessfulExit: false` — the server auto-restarts 
 
 **IMPORTANT**: When testing the server locally, do NOT use a different port. Kill the running server first (`launchctl kickstart -k` or `lsof -ti:3847 | xargs kill`), then start with `npm start`. The iOS/Mac apps and Bonjour discovery are hardcoded to port 3847.
 
+## Worktree Discipline
+- Only edit files in the worktree branch, never in main directly — avoids merge conflicts
+- Never regenerate API keys or do other destructive actions during testing without asking
+
+## Testing Server from a Worktree
+
+launchd always runs from main (`/Users/huanlu/Developer/ClaudeHistorySearch/server`). To test worktree changes:
+
+1. Kill the launchd server: `lsof -ti:3847 | xargs kill`
+2. Do NOT use `launchctl kickstart/load/unload` — that restarts from main, not the worktree
+3. Tell the user to run this in a **separate terminal** (outside Claude Code):
+   ```
+   cd /path/to/worktree/server && npm start
+   ```
+   Running from inside Claude Code inherits `CLAUDECODE` env var, which blocks spawning `claude` subprocesses.
+4. After merging to main, restart launchd for production: `launchctl kickstart -k gui/$(id -u)/com.claude-history-server`
+
+Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
+
 ## Testing
 
 ```bash
