@@ -2,14 +2,7 @@ import { createReadStream, readdirSync, statSync, existsSync, readFileSync } fro
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import {
-  db,
-  insertSession,
-  insertMessage,
-  clearSessionMessages,
-  getSessionLastIndexed,
-  type LastIndexedRecord
-} from './database.js';
+import type { SessionRepository } from './database/index.js';
 import { logger } from './logger.js';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
@@ -236,7 +229,8 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
 export async function indexSessionFile(
   filePath: string,
   forceReindex: boolean = false,
-  titleMap: Map<string, string> = new Map()
+  titleMap: Map<string, string> = new Map(),
+  repo: SessionRepository
 ): Promise<IndexResult | null> {
   const fileName = basename(filePath, '.jsonl');
 
@@ -250,7 +244,7 @@ export async function indexSessionFile(
   const fileModTime = fileStat.mtimeMs;
 
   if (!forceReindex) {
-    const existing = getSessionLastIndexed.get(fileName) as LastIndexedRecord | undefined;
+    const existing = repo.getSessionLastIndexed(fileName);
     if (existing && existing.last_indexed && existing.last_indexed >= fileModTime) {
       return null; // Already up to date
     }
@@ -271,39 +265,18 @@ export async function indexSessionFile(
   // Detect if this is an automatic (heartbeat) session
   const isAutomatic = detectAutomaticSession(parsedSession);
 
-  // Use transaction for atomic update
-  const transaction = db.transaction(() => {
-    // Clear existing messages for this session
-    clearSessionMessages.run(sessionId);
-
-    // Insert session
-    // Automatic sessions are marked as unread so they appear with a badge
-    insertSession.run(
-      sessionId,
-      project || 'Unknown',
-      startedAt || Date.now(),
-      lastActivityAt || startedAt || Date.now(),
-      messages.length,
-      preview || '',
-      title,
-      Date.now(),
-      isAutomatic ? 1 : 0,  // is_automatic
-      isAutomatic ? 1 : 0   // is_unread (new automatic sessions are unread)
-    );
-
-    // Insert messages
-    for (const msg of messages) {
-      insertMessage.run(
-        sessionId,
-        msg.role,
-        msg.content,
-        msg.timestamp,
-        msg.uuid
-      );
-    }
+  repo.indexSession({
+    sessionId,
+    project: project || 'Unknown',
+    startedAt: startedAt || Date.now(),
+    lastActivityAt: lastActivityAt || startedAt || Date.now(),
+    messageCount: messages.length,
+    preview: preview || '',
+    title,
+    lastIndexed: Date.now(),
+    isAutomatic,
+    messages,
   });
-
-  transaction();
 
   return {
     sessionId,
@@ -314,7 +287,10 @@ export async function indexSessionFile(
 /**
  * Index all session files in the Claude projects directory
  */
-export async function indexAllSessions(forceReindex: boolean = false): Promise<IndexAllResult> {
+export async function indexAllSessions(
+  forceReindex: boolean = false,
+  repo: SessionRepository
+): Promise<IndexAllResult> {
   logger.log('Starting indexing of Claude sessions...');
 
   if (!existsSync(PROJECTS_DIR)) {
@@ -345,7 +321,7 @@ export async function indexAllSessions(forceReindex: boolean = false): Promise<I
 
       const filePath = join(projectPath, file);
       try {
-        const result = await indexSessionFile(filePath, forceReindex, titleMap);
+        const result = await indexSessionFile(filePath, forceReindex, titleMap, repo);
 
         if (result) {
           indexed++;

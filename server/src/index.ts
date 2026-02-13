@@ -2,8 +2,8 @@ import Bonjour from 'bonjour-service';
 import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
-import routes, { setHeartbeatService, setConfigService, setOnConfigChanged } from './routes.js';
-import { DB_PATH } from './database.js';
+import { createRouter, setHeartbeatService, setConfigService, setOnConfigChanged } from './routes.js';
+import { createSessionRepository, DB_PATH } from './database/index.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
@@ -34,11 +34,15 @@ const transport = new HttpTransport({ port: PORT });
 // WebSocket transport (initialized after HTTP server starts)
 let wsTransport: WebSocketTransport | null = null;
 
+// Create session repository and router
+const sessionRepo = createSessionRepository();
+const router = createRouter(sessionRepo);
+
 // Authentication middleware
 transport.use(authMiddleware);
 
 // Mount API routes
-transport.use('/', routes);
+transport.use('/', router);
 
 // Start server
 async function main(): Promise<void> {
@@ -86,7 +90,7 @@ async function main(): Promise<void> {
 
   // Initial indexing
   logger.log('\nStarting initial index...');
-  const result = await indexAllSessions();
+  const result = await indexAllSessions(false, sessionRepo);
   logger.log(`Initial index complete: ${result.indexed} sessions indexed\n`);
 
   // Advertise via Bonjour/mDNS (auto-disabled if stealth mode is on)
@@ -120,12 +124,12 @@ async function main(): Promise<void> {
 
   watcher.on('change', async (path: string) => {
     logger.log(`File changed: ${path}`);
-    await indexSessionFile(path, true);
+    await indexSessionFile(path, true, new Map(), sessionRepo);
   });
 
   watcher.on('add', async (path: string) => {
     logger.log(`New file: ${path}`);
-    await indexSessionFile(path, false);
+    await indexSessionFile(path, false, new Map(), sessionRepo);
   });
 
   logger.log('Watching for file changes...\n');
@@ -134,7 +138,7 @@ async function main(): Promise<void> {
   const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
   const reindexTimer = setInterval(async () => {
     logger.log('Running periodic reindex...');
-    const reindexResult = await indexAllSessions();
+    const reindexResult = await indexAllSessions(false, sessionRepo);
     if (reindexResult.indexed > 0) {
       logger.log(`Periodic reindex: ${reindexResult.indexed} new sessions indexed`);
     } else {
