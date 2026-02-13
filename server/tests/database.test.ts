@@ -90,7 +90,7 @@ function setupDatabase(): void {
       content,
       timestamp UNINDEXED,
       uuid UNINDEXED,
-      tokenize='porter unicode61'
+      tokenize='unicode61'
     );
   `);
 
@@ -224,6 +224,20 @@ function seedTestData(): void {
   insertMessage.run('session-js-003', 'user', 'How do async/await work in JavaScript?', now - 3600000, 'msg-007');
   insertMessage.run('session-js-003', 'assistant', 'Async/await is syntactic sugar for Promises. The async keyword marks a function as asynchronous, and await pauses execution until a Promise resolves.', now - 3550000, 'msg-008');
   insertMessage.run('session-js-003', 'user', 'What about error handling?', now - 3500000, 'msg-009');
+
+  // Session 4: PPT-only content (for FTS false-positive regression test)
+  insertSession.run('session-ppt-only', '/test/ppt-project', now - 7200000, now - 7100000, 1, 'PPT session', 'PPT Session', now, 0, 0);
+  insertMessage.run('session-ppt-only', 'assistant', 'Edit PPTAppDelegate.mm to fix the PowerPoint issue', now - 7200000, 'msg-010');
+
+  // Session 5: PPS content (for FTS false-positive regression test)
+  insertSession.run('session-pps-real', '/test/pps-project', now - 7200000, now - 7100000, 1, 'PPS session', 'PPS Session', now, 0, 0);
+  insertMessage.run('session-pps-real', 'assistant', 'The pps file format is used for slideshows', now - 7200000, 'msg-011');
+
+  // Session 6: Word matching test data — contains "actionable", "interaction", "act"
+  insertSession.run('session-words', '/test/words', now - 5000000, now - 4900000, 3, 'Word tests', 'Word Match Tests', now, 0, 0);
+  insertMessage.run('session-words', 'assistant', 'Create actionable items from the review', now - 5000000, 'msg-012');
+  insertMessage.run('session-words', 'user', 'How do I act on the interaction feedback?', now - 4950000, 'msg-013');
+  insertMessage.run('session-words', 'assistant', 'Use the transaction log to track reactive changes', now - 4900000, 'msg-014');
 }
 
 describe('Database Schema', () => {
@@ -276,7 +290,7 @@ describe('Session Operations', () => {
 
   it('should retrieve recent sessions ordered by last activity', () => {
     const sessions = getRecentSessions.all(10, 0);
-    expect(sessions.length).toBe(3);
+    expect(sessions.length).toBe(6);
     // Most recent should be first (js-003 was 1 hour ago)
     expect(sessions[0].id).toBe('session-js-003');
   });
@@ -305,14 +319,6 @@ describe('FTS5 Full-Text Search', () => {
     expect(results.some(r => r.session_id === 'session-react-001')).toBe(true);
   });
 
-  it('should find messages using prefix matching', () => {
-    // FTS5 prefix matching with *
-    const results = searchMessagesByRelevance.all('Promis*', 50, 0);
-    expect(results.length).toBeGreaterThan(0);
-    // Should find the async/await explanation that mentions Promise
-    expect(results.some(r => r.content.toLowerCase().includes('promise'))).toBe(true);
-  });
-
   it('should highlight matching terms', () => {
     const results = searchMessagesByRelevance.all('Python', 50, 0);
     expect(results.length).toBeGreaterThan(0);
@@ -321,11 +327,49 @@ describe('FTS5 Full-Text Search', () => {
     expect(pythonResult!.highlighted_content).toContain('<mark>');
   });
 
-  it('should use porter stemmer for stemming', () => {
-    // "creating" should match "create" due to stemming
-    const results = searchMessagesByRelevance.all('creating', 50, 0);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.some(r => r.content.toLowerCase().includes('create'))).toBe(true);
+  // Word matching behavior — FTS5 with unicode61 tokenizer
+  // The app always appends * to each search term, so tests use "term*" to match real behavior.
+  // Seed data in session-words:
+  //   msg-012: "Create actionable items from the review"
+  //   msg-013: "How do I act on the interaction feedback?"
+  //   msg-014: "Use the transaction log to track reactive changes"
+
+  it('should match words starting with the search term (prefix)', () => {
+    // App sends "act*" — matches "act", "actionable" (words starting with "act")
+    const results = searchMessagesByRelevance.all('act*', 50, 0);
+    expect(results.some(r => r.uuid === 'msg-012')).toBe(true);   // "actionable"
+    expect(results.some(r => r.uuid === 'msg-013')).toBe(true);   // "act"
+    // Does NOT match words where "act" appears in the middle or end
+    expect(results.some(r => r.uuid === 'msg-014')).toBe(false);  // "transaction", "reactive"
+  });
+
+  it('should match longer prefixes without hitting unrelated words', () => {
+    // App sends "action*" — matches "action", "actionable" but NOT "transaction"
+    const results = searchMessagesByRelevance.all('action*', 50, 0);
+    expect(results.some(r => r.uuid === 'msg-012')).toBe(true);   // "actionable"
+    expect(results.some(r => r.uuid === 'msg-013')).toBe(false);  // "interaction" — "action" is not at start
+    expect(results.some(r => r.uuid === 'msg-014')).toBe(false);  // "transaction" — "action" is not at start
+  });
+
+  it('should not match suffixes (FTS5 limitation)', () => {
+    // App sends "tion*" — only matches words starting with "tion", not ending with it
+    const results = searchMessagesByRelevance.all('tion*', 50, 0);
+    // "interaction", "transaction" contain "tion" but not at the start
+    expect(results.some(r => r.session_id === 'session-words')).toBe(false);
+  });
+
+  it('should not match substrings in the middle of words (FTS5 limitation)', () => {
+    // App sends "ransact*" — won't find "transaction" because "ransact" isn't at word start
+    const results = searchMessagesByRelevance.all('ransact*', 50, 0);
+    expect(results.some(r => r.session_id === 'session-words')).toBe(false);
+  });
+
+  it('should not produce false positives for short prefix queries', () => {
+    // Regression: with porter stemmer, "pps*" was stemmed to "pp*" which matched "ppt".
+    // With unicode61 (no stemmer), "pps*" should only match tokens starting with "pps".
+    const results = searchMessagesByRelevance.all('pps*', 50, 0);
+    expect(results.some(r => r.session_id === 'session-pps-real')).toBe(true);
+    expect(results.some(r => r.session_id === 'session-ppt-only')).toBe(false);
   });
 
   it('should return results with session metadata', () => {
