@@ -417,10 +417,11 @@ AuthenticationService {
 { "apiKeyHash": "abc123..." }
 ```
 
-**Issue:** Configuration file in `~/.claude-history-server/` has default permissions (644). Anyone with read access can copy the hash and authenticate.
+**Issue:** Configuration file in `~/.claude-history-server/` has default permissions (644). Anyone with read access can copy the hash and authenticate. Additionally, SHA256 hashes alone are vulnerable to rainbow table attacks if API keys are weak.
 
 **Recommendation:**
 - Set restrictive permissions (600) on config directory
+- Replace SHA256 with proper password hashing (bcrypt, scrypt, or Argon2) with salting
 - Use OS keychain (macOS Keychain Access, Linux Secret Service)
 - Implement key rotation mechanism
 
@@ -523,15 +524,17 @@ app.get('/sessions/:id', (req, res) => {
 ```
 
 **Potential issues:**
-- `:id` could be `../../../../etc/passwd` (path traversal)
 - Query params `?limit=-1` not validated (causes errors)
 - Search query `?q=` empty string accepted (wasteful FTS5 query)
+- Malformed session IDs need proper validation
 
 **Recommendation:**
 ```typescript
 import Joi from 'joi';
 
-const sessionIdSchema = Joi.string().regex(/^[a-zA-Z0-9_-]+$/);
+// Session IDs may contain special chars like / and #
+// Validate they don't contain path traversal attempts
+const sessionIdSchema = Joi.string().pattern(/^[^.]+$/);  // Disallow dots to prevent ../
 const paginationSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
   offset: Joi.number().integer().min(0).default(0)
