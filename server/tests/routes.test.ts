@@ -7,7 +7,7 @@ import { randomBytes, createHash } from 'crypto';
 import { jest } from '@jest/globals';
 import type { SessionRepository } from '../src/database/interfaces.js';
 import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/database/connection.js';
-import { createRouter } from '../src/routes.js';
+import { createRouter, type RouteDeps } from '../src/routes.js';
 
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-${Date.now()}`);
@@ -60,8 +60,8 @@ function createMockRepository(overrides?: Partial<SessionRepository>): SessionRe
   };
 }
 
-// Create a test app that uses the real createRouter with a mock repo
-function createTestApp(repo: SessionRepository, withAuth = true): Application {
+// Create a test app that uses the real createRouter with RouteDeps
+function createTestApp(deps: RouteDeps, withAuth = true): Application {
   const app = express();
   app.use(express.json());
 
@@ -106,8 +106,8 @@ function createTestApp(repo: SessionRepository, withAuth = true): Application {
     next();
   });
 
-  // Mount the REAL router with the mock repo
-  app.use('/', createRouter(repo));
+  // Mount the REAL router with deps
+  app.use('/', createRouter(deps));
 
   return app;
 }
@@ -185,7 +185,7 @@ describe('API Routes (with mock repository)', () => {
       },
       searchMessages: () => sampleSearchResults,
     });
-    app = createTestApp(mockRepo, true);
+    app = createTestApp({ repo: mockRepo }, true);
   });
 
   afterAll(() => {
@@ -376,7 +376,7 @@ describe('API Routes (with mock repository)', () => {
     it('should call searchMessages with sanitized query', async () => {
       const searchSpy = jest.fn().mockReturnValue(sampleSearchResults);
       const spyRepo = createMockRepository({ searchMessages: searchSpy as SessionRepository['searchMessages'] });
-      const spyApp = createTestApp(spyRepo, false);
+      const spyApp = createTestApp({ repo: spyRepo }, false);
 
       await request(spyApp).get('/search?q=hello+world');
 
@@ -394,7 +394,7 @@ describe('API Routes (with mock repository)', () => {
         getSessionById: () => sampleSession,
         hideSession: hideSpy,
       });
-      const spyApp = createTestApp(spyRepo, false);
+      const spyApp = createTestApp({ repo: spyRepo }, false);
 
       const res = await request(spyApp).delete('/sessions/test-session-1');
 
@@ -420,7 +420,7 @@ describe('API Routes (with mock repository)', () => {
         getSessionById: () => heartbeatSession,
         markSessionAsRead: readSpy,
       });
-      const spyApp = createTestApp(spyRepo, false);
+      const spyApp = createTestApp({ repo: spyRepo }, false);
 
       const res = await request(spyApp).post('/sessions/test-heartbeat-session/read');
 
@@ -448,12 +448,100 @@ describe('API without authentication configured', () => {
     const repo = createMockRepository({
       getRecentSessions: () => [sampleSession],
     });
-    app = createTestApp(repo, true);
+    app = createTestApp({ repo }, true);
   });
 
   it('should allow requests when no API key is configured', async () => {
     const res = await request(app).get('/sessions');
     expect(res.status).toBe(200);
     expect(res.body.sessions.length).toBe(1);
+  });
+});
+
+describe('POST /heartbeat', () => {
+  const mockRepo = createMockRepository();
+
+  it('should return 503 when heartbeatService not provided', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+    const res = await request(app).post('/heartbeat');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Heartbeat service not initialized');
+  });
+
+  it('should call runHeartbeat(true) and return result', async () => {
+    const mockResult = { tasksProcessed: 1, sessionsCreated: 0, sessionIds: [], errors: [] };
+    const mockHeartbeat = { runHeartbeat: jest.fn().mockResolvedValue(mockResult) };
+    const app = createTestApp({
+      repo: mockRepo,
+      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService.js').HeartbeatService,
+    }, false);
+
+    const res = await request(app).post('/heartbeat');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(mockResult);
+    expect(mockHeartbeat.runHeartbeat).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('GET /api/config', () => {
+  const mockRepo = createMockRepository();
+
+  it('should return 503 when configService not provided', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+    const res = await request(app).get('/api/config');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Config service not initialized');
+  });
+
+  it('should return sections when configService provided', async () => {
+    const mockSections = { heartbeat: { enabled: false }, security: { allowedWorkingDirs: [] } };
+    const mockConfig = { getAllEditableSections: jest.fn().mockReturnValue(mockSections) };
+    const app = createTestApp({
+      repo: mockRepo,
+      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+    }, false);
+
+    const res = await request(app).get('/api/config');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(mockSections);
+  });
+});
+
+describe('PUT /api/config/:section', () => {
+  const mockRepo = createMockRepository();
+
+  it('should return 503 when configService not provided', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+    const res = await request(app).put('/api/config/heartbeat').send({ enabled: true });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Config service not initialized');
+  });
+
+  it('should update section and call onConfigChanged callback', async () => {
+    const onChanged = jest.fn();
+    const mockConfig = { updateSection: jest.fn().mockReturnValue(null) };
+    const app = createTestApp({
+      repo: mockRepo,
+      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+      onConfigChanged: onChanged,
+    }, false);
+
+    const res = await request(app).put('/api/config/heartbeat').send({ enabled: true });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockConfig.updateSection).toHaveBeenCalledWith('heartbeat', { enabled: true });
+    expect(onChanged).toHaveBeenCalledWith('heartbeat');
+  });
+
+  it('should return 400 for validation error', async () => {
+    const mockConfig = { updateSection: jest.fn().mockReturnValue('intervalMs must be >= 60000') };
+    const app = createTestApp({
+      repo: mockRepo,
+      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+    }, false);
+
+    const res = await request(app).put('/api/config/heartbeat').send({ intervalMs: 100 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('intervalMs must be >= 60000');
   });
 });

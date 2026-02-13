@@ -9,34 +9,20 @@ import {
   type HeartbeatStateRecord
 } from './database/index.js';
 import { indexAllSessions } from './indexer.js';
-import { HeartbeatService } from './services/HeartbeatService.js';
+import type { HeartbeatService } from './services/HeartbeatService.js';
 import { logger } from './logger.js';
-import { ConfigService } from './services/ConfigService.js';
+import type { ConfigService } from './services/ConfigService.js';
 
 // Read admin.html at module load
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const adminHtml = readFileSync(join(__dirname, 'admin', 'admin.html'), 'utf-8');
 
-// Singleton heartbeat service for API routes
-let heartbeatService: HeartbeatService | null = null;
-
-export function setHeartbeatService(service: HeartbeatService): void {
-  heartbeatService = service;
-}
-
-// Config service for admin UI
-let configService: ConfigService | null = null;
-
-export function setConfigService(service: ConfigService): void {
-  configService = service;
-}
-
-// Callback to restart heartbeat timer after config change
-let onConfigChanged: ((section: string) => void) | null = null;
-
-export function setOnConfigChanged(callback: (section: string) => void): void {
-  onConfigChanged = callback;
+export interface RouteDeps {
+  repo: SessionRepository;
+  heartbeatService?: HeartbeatService;
+  configService?: ConfigService;
+  onConfigChanged?: (section: string) => void;
 }
 
 // API Response types
@@ -78,7 +64,8 @@ interface SearchResultResponse {
   };
 }
 
-export function createRouter(repo: SessionRepository): Router {
+export function createRouter(deps: RouteDeps): Router {
+  const { repo, heartbeatService, configService, onConfigChanged } = deps;
   const router = Router();
 
   /**
