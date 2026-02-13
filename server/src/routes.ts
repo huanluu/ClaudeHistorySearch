@@ -197,12 +197,14 @@ export function createRouter(repo: SessionRepository): Router {
       const offset = parseInt(offsetParam as string) || 0;
       const sort: SortOption = sortParam === 'date' ? 'date' : 'relevance';
 
-      // Escape special FTS5 characters and format query with prefix matching
+      // Escape special FTS5 characters and format query with prefix matching.
+      // The FTS5 table uses unicode61 tokenizer (no porter stemmer) so * gives
+      // clean prefix matching without stemmer-induced false positives.
       const sanitizedQuery = query
         .replace(/['"*()]/g, '')  // Remove special FTS5 characters
         .split(/\s+/)
         .filter(term => term.length > 0)
-        .map(term => `${term}*`)  // Add * for prefix matching (without quotes)
+        .map(term => `${term}*`)  // Add * for prefix matching
         .join(' ');
 
       if (!sanitizedQuery) {

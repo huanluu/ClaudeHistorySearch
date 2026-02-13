@@ -129,6 +129,19 @@ db.exec(`
   );
 `);
 
+// Migration: rebuild FTS table if it still uses porter tokenizer.
+// Porter stemmer causes false positives for short/acronym queries (e.g. "pps" matches "ppt").
+const ftsSchema = db.prepare(
+  `SELECT sql FROM sqlite_master WHERE type='table' AND name='messages_fts'`
+).get() as { sql: string } | undefined;
+
+if (ftsSchema?.sql?.includes('porter')) {
+  logger.log('Migrating FTS table: removing porter stemmer (rebuilds search index)');
+  db.exec(`DROP TABLE messages_fts`);
+  // Force reindex by clearing last_indexed timestamps
+  db.exec(`UPDATE sessions SET last_indexed = NULL`);
+}
+
 // Create FTS5 virtual table for full-text search
 db.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
@@ -137,7 +150,7 @@ db.exec(`
     content,
     timestamp UNINDEXED,
     uuid UNINDEXED,
-    tokenize='porter unicode61'
+    tokenize='unicode61'
   );
 `);
 
