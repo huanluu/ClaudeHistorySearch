@@ -1,4 +1,4 @@
-import Database, { type Statement, type Database as DatabaseType } from 'better-sqlite3';
+import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
@@ -154,16 +154,3 @@ db.exec(`
   );
 `);
 
-// Heartbeat-related prepared statements (out of scope for SessionRepository)
-export const getHeartbeatState: Statement<unknown[], HeartbeatStateRecord> = db.prepare(`
-  SELECT * FROM heartbeat_state WHERE key = ?
-`);
-
-export const upsertHeartbeatState: Statement = db.prepare(`
-  INSERT OR REPLACE INTO heartbeat_state (key, last_changed, last_processed)
-  VALUES (?, ?, ?)
-`);
-
-export const getAllHeartbeatState: Statement<unknown[], HeartbeatStateRecord> = db.prepare(`
-  SELECT * FROM heartbeat_state
-`);

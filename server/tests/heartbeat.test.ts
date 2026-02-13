@@ -11,6 +11,8 @@ import {
   WorkItem,
   CommandExecutor
 } from '../src/services/HeartbeatService.js';
+import type { HeartbeatRepository } from '../src/database/interfaces.js';
+import type { HeartbeatStateRecord } from '../src/database/connection.js';
 
 /**
  * Create a mock ChildProcess that emits a stream-json init message on stdout,
@@ -309,16 +311,16 @@ describe('Heartbeat Database Schema', () => {
 
 describe('Production Database Module (Heartbeat Schema)', () => {
   // These tests import from the actual database module to verify migrations work
-  // We use a dynamic import to avoid module caching issues
 
-  it('should export heartbeat-related prepared statements', async () => {
+  it('should construct SqliteHeartbeatRepository from production db', async () => {
     const dbModule = await import('../src/database/connection.js');
+    const { SqliteHeartbeatRepository } = await import('../src/database/SqliteHeartbeatRepository.js');
 
-    // Check that the module exports what we need for heartbeat
     expect(typeof dbModule.db).toBe('object');
-    expect(typeof dbModule.getAllHeartbeatState).toBe('object');
-    expect(typeof dbModule.getHeartbeatState).toBe('object');
-    expect(typeof dbModule.upsertHeartbeatState).toBe('object');
+
+    // Should not throw — heartbeat_state table exists
+    const repo = new SqliteHeartbeatRepository(dbModule.db);
+    expect(repo).toBeDefined();
 
     // Verify sessions table has heartbeat columns in production DB
     const columns = dbModule.db.prepare("PRAGMA table_info(sessions)").all() as ColumnInfo[];
@@ -1079,6 +1081,72 @@ More text.
       expect(result.sessionIds).toEqual(['test-session-abc123']);
 
       rmSync(heartbeatPath);
+    });
+  });
+
+  // ===========================================================================
+  // HeartbeatService with HeartbeatRepository
+  // ===========================================================================
+
+  describe('HeartbeatService with HeartbeatRepository', () => {
+    function createMockHeartbeatRepo(overrides?: Partial<HeartbeatRepository>): HeartbeatRepository {
+      return {
+        getState: () => undefined,
+        upsertState: () => {},
+        getAllState: () => [],
+        ...overrides,
+      };
+    }
+
+    it('recordProcessedItem delegates to repo.upsertState', () => {
+      const calls: Array<{ key: string; lastChanged: string; lastProcessed: number }> = [];
+      const repo = createMockHeartbeatRepo({
+        upsertState: (key, lastChanged, lastProcessed) => {
+          calls.push({ key, lastChanged, lastProcessed });
+        },
+      });
+
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo);
+      service.recordProcessedItem('workitem:100', '2024-06-01T00:00:00Z');
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].key).toBe('workitem:100');
+      expect(calls[0].lastChanged).toBe('2024-06-01T00:00:00Z');
+      expect(typeof calls[0].lastProcessed).toBe('number');
+    });
+
+    it('getProcessedItemState delegates to repo.getState', () => {
+      const repo = createMockHeartbeatRepo({
+        getState: (key: string) => {
+          if (key === 'workitem:200') {
+            return { key: 'workitem:200', last_changed: '2024-07-01T00:00:00Z', last_processed: 123 };
+          }
+          return undefined;
+        },
+      });
+
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo);
+
+      expect(service.getProcessedItemState('workitem:200')).toBe('2024-07-01T00:00:00Z');
+      expect(service.getProcessedItemState('workitem:999')).toBeUndefined();
+    });
+
+    it('getAllState delegates to repo.getAllState', () => {
+      const records: HeartbeatStateRecord[] = [
+        { key: 'workitem:1', last_changed: 'date-a', last_processed: 100 },
+        { key: 'workitem:2', last_changed: 'date-b', last_processed: 200 },
+      ];
+      const repo = createMockHeartbeatRepo({
+        getAllState: () => records,
+      });
+
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo);
+      expect(service.getAllState()).toEqual(records);
+    });
+
+    it('getAllState returns [] when no repo is provided', () => {
+      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      expect(service.getAllState()).toEqual([]);
     });
   });
 });

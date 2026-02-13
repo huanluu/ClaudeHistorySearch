@@ -3,7 +3,7 @@ import { watch, type FSWatcher } from 'chokidar';
 import { execSync } from 'child_process';
 import { indexAllSessions, indexSessionFile, PROJECTS_DIR } from './indexer.js';
 import { createRouter } from './routes.js';
-import { createSessionRepository, DB_PATH } from './database/index.js';
+import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
 import { authMiddleware } from './auth/middleware.js';
 import { hasApiKey } from './auth/keyManager.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
@@ -56,7 +56,8 @@ async function main(): Promise<void> {
     logger.log(`Security: ${allowedDirs.length} allowed working director${allowedDirs.length === 1 ? 'y' : 'ies'} configured`);
   }
 
-  const heartbeatService = new HeartbeatService();
+  const heartbeatRepo = createHeartbeatRepository();
+  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo);
 
   let heartbeatTimer: NodeJS.Timeout | null = null;
   let heartbeatRunCount = 0;

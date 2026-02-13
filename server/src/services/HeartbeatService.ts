@@ -3,6 +3,8 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { execSync, spawn, ChildProcess } from 'child_process';
 import { logger } from '../logger.js';
+import type { HeartbeatRepository } from '../database/interfaces.js';
+import type { HeartbeatStateRecord } from '../database/connection.js';
 
 /**
  * Configuration for the heartbeat service
@@ -111,15 +113,16 @@ export class HeartbeatService {
   private config: HeartbeatConfig;
   private configDir: string;
   private executor: CommandExecutor;
-  // In-memory state for tracking processed items (tests use this directly)
-  // Production will use the database heartbeat_state table
+  private repo: HeartbeatRepository | null;
+  // In-memory fallback for tracking processed items (used when no repo is provided)
   private processedState: Map<string, string> = new Map();
   // Lock to prevent overlapping heartbeat runs
   private isRunning = false;
 
-  constructor(configDir?: string, executor?: CommandExecutor) {
+  constructor(configDir?: string, executor?: CommandExecutor, repo?: HeartbeatRepository) {
     this.configDir = configDir || getConfigDir();
     this.executor = executor || defaultExecutor;
+    this.repo = repo ?? null;
     this.config = this.loadConfig();
   }
 
@@ -263,14 +266,31 @@ export class HeartbeatService {
    * Record that a work item has been processed
    */
   recordProcessedItem(key: string, lastChanged: string): void {
-    this.processedState.set(key, lastChanged);
+    if (this.repo) {
+      this.repo.upsertState(key, lastChanged, Date.now());
+    } else {
+      this.processedState.set(key, lastChanged);
+    }
   }
 
   /**
    * Get the last known changed date for a work item
    */
   getProcessedItemState(key: string): string | undefined {
+    if (this.repo) {
+      return this.repo.getState(key)?.last_changed ?? undefined;
+    }
     return this.processedState.get(key);
+  }
+
+  /**
+   * Get all heartbeat state records (for status endpoint)
+   */
+  getAllState(): HeartbeatStateRecord[] {
+    if (this.repo) {
+      return this.repo.getAllState();
+    }
+    return [];
   }
 
   /**

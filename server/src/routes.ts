@@ -3,10 +3,8 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Router, type Request, type Response } from 'express';
 import {
-  getAllHeartbeatState,
   type SessionRepository,
   type SortOption,
-  type HeartbeatStateRecord
 } from './database/index.js';
 import { indexAllSessions } from './indexer.js';
 import type { HeartbeatService } from './services/HeartbeatService.js';
@@ -340,7 +338,7 @@ export function createRouter(deps: RouteDeps): Router {
    */
   router.get('/heartbeat/status', (_req: Request, res: Response) => {
     try {
-      const state = getAllHeartbeatState.all() as HeartbeatStateRecord[];
+      const state = heartbeatService?.getAllState() ?? [];
       const config = heartbeatService?.getConfig();
 
       res.json({
