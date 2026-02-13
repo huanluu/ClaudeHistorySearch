@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// A shared component for displaying a list of session messages.
 /// Supports scroll-to-message functionality and text highlighting.
@@ -54,6 +59,8 @@ public struct MessageListView: View {
 
     // MARK: - Session Header
 
+    @State private var copiedSessionId = false
+
     @ViewBuilder
     private func sessionHeader(_ session: Session) -> some View {
         VStack(spacing: style.isCompact ? 4 : 8) {
@@ -69,9 +76,41 @@ public struct MessageListView: View {
             Text("\(messages.count) messages")
                 .font(.caption2)
                 .foregroundColor(.secondary)
+
+            // Session ID (tap to copy)
+            HStack(spacing: 4) {
+                Text(session.id)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .lineLimit(1)
+
+                Image(systemName: copiedSessionId ? "checkmark" : "doc.on.clipboard")
+                    .font(.system(size: 9))
+                    .foregroundColor(copiedSessionId ? .green : .secondary.opacity(0.5))
+            }
+            .onTapGesture {
+                copyToClipboard(session.id)
+                withAnimation {
+                    copiedSessionId = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    withAnimation {
+                        copiedSessionId = false
+                    }
+                }
+            }
         }
         .padding(.vertical, style.isCompact ? 12 : 16)
         .padding(.horizontal, style.isCompact ? 12 : 16)
+    }
+
+    private func copyToClipboard(_ text: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
     }
 
     // MARK: - Scroll Support
