@@ -101,6 +101,27 @@ Data flow: JSONL files → indexer → SQLite FTS5 → REST API
 | `session.error` | Server → Client | Session error |
 | `session.complete` | Server → Client | Session finished |
 
+## Server Management (launchd)
+
+The server runs as a launchd agent: `com.claude-history-server`
+
+```bash
+# Restart the server (single command)
+launchctl kickstart -k gui/$(id -u)/com.claude-history-server
+
+# Restart AND reload plist changes
+launchctl unload ~/Library/LaunchAgents/com.claude-history-server.plist && launchctl load ~/Library/LaunchAgents/com.claude-history-server.plist
+
+# Check status (PID in first column, - means not running)
+launchctl list | grep claude-history-server
+
+# View logs
+tail -f /tmp/claude-history-server.log    # stdout
+tail -f /tmp/claude-history-server.err    # stderr
+```
+
+The plist uses `KeepAlive > SuccessfulExit: false` — the server auto-restarts on crashes (non-zero exit) but stays down when stopped intentionally (exit 0). Do NOT change this to `KeepAlive: true` as it would prevent manual stop-edit-restart workflows.
+
 ## Testing
 
 ```bash
