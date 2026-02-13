@@ -312,12 +312,13 @@ describe('Production Database Module (Heartbeat Schema)', () => {
   // We use a dynamic import to avoid module caching issues
 
   it('should export heartbeat-related prepared statements', async () => {
-    // This test will fail until we add the exports to database.ts
-    const dbModule = await import('../src/database.js');
+    const dbModule = await import('../src/database/connection.js');
 
     // Check that the module exports what we need for heartbeat
     expect(typeof dbModule.db).toBe('object');
-    expect(typeof dbModule.insertSession).toBe('object');
+    expect(typeof dbModule.getAllHeartbeatState).toBe('object');
+    expect(typeof dbModule.getHeartbeatState).toBe('object');
+    expect(typeof dbModule.upsertHeartbeatState).toBe('object');
 
     // Verify sessions table has heartbeat columns in production DB
     const columns = dbModule.db.prepare("PRAGMA table_info(sessions)").all() as ColumnInfo[];
@@ -328,7 +329,7 @@ describe('Production Database Module (Heartbeat Schema)', () => {
   });
 
   it('should have heartbeat_state table in production database', async () => {
-    const dbModule = await import('../src/database.js');
+    const dbModule = await import('../src/database/connection.js');
 
     const tables = dbModule.db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='heartbeat_state'")

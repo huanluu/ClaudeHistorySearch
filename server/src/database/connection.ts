@@ -2,7 +2,7 @@ import Database, { type Statement, type Database as DatabaseType } from 'better-
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { logger } from './logger.js';
+import { logger } from '../logger.js';
 
 // Types for database records
 export interface SessionRecord {
@@ -141,122 +141,7 @@ db.exec(`
   );
 `);
 
-// Prepared statements with proper typing
-export const insertSession: Statement = db.prepare(`
-  INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
-
-export const insertMessage: Statement = db.prepare(`
-  INSERT INTO messages_fts (session_id, role, content, timestamp, uuid)
-  VALUES (?, ?, ?, ?, ?)
-`);
-
-export const getSessionById: Statement<unknown[], SessionRecord> = db.prepare(`
-  SELECT * FROM sessions WHERE id = ?
-`);
-
-export const getRecentSessions: Statement<unknown[], SessionRecord> = db.prepare(`
-  SELECT * FROM sessions
-  WHERE is_hidden = 0
-  ORDER BY COALESCE(last_activity_at, started_at) DESC
-  LIMIT ? OFFSET ?
-`);
-
-// For "Sessions" tab — manual sessions only
-export const getManualSessions: Statement<unknown[], SessionRecord> = db.prepare(`
-  SELECT * FROM sessions
-  WHERE is_automatic = 0 AND is_hidden = 0
-  ORDER BY COALESCE(last_activity_at, started_at) DESC
-  LIMIT ? OFFSET ?
-`);
-
-// For "Heartbeat" tab — automatic sessions only
-export const getAutomaticSessions: Statement<unknown[], SessionRecord> = db.prepare(`
-  SELECT * FROM sessions
-  WHERE is_automatic = 1 AND is_hidden = 0
-  ORDER BY COALESCE(last_activity_at, started_at) DESC
-  LIMIT ? OFFSET ?
-`);
-
-const searchMessagesByRelevance: Statement<unknown[], SearchResultRecord> = db.prepare(`
-  SELECT
-    messages_fts.session_id,
-    messages_fts.role,
-    messages_fts.content,
-    messages_fts.timestamp,
-    messages_fts.uuid,
-    sessions.project,
-    sessions.started_at,
-    sessions.title,
-    highlight(messages_fts, 2, '<mark>', '</mark>') as highlighted_content,
-    bm25(messages_fts) as rank
-  FROM messages_fts
-  JOIN sessions ON sessions.id = messages_fts.session_id
-  WHERE messages_fts MATCH ? AND sessions.is_automatic = ? AND sessions.is_hidden = 0
-  ORDER BY rank
-  LIMIT ? OFFSET ?
-`);
-
-const searchMessagesByDate: Statement<unknown[], SearchResultRecord> = db.prepare(`
-  SELECT
-    messages_fts.session_id,
-    messages_fts.role,
-    messages_fts.content,
-    messages_fts.timestamp,
-    messages_fts.uuid,
-    sessions.project,
-    sessions.started_at,
-    sessions.title,
-    highlight(messages_fts, 2, '<mark>', '</mark>') as highlighted_content,
-    bm25(messages_fts) as rank
-  FROM messages_fts
-  JOIN sessions ON sessions.id = messages_fts.session_id
-  WHERE messages_fts MATCH ? AND sessions.is_automatic = ? AND sessions.is_hidden = 0
-  ORDER BY sessions.started_at DESC, rank
-  LIMIT ? OFFSET ?
-`);
-
-// Wrapper function to select the appropriate query based on sort option
-export function searchMessages(
-  query: string,
-  limit: number,
-  offset: number,
-  sort: SortOption = 'relevance',
-  automaticOnly: boolean = false
-): SearchResultRecord[] {
-  const automaticFlag = automaticOnly ? 1 : 0;
-  const stmt = sort === 'date' ? searchMessagesByDate : searchMessagesByRelevance;
-  return stmt.all(query, automaticFlag, limit, offset);
-}
-
-export const getMessagesBySessionId: Statement<unknown[], MessageRecord> = db.prepare(`
-  SELECT session_id, role, content, timestamp, uuid
-  FROM messages_fts
-  WHERE session_id = ?
-  ORDER BY timestamp ASC
-`);
-
-export const clearSessionMessages: Statement = db.prepare(`
-  DELETE FROM messages_fts WHERE session_id = ?
-`);
-
-export const getSessionLastIndexed: Statement<unknown[], LastIndexedRecord> = db.prepare(`
-  SELECT last_indexed FROM sessions WHERE id = ?
-`);
-
-// Re-export for backwards compatibility in tests
-export { searchMessagesByRelevance, searchMessagesByDate };
-
-// Heartbeat-related prepared statements
-export const markSessionAsRead: Statement = db.prepare(`
-  UPDATE sessions SET is_unread = 0 WHERE id = ?
-`);
-
-export const hideSession: Statement = db.prepare(`
-  UPDATE sessions SET is_hidden = 1 WHERE id = ?
-`);
-
+// Heartbeat-related prepared statements (out of scope for SessionRepository)
 export const getHeartbeatState: Statement<unknown[], HeartbeatStateRecord> = db.prepare(`
   SELECT * FROM heartbeat_state WHERE key = ?
 `);
