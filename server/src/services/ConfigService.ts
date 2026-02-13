@@ -6,9 +6,11 @@ import { getConfigDir } from './HeartbeatService.js';
  * Field schema for validation
  */
 interface FieldSchema {
-  type: 'boolean' | 'number' | 'string';
+  type: 'boolean' | 'number' | 'string' | 'array';
   min?: number;
   max?: number;
+  /** For array type: the expected type of each item */
+  itemType?: 'string' | 'number' | 'boolean';
 }
 
 /**
@@ -30,6 +32,11 @@ const EDITABLE_SECTIONS: Record<string, SectionDefinition> = {
       workingDirectory: { type: 'string' },
       maxItems: { type: 'number', min: 0 },
       maxRuns: { type: 'number', min: 0 },
+    },
+  },
+  security: {
+    fields: {
+      allowedWorkingDirs: { type: 'array', itemType: 'string' },
     },
   },
 };
@@ -121,6 +128,21 @@ export class ConfigService {
       const fieldDef = sectionDef.fields[key];
       if (!fieldDef) {
         return `Unknown field: ${key}`;
+      }
+
+      // Array type check
+      if (fieldDef.type === 'array') {
+        if (!Array.isArray(value)) {
+          return `Field "${key}" must be an array`;
+        }
+        if (fieldDef.itemType) {
+          for (const item of value) {
+            if (typeof item !== fieldDef.itemType) {
+              return `Field "${key}" must contain only ${fieldDef.itemType} items`;
+            }
+          }
+        }
+        continue;
       }
 
       // Type check

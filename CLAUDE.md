@@ -122,6 +122,8 @@ tail -f /tmp/claude-history-server.err    # stderr
 
 The plist uses `KeepAlive > SuccessfulExit: false` — the server auto-restarts on crashes (non-zero exit) but stays down when stopped intentionally (exit 0). Do NOT change this to `KeepAlive: true` as it would prevent manual stop-edit-restart workflows.
 
+**IMPORTANT**: When testing the server locally, do NOT use a different port. Kill the running server first (`launchctl kickstart -k` or `lsof -ti:3847 | xargs kill`), then start with `npm start`. The iOS/Mac apps and Bonjour discovery are hardcoded to port 3847.
+
 ## Testing
 
 ```bash

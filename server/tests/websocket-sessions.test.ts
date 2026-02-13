@@ -1,10 +1,11 @@
 import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { EventEmitter } from 'events';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
+import { WorkingDirValidator } from '../src/security/WorkingDirValidator.js';
 
 // Create mock spawn function
 const mockSpawn = jest.fn();
@@ -77,8 +78,12 @@ describe('WebSocket Session Integration', () => {
     const address = server.address() as { port: number };
     serverPort = address.port;
 
-    // Start WebSocket server
-    wsTransport = new WebSocketTransport({ server, path: '/ws' });
+    // Start WebSocket server with working directory validator
+    // Allow TEST_CONFIG_DIR and /tmp (resolve symlinks for macOS /var → /private/var)
+    const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
+    const resolvedTmp = realpathSync('/tmp');
+    const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
+    wsTransport = new WebSocketTransport({ server, path: '/ws', validator });
     wsTransport.start();
   });
 
@@ -330,6 +335,125 @@ describe('WebSocket Session Integration', () => {
       // Both processes should be killed
       expect(mockProcess1.kill).toHaveBeenCalledWith('SIGTERM');
       expect(mockProcess2.kill).toHaveBeenCalledWith('SIGTERM');
+    });
+  });
+
+  describe('Working directory validation', () => {
+    it('rejects session.start with disallowed directory', async () => {
+      const ws = await connectClient();
+      const messages: WSMessage[] = [];
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        if (msg.type !== 'auth_result') {
+          messages.push(msg);
+        }
+      });
+
+      // Attempt to start session in a forbidden directory
+      ws.send(JSON.stringify({
+        type: 'session.start',
+        payload: {
+          sessionId: 'test-forbidden-dir',
+          prompt: 'hack the planet',
+          workingDir: '/etc'
+        }
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Should receive session.error
+      const errorMsg = messages.find(m => m.type === 'session.error');
+      expect(errorMsg).toBeDefined();
+      expect((errorMsg?.payload as { error: string }).error).toMatch(/not within any allowed directory/i);
+
+      // spawn should NOT have been called
+      expect(mockSpawn).not.toHaveBeenCalled();
+
+      ws.close();
+    });
+
+    it('rejects path traversal attempt', async () => {
+      const ws = await connectClient();
+      const messages: WSMessage[] = [];
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        if (msg.type !== 'auth_result') {
+          messages.push(msg);
+        }
+      });
+
+      // Path traversal: start in allowed dir but escape via ..
+      ws.send(JSON.stringify({
+        type: 'session.start',
+        payload: {
+          sessionId: 'test-traversal',
+          prompt: 'traversal',
+          workingDir: '/tmp/../../etc'
+        }
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const errorMsg = messages.find(m => m.type === 'session.error');
+      expect(errorMsg).toBeDefined();
+      expect(mockSpawn).not.toHaveBeenCalled();
+
+      ws.close();
+    });
+
+    it('rejects session.resume with disallowed directory', async () => {
+      const ws = await connectClient();
+      const messages: WSMessage[] = [];
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString()) as WSMessage;
+        if (msg.type !== 'auth_result') {
+          messages.push(msg);
+        }
+      });
+
+      ws.send(JSON.stringify({
+        type: 'session.resume',
+        payload: {
+          sessionId: 'test-resume-forbidden',
+          resumeSessionId: 'some-session-id',
+          prompt: 'continue',
+          workingDir: '/etc'
+        }
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const errorMsg = messages.find(m => m.type === 'session.error');
+      expect(errorMsg).toBeDefined();
+      expect(mockSpawn).not.toHaveBeenCalled();
+
+      ws.close();
+    });
+
+    it('allows session.start with allowed directory', async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const ws = await connectClient();
+
+      ws.send(JSON.stringify({
+        type: 'session.start',
+        payload: {
+          sessionId: 'test-allowed-dir',
+          prompt: 'hello',
+          workingDir: '/tmp'
+        }
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // spawn SHOULD have been called
+      expect(mockSpawn).toHaveBeenCalled();
+
+      ws.close();
     });
   });
 });

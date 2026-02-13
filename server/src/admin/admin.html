@@ -115,6 +115,20 @@
       <span class="status" id="hb-status"></span>
     </div>
   </div>
+
+  <!-- Security Configuration -->
+  <div class="card" id="security-card">
+    <h2>Security</h2>
+    <div class="field">
+      <label for="sec-alloweddirs">Allowed Working Directories</label>
+      <textarea id="sec-alloweddirs" rows="5" style="width:100%;padding:0.5rem 0.75rem;border:1px solid #ccc;border-radius:4px;font-size:0.875rem;font-family:inherit;resize:vertical;" placeholder="/Users/you/Developer&#10;/tmp/safe-project"></textarea>
+      <div class="hint">One directory per line. Sessions can only run in these directories (and subdirectories). Leave empty to deny all.</div>
+    </div>
+    <div class="actions">
+      <button class="btn-primary" id="sec-save">Save</button>
+      <span class="status" id="sec-status"></span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -127,17 +141,24 @@
   const hbSave = document.getElementById('hb-save');
   const hbStatus = document.getElementById('hb-status');
 
+  const secAllowedDirs = document.getElementById('sec-alloweddirs');
+  const secSave = document.getElementById('sec-save');
+  const secStatus = document.getElementById('sec-status');
+
   const heartbeatCard = document.getElementById('heartbeat-card');
+  const securityCard = document.getElementById('security-card');
   let configLoaded = false;
 
-  function setCardEnabled(enabled) {
-    const inputs = heartbeatCard.querySelectorAll('input, button');
-    inputs.forEach(el => { if (el.id !== 'apiKey') el.disabled = !enabled; });
-    heartbeatCard.style.opacity = enabled ? '1' : '0.5';
+  function setCardsEnabled(enabled) {
+    [heartbeatCard, securityCard].forEach(card => {
+      const inputs = card.querySelectorAll('input, button, textarea');
+      inputs.forEach(el => { if (el.id !== 'apiKey') el.disabled = !enabled; });
+      card.style.opacity = enabled ? '1' : '0.5';
+    });
   }
 
-  // Start with card disabled until config loads
-  setCardEnabled(false);
+  // Start with cards disabled until config loads
+  setCardsEnabled(false);
 
   // Persist API key in localStorage
   apiKeyInput.value = localStorage.getItem('adminApiKey') || '';
@@ -172,7 +193,7 @@
       if (!res.ok) {
         if (res.status === 401) {
           configLoaded = false;
-          setCardEnabled(false);
+          setCardsEnabled(false);
           showStatus(hbStatus, 'Enter a valid API key to load settings', 'error');
           return;
         }
@@ -184,12 +205,14 @@
       hbInterval.value = hb.intervalMs ? Math.round(hb.intervalMs / 60000) : 60;
       hbWorkdir.value = hb.workingDirectory || '';
       hbMaxitems.value = hb.maxItems ?? 0;
+      const sec = data.security || {};
+      secAllowedDirs.value = (sec.allowedWorkingDirs || []).join('\n');
       configLoaded = true;
-      setCardEnabled(true);
+      setCardsEnabled(true);
       showStatus(hbStatus, '', '');
     } catch (err) {
       configLoaded = false;
-      setCardEnabled(false);
+      setCardsEnabled(false);
       showStatus(hbStatus, 'Failed to load config: ' + err.message, 'error');
     }
   }
@@ -219,6 +242,30 @@
       showStatus(hbStatus, err.message, 'error');
     } finally {
       hbSave.disabled = false;
+    }
+  });
+
+  // Save security section
+  secSave.addEventListener('click', async () => {
+    secSave.disabled = true;
+    showStatus(secStatus, 'Saving...', 'loading');
+    try {
+      const lines = secAllowedDirs.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const body = { allowedWorkingDirs: lines };
+      const res = await fetch('/api/config/security', {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      showStatus(secStatus, 'Saved', 'success');
+    } catch (err) {
+      showStatus(secStatus, err.message, 'error');
+    } finally {
+      secSave.disabled = false;
     }
   });
 

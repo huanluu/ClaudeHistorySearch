@@ -4,6 +4,7 @@ import { URL } from 'url';
 import { validateApiKey, hasApiKey } from '../auth/keyManager.js';
 import { SessionStore, SessionExecutor } from '../sessions/index.js';
 import { logger } from '../logger.js';
+import { WorkingDirValidator } from '../security/WorkingDirValidator.js';
 
 /**
  * Message types for WebSocket communication
@@ -75,6 +76,8 @@ export interface WebSocketTransportOptions {
   path?: string;
   /** Ping interval in ms (default: 30000) */
   pingInterval?: number;
+  /** Working directory validator (optional, no validation if not set) */
+  validator?: WorkingDirValidator;
   /** Message handler callback */
   onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
   /** Connection handler callback */
@@ -103,6 +106,7 @@ export class WebSocketTransport {
   private pingTimer: NodeJS.Timeout | null = null;
   private clients: Set<AuthenticatedWebSocket> = new Set();
   private sessionStore: SessionStore = new SessionStore();
+  private validator?: WorkingDirValidator;
 
   // Event handlers
   private onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
@@ -115,9 +119,17 @@ export class WebSocketTransport {
     this.server = options.server;
     this.path = options.path ?? '/ws';
     this.pingInterval = options.pingInterval ?? 30000;
+    this.validator = options.validator;
     this.onMessage = options.onMessage;
     this.onConnection = options.onConnection;
     this.onDisconnection = options.onDisconnection;
+  }
+
+  /**
+   * Set or update the working directory validator (for hot-reload)
+   */
+  setValidator(validator: WorkingDirValidator): void {
+    this.validator = validator;
   }
 
   /**
@@ -340,12 +352,17 @@ export class WebSocketTransport {
    */
   private _handleSessionStart(ws: AuthenticatedWebSocket, payload: SessionStartPayload): void {
     logger.log(`[WebSocket] session.start received: sessionId=${payload.sessionId}, prompt="${payload.prompt.substring(0, 50)}..."`);
+
+    // Validate working directory
+    const workingDir = this._validateWorkingDir(ws, payload.sessionId, payload.workingDir);
+    if (!workingDir) return;
+
     const executor = this.sessionStore.create(payload.sessionId, ws.clientId);
     this._wireSessionEvents(ws, executor, payload.sessionId);
 
     executor.start({
       prompt: payload.prompt,
-      workingDir: payload.workingDir
+      workingDir
     });
     logger.log(`[WebSocket] session.start: executor started`);
   }
@@ -355,12 +372,17 @@ export class WebSocketTransport {
    */
   private _handleSessionResume(ws: AuthenticatedWebSocket, payload: SessionResumePayload): void {
     logger.log(`[WebSocket] session.resume received: sessionId=${payload.sessionId}, resumeSessionId=${payload.resumeSessionId}`);
+
+    // Validate working directory
+    const workingDir = this._validateWorkingDir(ws, payload.sessionId, payload.workingDir);
+    if (!workingDir) return;
+
     const executor = this.sessionStore.create(payload.sessionId, ws.clientId);
     this._wireSessionEvents(ws, executor, payload.sessionId);
 
     executor.start({
       prompt: payload.prompt,
-      workingDir: payload.workingDir,
+      workingDir,
       resumeSessionId: payload.resumeSessionId
     });
     logger.log(`[WebSocket] session.resume: executor started`);
@@ -374,6 +396,28 @@ export class WebSocketTransport {
     if (executor) {
       executor.cancel();
     }
+  }
+
+  /**
+   * Validate working directory against the allowlist.
+   * Returns the resolved path if valid, or null if rejected (sends session.error).
+   */
+  private _validateWorkingDir(ws: AuthenticatedWebSocket, sessionId: string, workingDir: string): string | null {
+    if (!this.validator) {
+      return workingDir; // No validator configured, allow all (backwards-compatible)
+    }
+
+    const result = this.validator.validate(workingDir);
+    if (!result.allowed) {
+      logger.log(`[WebSocket] Working directory rejected: ${workingDir} - ${result.error}`);
+      this.send(ws, {
+        type: 'session.error',
+        payload: { sessionId, error: result.error } as SessionErrorPayload
+      });
+      return null;
+    }
+
+    return result.resolvedPath ?? workingDir;
   }
 
   /**

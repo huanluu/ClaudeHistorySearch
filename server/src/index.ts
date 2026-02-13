@@ -10,6 +10,7 @@ import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WS
 import { HeartbeatService } from './services/HeartbeatService.js';
 import { logger } from './logger.js';
 import { ConfigService } from './services/ConfigService.js';
+import { WorkingDirValidator } from './security/WorkingDirValidator.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 const SERVICE_TYPE = 'claudehistory';
@@ -47,6 +48,19 @@ async function main(): Promise<void> {
   logger.log(`Claude History Server running on http://0.0.0.0:${PORT}`);
   logger.log(`Database: ${DB_PATH}`);
 
+  // Initialize working directory validator for session security
+  const configService = new ConfigService();
+  const securityConfig = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
+  const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
+  const workingDirValidator = new WorkingDirValidator(allowedDirs);
+
+  if (allowedDirs.length === 0) {
+    logger.log('WARNING: No allowed working directories configured. All session.start/resume requests will be denied.');
+    logger.log('Configure allowed directories via the admin UI at /admin');
+  } else {
+    logger.log(`Security: ${allowedDirs.length} allowed working director${allowedDirs.length === 1 ? 'y' : 'ies'} configured`);
+  }
+
   // Initialize WebSocket transport (attached to HTTP server)
   const httpServer = transport.getServer();
   if (httpServer) {
@@ -54,6 +68,7 @@ async function main(): Promise<void> {
       server: httpServer,
       path: '/ws',
       pingInterval: 30000,
+      validator: workingDirValidator,
       onConnection: (ws: AuthenticatedWebSocket) => {
         logger.log(`[WebSocket] Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
       },
@@ -147,8 +162,7 @@ async function main(): Promise<void> {
   const heartbeatService = new HeartbeatService();
   setHeartbeatService(heartbeatService);  // Make available to API routes
 
-  // Config service for admin UI
-  const configService = new ConfigService();
+  // Config service for admin UI (created earlier for security config)
   setConfigService(configService);
 
   let heartbeatTimer: NodeJS.Timeout | null = null;
@@ -214,7 +228,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // Wire config change handler to restart heartbeat timer
+  // Wire config change handler to restart heartbeat timer and update security
   setOnConfigChanged((section: string) => {
     if (section === 'heartbeat') {
       // Read the updated config from disk and apply to heartbeat service
@@ -223,6 +237,12 @@ async function main(): Promise<void> {
         heartbeatService.updateConfig(updatedSection as Partial<import('./services/HeartbeatService.js').HeartbeatConfig>);
       }
       restartHeartbeatTimer();
+    }
+    if (section === 'security') {
+      const updatedSecurity = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
+      const updatedDirs = updatedSecurity?.allowedWorkingDirs ?? [];
+      workingDirValidator.setAllowedDirs(updatedDirs);
+      logger.log(`Security config updated: ${updatedDirs.length} allowed working director${updatedDirs.length === 1 ? 'y' : 'ies'}`);
     }
   });
 
