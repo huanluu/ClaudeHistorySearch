@@ -7,7 +7,7 @@ import {
   type SortOption,
 } from '../database/index.js';
 import { indexAllSessions } from '../services/index.js';
-import type { HeartbeatService, ConfigService } from '../services/index.js';
+import type { HeartbeatService, ConfigService, IndexAllResult } from '../services/index.js';
 import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 
@@ -22,6 +22,7 @@ export interface RouteDeps {
   configService?: ConfigService;
   onConfigChanged?: (section: string) => void;
   logger?: Logger;
+  indexFn?: (force: boolean, repo: SessionRepository, logger: Logger) => Promise<IndexAllResult>;
 }
 
 // API Response types
@@ -64,7 +65,7 @@ interface SearchResultResponse {
 }
 
 export function createRouter(deps: RouteDeps): Router {
-  const { repo, heartbeatService, configService, onConfigChanged } = deps;
+  const { repo, heartbeatService, configService, onConfigChanged, indexFn = indexAllSessions } = deps;
   const logger = deps.logger ?? defaultLogger;
   const router = Router();
 
@@ -281,7 +282,7 @@ export function createRouter(deps: RouteDeps): Router {
   router.post('/reindex', async (req: Request, res: Response) => {
     try {
       const force = req.query.force === 'true';
-      const result = await indexAllSessions(force, repo, logger);
+      const result = await indexFn(force, repo, logger);
       res.json({
         success: true,
         ...result

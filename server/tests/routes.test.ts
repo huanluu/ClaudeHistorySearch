@@ -545,3 +545,163 @@ describe('PUT /api/config/:section', () => {
     expect(res.body.error).toBe('intervalMs must be >= 60000');
   });
 });
+
+describe('POST /reindex', () => {
+  const mockRepo = createMockRepository();
+
+  it('should call indexFn and return result with force=false by default', async () => {
+    const indexFn = jest.fn<() => Promise<{ indexed: number; skipped: number }>>()
+      .mockResolvedValue({ indexed: 5, skipped: 10 });
+    const app = createTestApp({ repo: mockRepo, indexFn }, false);
+
+    const res = await request(app).post('/reindex');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, indexed: 5, skipped: 10 });
+    expect(indexFn).toHaveBeenCalledWith(false, mockRepo, expect.anything());
+  });
+
+  it('should pass force=true when ?force=true', async () => {
+    const indexFn = jest.fn<() => Promise<{ indexed: number; skipped: number }>>()
+      .mockResolvedValue({ indexed: 0, skipped: 0 });
+    const app = createTestApp({ repo: mockRepo, indexFn }, false);
+
+    await request(app).post('/reindex?force=true');
+
+    expect(indexFn).toHaveBeenCalledWith(true, mockRepo, expect.anything());
+  });
+
+  it('should return 500 when indexFn rejects', async () => {
+    const indexFn = jest.fn<() => Promise<{ indexed: number; skipped: number }>>()
+      .mockRejectedValue(new Error('disk full'));
+    const app = createTestApp({ repo: mockRepo, indexFn }, false);
+
+    const res = await request(app).post('/reindex');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Reindex failed');
+  });
+});
+
+describe('GET /heartbeat/status', () => {
+  const mockRepo = createMockRepository();
+
+  it('should return defaults when heartbeatService not provided', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+
+    const res = await request(app).get('/heartbeat/status');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      enabled: false,
+      intervalMs: 0,
+      workingDirectory: '',
+      state: [],
+    });
+  });
+
+  it('should return mapped state from heartbeatService', async () => {
+    const mockHeartbeat = {
+      getAllState: jest.fn().mockReturnValue([
+        { key: 'item-1', last_changed: '2025-01-01', last_processed: '2025-01-01' },
+      ]),
+      getConfig: jest.fn().mockReturnValue({
+        enabled: true,
+        intervalMs: 120000,
+        workingDirectory: '/tmp/work',
+      }),
+    };
+    const app = createTestApp({
+      repo: mockRepo,
+      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService.js').HeartbeatService,
+    }, false);
+
+    const res = await request(app).get('/heartbeat/status');
+
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(true);
+    expect(res.body.intervalMs).toBe(120000);
+    expect(res.body.workingDirectory).toBe('/tmp/work');
+    expect(res.body.state).toEqual([
+      { key: 'item-1', lastChanged: '2025-01-01', lastProcessed: '2025-01-01' },
+    ]);
+  });
+
+  it('should return 500 when getAllState throws', async () => {
+    const mockHeartbeat = {
+      getAllState: jest.fn().mockImplementation(() => { throw new Error('db error'); }),
+      getConfig: jest.fn().mockReturnValue({ enabled: false, intervalMs: 0, workingDirectory: '' }),
+    };
+    const app = createTestApp({
+      repo: mockRepo,
+      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService.js').HeartbeatService,
+    }, false);
+
+    const res = await request(app).get('/heartbeat/status');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Failed to get heartbeat status');
+  });
+});
+
+describe('GET /admin', () => {
+  const mockRepo = createMockRepository();
+
+  it('should return HTML content type', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+
+    const res = await request(app).get('/admin');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+  });
+
+  it('should return valid HTML document', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+
+    const res = await request(app).get('/admin');
+
+    expect(res.text).toContain('<!DOCTYPE html>');
+  });
+});
+
+describe('GET /api/config/:section', () => {
+  const mockRepo = createMockRepository();
+
+  it('should return 503 when configService not provided', async () => {
+    const app = createTestApp({ repo: mockRepo }, false);
+
+    const res = await request(app).get('/api/config/heartbeat');
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Config service not initialized');
+  });
+
+  it('should return section data when found', async () => {
+    const sectionData = { enabled: true, intervalMs: 120000 };
+    const mockConfig = { getSection: jest.fn().mockReturnValue(sectionData) };
+    const app = createTestApp({
+      repo: mockRepo,
+      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+    }, false);
+
+    const res = await request(app).get('/api/config/heartbeat');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(sectionData);
+    expect(mockConfig.getSection).toHaveBeenCalledWith('heartbeat');
+  });
+
+  it('should return 404 for unknown section', async () => {
+    const mockConfig = { getSection: jest.fn().mockReturnValue(null) };
+    const app = createTestApp({
+      repo: mockRepo,
+      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+    }, false);
+
+    const res = await request(app).get('/api/config/nonexistent');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Unknown section: nonexistent');
+  });
+});
