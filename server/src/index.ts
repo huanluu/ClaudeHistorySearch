@@ -19,6 +19,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: Error) => {
-  logger.error('Failed to start server:', err);
+  logger.error({ msg: `Failed to start server: ${err.message}`, op: 'server.start', err });
   process.exit(1);
 });

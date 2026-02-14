@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { execSync, spawn, type ChildProcess } from 'child_process';
-import { logger } from '../provider/index.js';
+import { logger as defaultLogger } from '../provider/index.js';
+import type { Logger } from '../provider/index.js';
 import type { HeartbeatRepository, HeartbeatStateRecord } from '../database/index.js';
 
 /**
@@ -113,6 +114,7 @@ export class HeartbeatService {
   private configDir: string;
   private executor: CommandExecutor;
   private repo: HeartbeatRepository | null;
+  private logger: Logger;
   // In-memory fallback for tracking processed items (used when no repo is provided)
   private processedState: Map<string, string> = new Map();
   // Lock to prevent overlapping heartbeat runs
@@ -122,10 +124,11 @@ export class HeartbeatService {
   private schedulerRunCount = 0;
   private initialDelayTimer: NodeJS.Timeout | null = null;
 
-  constructor(configDir?: string, executor?: CommandExecutor, repo?: HeartbeatRepository) {
+  constructor(configDir?: string, executor?: CommandExecutor, repo?: HeartbeatRepository, logger: Logger = defaultLogger) {
     this.configDir = configDir || getConfigDir();
     this.executor = executor || defaultExecutor;
     this.repo = repo ?? null;
+    this.logger = logger;
     this.config = this.loadConfig();
   }
 
@@ -154,30 +157,34 @@ export class HeartbeatService {
 
     const config = this.getConfig();
     if (!config.enabled) {
-      logger.log('Heartbeat rescheduled: disabled');
+      this.logger.log({ msg: 'Heartbeat rescheduled: disabled', op: 'heartbeat.config' });
       return;
     }
 
     const runHeartbeatOnce = async (label: string): Promise<void> => {
       this.schedulerRunCount++;
-      logger.log(`${label} (run ${this.schedulerRunCount}${config.maxRuns > 0 ? `/${config.maxRuns}` : ''})...`);
+      this.logger.log({
+        msg: `${label} (run ${this.schedulerRunCount}${config.maxRuns > 0 ? `/${config.maxRuns}` : ''})...`,
+        op: 'heartbeat.run',
+        context: { run: this.schedulerRunCount, maxRuns: config.maxRuns },
+      });
       try {
         const heartbeatResult = await this.runHeartbeat();
         if (heartbeatResult.sessionsCreated > 0) {
-          logger.log(`Heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
+          this.logger.log({ msg: `Heartbeat: ${heartbeatResult.sessionsCreated} sessions created`, op: 'heartbeat.run', context: { sessionsCreated: heartbeatResult.sessionsCreated } });
         } else {
-          logger.log('Heartbeat: no changes detected');
+          this.logger.log({ msg: 'Heartbeat: no changes detected', op: 'heartbeat.run' });
         }
         if (heartbeatResult.errors.length > 0) {
-          logger.error('Heartbeat errors:', heartbeatResult.errors);
+          this.logger.error({ msg: `Heartbeat errors: ${heartbeatResult.errors.join(', ')}`, op: 'heartbeat.error', context: { errors: heartbeatResult.errors } });
         }
       } catch (error) {
-        logger.error('Heartbeat error:', error);
+        this.logger.error({ msg: `Heartbeat error: ${(error as Error).message}`, op: 'heartbeat.error', err: error });
       }
 
       // Stop scheduling if maxRuns reached
       if (config.maxRuns > 0 && this.schedulerRunCount >= config.maxRuns) {
-        logger.log(`Heartbeat: maxRuns (${config.maxRuns}) reached, stopping scheduled heartbeats`);
+        this.logger.log({ msg: `Heartbeat: maxRuns (${config.maxRuns}) reached, stopping scheduled heartbeats`, op: 'heartbeat.config', context: { maxRuns: config.maxRuns } });
         if (this.schedulerTimer) {
           clearInterval(this.schedulerTimer);
           this.schedulerTimer = null;
@@ -199,9 +206,9 @@ export class HeartbeatService {
       runHeartbeatOnce('Running initial heartbeat');
     }, 5000);
 
-    logger.log(`Heartbeat rescheduled every ${config.intervalMs / 1000 / 60} minutes`);
+    this.logger.log({ msg: `Heartbeat rescheduled every ${config.intervalMs / 1000 / 60} minutes`, op: 'heartbeat.config', context: { intervalMs: config.intervalMs } });
     if (config.maxRuns > 0) {
-      logger.log(`Heartbeat max runs: ${config.maxRuns}`);
+      this.logger.log({ msg: `Heartbeat max runs: ${config.maxRuns}`, op: 'heartbeat.config', context: { maxRuns: config.maxRuns } });
     }
   }
 
@@ -260,7 +267,7 @@ export class HeartbeatService {
         }
       } catch (error) {
         // Malformed config file - use defaults
-        logger.warn(`Warning: Could not parse config.json: ${(error as Error).message}`);
+        this.logger.warn({ msg: `Warning: Could not parse config.json: ${(error as Error).message}`, op: 'heartbeat.config', err: error });
       }
     }
 
@@ -567,7 +574,11 @@ Please analyze this work item in the context of the codebase:
 
         for (const item of allItems) {
           if (result.sessionsCreated >= HeartbeatService.MAX_SESSIONS_PER_HEARTBEAT) {
-            logger.log(`Heartbeat session limit reached (${HeartbeatService.MAX_SESSIONS_PER_HEARTBEAT}), deferring ${allItems.length - allItems.indexOf(item)} remaining items to next run`);
+            this.logger.log({
+              msg: `Heartbeat session limit reached (${HeartbeatService.MAX_SESSIONS_PER_HEARTBEAT}), deferring ${allItems.length - allItems.indexOf(item)} remaining items to next run`,
+              op: 'heartbeat.run',
+              context: { limit: HeartbeatService.MAX_SESSIONS_PER_HEARTBEAT, deferred: allItems.length - allItems.indexOf(item) },
+            });
             break;
           }
           try {

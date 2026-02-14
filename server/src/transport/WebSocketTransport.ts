@@ -1,7 +1,8 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
-import { validateApiKey, hasApiKey, WorkingDirValidator, logger } from '../provider/index.js';
+import { validateApiKey, hasApiKey, WorkingDirValidator, logger as defaultLogger } from '../provider/index.js';
+import type { Logger } from '../provider/index.js';
 import { SessionStore, SessionExecutor } from '../sessions/index.js';
 
 /**
@@ -76,6 +77,8 @@ export interface WebSocketTransportOptions {
   pingInterval?: number;
   /** Working directory validator (optional, no validation if not set) */
   validator?: WorkingDirValidator;
+  /** Logger instance */
+  logger?: Logger;
   /** Message handler callback */
   onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
   /** Connection handler callback */
@@ -105,6 +108,7 @@ export class WebSocketTransport {
   private clients: Set<AuthenticatedWebSocket> = new Set();
   private sessionStore: SessionStore = new SessionStore();
   private validator?: WorkingDirValidator;
+  private logger: Logger;
 
   // Event handlers
   private onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
@@ -118,6 +122,7 @@ export class WebSocketTransport {
     this.path = options.path ?? '/ws';
     this.pingInterval = options.pingInterval ?? 30000;
     this.validator = options.validator;
+    this.logger = options.logger ?? defaultLogger;
     this.onMessage = options.onMessage;
     this.onConnection = options.onConnection;
     this.onDisconnection = options.onDisconnection;
@@ -146,14 +151,14 @@ export class WebSocketTransport {
 
     this.wss.on('connection', this._handleConnection.bind(this));
     this.wss.on('error', (error) => {
-      logger.error('[WebSocket] Server error:', error);
+      this.logger.error({ msg: `Server error: ${(error as Error).message}`, op: 'ws.error', err: error });
     });
 
     // Start ping interval
     this._startPingInterval();
 
     this.isRunning = true;
-    logger.log(`[WebSocket] Server started on path ${this.path}`);
+    this.logger.log({ msg: `Server started on path ${this.path}`, op: 'ws.connect', context: { path: this.path } });
   }
 
   /**
@@ -264,7 +269,7 @@ export class WebSocketTransport {
     authenticatedWs.clientId = this._generateClientId();
 
     this.clients.add(authenticatedWs);
-    logger.log(`[WebSocket] Client connected: ${authenticatedWs.clientId}`);
+    this.logger.log({ msg: `Client connected: ${authenticatedWs.clientId}`, op: 'ws.connect', context: { clientId: authenticatedWs.clientId } });
 
     // Send auth success
     this.send(authenticatedWs, {
@@ -283,7 +288,7 @@ export class WebSocketTransport {
     // Handle close
     ws.on('close', () => {
       this.clients.delete(authenticatedWs);
-      logger.log(`[WebSocket] Client disconnected: ${authenticatedWs.clientId}`);
+      this.logger.log({ msg: `Client disconnected: ${authenticatedWs.clientId}`, op: 'ws.disconnect', context: { clientId: authenticatedWs.clientId } });
 
       // Cancel all sessions for this client
       const sessions = this.sessionStore.removeByClient(authenticatedWs.clientId);
@@ -296,7 +301,7 @@ export class WebSocketTransport {
 
     // Handle errors
     ws.on('error', (error) => {
-      logger.error(`[WebSocket] Client error (${authenticatedWs.clientId}):`, error);
+      this.logger.error({ msg: `Client error (${authenticatedWs.clientId}): ${(error as Error).message}`, op: 'ws.error', err: error, context: { clientId: authenticatedWs.clientId } });
     });
 
     // Handle pong responses
@@ -337,7 +342,7 @@ export class WebSocketTransport {
       // Delegate other messages to handler
       this.onMessage?.(ws, message);
     } catch (error) {
-      logger.error('[WebSocket] Failed to parse message:', error);
+      this.logger.error({ msg: `Failed to parse message: ${(error as Error).message}`, op: 'ws.error', err: error });
       this.send(ws, {
         type: 'error',
         payload: { message: 'Invalid message format' }
@@ -349,7 +354,11 @@ export class WebSocketTransport {
    * Handle session.start message
    */
   private _handleSessionStart(ws: AuthenticatedWebSocket, payload: SessionStartPayload): void {
-    logger.log(`[WebSocket] session.start received: sessionId=${payload.sessionId}, prompt="${payload.prompt.substring(0, 50)}..."`);
+    this.logger.log({
+      msg: `session.start received: sessionId=${payload.sessionId}`,
+      op: 'ws.message',
+      context: { sessionId: payload.sessionId, promptPreview: payload.prompt.substring(0, 50) },
+    });
 
     // Validate working directory
     const workingDir = this._validateWorkingDir(ws, payload.sessionId, payload.workingDir);
@@ -362,14 +371,18 @@ export class WebSocketTransport {
       prompt: payload.prompt,
       workingDir
     });
-    logger.log(`[WebSocket] session.start: executor started`);
+    this.logger.log({ msg: `session.start: executor started`, op: 'ws.message', context: { sessionId: payload.sessionId } });
   }
 
   /**
    * Handle session.resume message
    */
   private _handleSessionResume(ws: AuthenticatedWebSocket, payload: SessionResumePayload): void {
-    logger.log(`[WebSocket] session.resume received: sessionId=${payload.sessionId}, resumeSessionId=${payload.resumeSessionId}`);
+    this.logger.log({
+      msg: `session.resume received: sessionId=${payload.sessionId}, resumeSessionId=${payload.resumeSessionId}`,
+      op: 'ws.message',
+      context: { sessionId: payload.sessionId, resumeSessionId: payload.resumeSessionId },
+    });
 
     // Validate working directory
     const workingDir = this._validateWorkingDir(ws, payload.sessionId, payload.workingDir);
@@ -383,7 +396,7 @@ export class WebSocketTransport {
       workingDir,
       resumeSessionId: payload.resumeSessionId
     });
-    logger.log(`[WebSocket] session.resume: executor started`);
+    this.logger.log({ msg: `session.resume: executor started`, op: 'ws.message', context: { sessionId: payload.sessionId } });
   }
 
   /**
@@ -407,7 +420,7 @@ export class WebSocketTransport {
 
     const result = this.validator.validate(workingDir);
     if (!result.allowed) {
-      logger.log(`[WebSocket] Working directory rejected: ${workingDir} - ${result.error}`);
+      this.logger.log({ msg: `Working directory rejected: ${workingDir} - ${result.error}`, op: 'ws.message', context: { workingDir, error: result.error } });
       this.send(ws, {
         type: 'session.error',
         payload: { sessionId, error: result.error } as SessionErrorPayload
@@ -422,10 +435,10 @@ export class WebSocketTransport {
    * Wire up session executor events to WebSocket messages
    */
   private _wireSessionEvents(ws: AuthenticatedWebSocket, executor: SessionExecutor, sessionId: string): void {
-    logger.log(`[WebSocket] Wiring session events for: ${sessionId}`);
+    this.logger.verbose({ msg: `Wiring session events for: ${sessionId}`, op: 'ws.message', context: { sessionId } });
 
     executor.on('message', (message: unknown) => {
-      logger.log(`[WebSocket] session.output for ${sessionId}:`, JSON.stringify(message).substring(0, 100));
+      this.logger.verbose({ msg: `session.output for ${sessionId}`, op: 'ws.message', context: { sessionId } });
       this.send(ws, {
         type: 'session.output',
         payload: { sessionId, message } as SessionOutputPayload
@@ -433,7 +446,7 @@ export class WebSocketTransport {
     });
 
     executor.on('error', (error: string) => {
-      logger.log(`[WebSocket] session.error for ${sessionId}: ${error}`);
+      this.logger.log({ msg: `session.error for ${sessionId}: ${error}`, op: 'ws.message', context: { sessionId, error } });
       this.send(ws, {
         type: 'session.error',
         payload: { sessionId, error } as SessionErrorPayload
@@ -441,7 +454,7 @@ export class WebSocketTransport {
     });
 
     executor.on('complete', (exitCode: number) => {
-      logger.log(`[WebSocket] session.complete for ${sessionId}: exitCode=${exitCode}`);
+      this.logger.log({ msg: `session.complete for ${sessionId}: exitCode=${exitCode}`, op: 'ws.message', context: { sessionId, exitCode } });
       this.send(ws, {
         type: 'session.complete',
         payload: { sessionId, exitCode } as SessionCompletePayload

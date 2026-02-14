@@ -3,7 +3,8 @@ import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import type { SessionRepository } from '../database/index.js';
-import { logger } from '../provider/index.js';
+import { logger as defaultLogger } from '../provider/index.js';
+import type { Logger } from '../provider/index.js';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
@@ -92,7 +93,7 @@ export function detectAutomaticSession(session: ParsedSession): boolean {
 /**
  * Load sessions-index.json from a project directory and return a map of sessionId → title
  */
-function loadSessionsIndex(projectPath: string): Map<string, string> {
+function loadSessionsIndex(projectPath: string, logger: Logger = defaultLogger): Map<string, string> {
   const indexPath = join(projectPath, 'sessions-index.json');
   const titleMap = new Map<string, string>();
 
@@ -114,7 +115,7 @@ function loadSessionsIndex(projectPath: string): Map<string, string> {
     }
   } catch (e) {
     const error = e as Error;
-    logger.error(`Error reading sessions-index.json from ${projectPath}:`, error.message);
+    logger.error({ msg: `Error reading sessions-index.json from ${projectPath}: ${error.message}`, op: 'indexer.error', err: error });
   }
 
   return titleMap;
@@ -230,7 +231,8 @@ export async function indexSessionFile(
   filePath: string,
   forceReindex: boolean = false,
   titleMap: Map<string, string> = new Map(),
-  repo: SessionRepository
+  repo: SessionRepository,
+  logger: Logger = defaultLogger
 ): Promise<IndexResult | null> {
   const fileName = basename(filePath, '.jsonl');
 
@@ -250,7 +252,7 @@ export async function indexSessionFile(
     }
   }
 
-  logger.log(`Indexing: ${filePath}`);
+  logger.log({ msg: `Indexing: ${filePath}`, op: 'indexer.file', context: { filePath } });
 
   const parsedSession = await parseSessionFile(filePath);
   const { sessionId, project, startedAt, lastActivityAt, preview, messages } = parsedSession;
@@ -289,12 +291,13 @@ export async function indexSessionFile(
  */
 export async function indexAllSessions(
   forceReindex: boolean = false,
-  repo: SessionRepository
+  repo: SessionRepository,
+  logger: Logger = defaultLogger
 ): Promise<IndexAllResult> {
-  logger.log('Starting indexing of Claude sessions...');
+  logger.log({ msg: 'Starting indexing of Claude sessions...', op: 'indexer.run' });
 
   if (!existsSync(PROJECTS_DIR)) {
-    logger.log('Projects directory not found:', PROJECTS_DIR);
+    logger.log({ msg: `Projects directory not found: ${PROJECTS_DIR}`, op: 'indexer.run', context: { dir: PROJECTS_DIR } });
     return { indexed: 0, skipped: 0 };
   }
 
@@ -311,7 +314,7 @@ export async function indexAllSessions(
     if (!stat.isDirectory()) continue;
 
     // Load sessions-index.json for this project to get titles
-    const titleMap = loadSessionsIndex(projectPath);
+    const titleMap = loadSessionsIndex(projectPath, logger);
 
     // Find all JSONL files in this project
     const files = readdirSync(projectPath);
@@ -321,7 +324,7 @@ export async function indexAllSessions(
 
       const filePath = join(projectPath, file);
       try {
-        const result = await indexSessionFile(filePath, forceReindex, titleMap, repo);
+        const result = await indexSessionFile(filePath, forceReindex, titleMap, repo, logger);
 
         if (result) {
           indexed++;
@@ -330,13 +333,13 @@ export async function indexAllSessions(
         }
       } catch (e) {
         const error = e as Error;
-        logger.error(`Error indexing ${filePath}:`, error.message);
+        logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
         skipped++;
       }
     }
   }
 
-  logger.log(`Indexing complete: ${indexed} sessions indexed, ${skipped} skipped`);
+  logger.log({ msg: `Indexing complete: ${indexed} sessions indexed, ${skipped} skipped`, op: 'indexer.run', context: { indexed, skipped } });
   return { indexed, skipped };
 }
 

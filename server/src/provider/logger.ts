@@ -1,11 +1,21 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
-import { format } from 'util';
 
 type LogLevel = 'LOG' | 'ERROR' | 'WARN' | 'VERBOSE';
 
 const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB
+
+export type ErrorType = 'db_error' | 'validation_error' | 'not_found' | 'service_unavailable' | 'internal_error';
+
+export interface LogEntry {
+  op?: string;
+  msg: string;
+  err?: unknown;
+  errType?: ErrorType;
+  context?: Record<string, unknown>;
+  durationMs?: number;
+}
 
 export interface LoggerOptions {
   verbose?: boolean;
@@ -13,19 +23,27 @@ export interface LoggerOptions {
 }
 
 export interface Logger {
-  log(...args: unknown[]): void;
-  error(...args: unknown[]): void;
-  warn(...args: unknown[]): void;
-  verbose(...args: unknown[]): void;
+  log(entry: LogEntry): void;
+  error(entry: LogEntry): void;
+  warn(entry: LogEntry): void;
+  verbose(entry: LogEntry): void;
 }
 
 /**
- * Create a logger that dual-writes to console and a log file.
- * Exported as a factory for testing (pass a custom logPath).
+ * Serialize an error value to a string for structured logging.
+ */
+function serializeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+/**
+ * Create a logger that writes structured JSONL to a log file.
+ * Console output is off by default (file-only); opt-in via `{ console: true }`.
  */
 export function createLogger(logPath: string, options: LoggerOptions = {}): Logger {
   const verbose = options.verbose ?? (process.env.LOG_VERBOSE === '1');
-  const useConsole = options.console ?? true;
+  const useConsole = options.console ?? false;
 
   // Ensure parent directory exists
   const dir = dirname(logPath);
@@ -49,33 +67,51 @@ export function createLogger(logPath: string, options: LoggerOptions = {}): Logg
     // Best effort — don't crash
   }
 
-  function writeToFile(level: LogLevel, args: unknown[]): void {
+  function writeToFile(level: LogLevel, entry: LogEntry): void {
     try {
-      const timestamp = new Date().toISOString();
-      const message = format(...args);
-      appendFileSync(logPath, `${timestamp} [${level}] ${message}\n`);
+      const record: Record<string, unknown> = {
+        ts: new Date().toISOString(),
+        level,
+        msg: entry.msg,
+      };
+      if (entry.op !== undefined) record.op = entry.op;
+      if (entry.err !== undefined) record.err = serializeError(entry.err);
+      if (entry.errType !== undefined) record.errType = entry.errType;
+      if (entry.context !== undefined) record.context = entry.context;
+      if (entry.durationMs !== undefined) record.durationMs = entry.durationMs;
+      appendFileSync(logPath, JSON.stringify(record) + '\n');
     } catch {
       // Never crash the server due to log file issues
     }
   }
 
+  function writeConsole(level: LogLevel, entry: LogEntry): void {
+    const parts = [entry.msg];
+    if (entry.op) parts.unshift(`[${entry.op}]`);
+    const text = parts.join(' ');
+
+    if (level === 'ERROR') console.error(text);
+    else if (level === 'WARN') console.warn(text);
+    else console.log(text);
+  }
+
   return {
-    log(...args: unknown[]): void {
-      if (useConsole) console.log(...args);
-      writeToFile('LOG', args);
+    log(entry: LogEntry): void {
+      if (useConsole) writeConsole('LOG', entry);
+      writeToFile('LOG', entry);
     },
-    error(...args: unknown[]): void {
-      if (useConsole) console.error(...args);
-      writeToFile('ERROR', args);
+    error(entry: LogEntry): void {
+      if (useConsole) writeConsole('ERROR', entry);
+      writeToFile('ERROR', entry);
     },
-    warn(...args: unknown[]): void {
-      if (useConsole) console.warn(...args);
-      writeToFile('WARN', args);
+    warn(entry: LogEntry): void {
+      if (useConsole) writeConsole('WARN', entry);
+      writeToFile('WARN', entry);
     },
-    verbose(...args: unknown[]): void {
+    verbose(entry: LogEntry): void {
       if (!verbose) return;
-      if (useConsole) console.log(...args);
-      writeToFile('VERBOSE', args);
+      if (useConsole) writeConsole('VERBOSE', entry);
+      writeToFile('VERBOSE', entry);
     }
   };
 }

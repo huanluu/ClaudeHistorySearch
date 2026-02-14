@@ -1,7 +1,8 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { indexSessionFile } from './indexer.js';
 import type { SessionRepository } from '../database/index.js';
-import { logger } from '../provider/index.js';
+import { logger as defaultLogger } from '../provider/index.js';
+import type { Logger } from '../provider/index.js';
 
 /**
  * FileWatcher monitors the Claude projects directory for new or changed JSONL
@@ -12,11 +13,13 @@ import { logger } from '../provider/index.js';
 export class FileWatcher {
   private projectsDir: string;
   private repo: SessionRepository;
+  private logger: Logger;
   private watcher: FSWatcher | null = null;
 
-  constructor(projectsDir: string, repo: SessionRepository) {
+  constructor(projectsDir: string, repo: SessionRepository, logger: Logger = defaultLogger) {
     this.projectsDir = projectsDir;
     this.repo = repo;
+    this.logger = logger;
   }
 
   /**
@@ -38,16 +41,16 @@ export class FileWatcher {
     });
 
     this.watcher.on('change', async (path: string) => {
-      logger.log(`File changed: ${path}`);
-      await indexSessionFile(path, true, new Map(), this.repo);
+      this.logger.log({ msg: `File changed: ${path}`, op: 'filewatcher.change', context: { path } });
+      await indexSessionFile(path, true, new Map(), this.repo, this.logger);
     });
 
     this.watcher.on('add', async (path: string) => {
-      logger.log(`New file: ${path}`);
-      await indexSessionFile(path, false, new Map(), this.repo);
+      this.logger.log({ msg: `New file: ${path}`, op: 'filewatcher.add', context: { path } });
+      await indexSessionFile(path, false, new Map(), this.repo, this.logger);
     });
 
-    logger.log('Watching for file changes...\n');
+    this.logger.log({ msg: 'Watching for file changes...', op: 'filewatcher.start' });
   }
 
   /**

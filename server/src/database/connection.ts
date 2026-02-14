@@ -80,7 +80,7 @@ db.exec(`
 // Migration: add last_activity_at column if it doesn't exist (for existing databases)
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN last_activity_at INTEGER`);
-  logger.log('Added last_activity_at column to sessions table');
+  logger.log({ msg: 'Added last_activity_at column to sessions table', op: 'db.migrate' });
 } catch {
   // Column already exists, ignore
 }
@@ -91,7 +91,7 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_
 // Migration: add title column if it doesn't exist (for existing databases)
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT`);
-  logger.log('Added title column to sessions table');
+  logger.log({ msg: 'Added title column to sessions table', op: 'db.migrate' });
 } catch {
   // Column already exists, ignore
 }
@@ -99,7 +99,7 @@ try {
 // Migration: add is_automatic column for heartbeat sessions
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN is_automatic INTEGER DEFAULT 0`);
-  logger.log('Added is_automatic column to sessions table');
+  logger.log({ msg: 'Added is_automatic column to sessions table', op: 'db.migrate' });
 } catch {
   // Column already exists, ignore
 }
@@ -107,7 +107,7 @@ try {
 // Migration: add is_unread column for heartbeat sessions
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN is_unread INTEGER DEFAULT 0`);
-  logger.log('Added is_unread column to sessions table');
+  logger.log({ msg: 'Added is_unread column to sessions table', op: 'db.migrate' });
 } catch {
   // Column already exists, ignore
 }
@@ -115,7 +115,7 @@ try {
 // Migration: add is_hidden column for soft-delete
 try {
   db.exec(`ALTER TABLE sessions ADD COLUMN is_hidden INTEGER DEFAULT 0`);
-  logger.log('Added is_hidden column to sessions table');
+  logger.log({ msg: 'Added is_hidden column to sessions table', op: 'db.migrate' });
 } catch {
   // Column already exists, ignore
 }
@@ -136,7 +136,7 @@ const ftsSchema = db.prepare(
 ).get() as { sql: string } | undefined;
 
 if (ftsSchema?.sql?.includes('porter')) {
-  logger.log('Migrating FTS table: removing porter stemmer (rebuilds search index)');
+  logger.log({ msg: 'Migrating FTS table: removing porter stemmer (rebuilds search index)', op: 'db.migrate' });
   db.exec(`DROP TABLE messages_fts`);
   // Force reindex by clearing last_indexed timestamps
   db.exec(`UPDATE sessions SET last_indexed = NULL`);
@@ -153,4 +153,3 @@ db.exec(`
     tokenize='unicode61'
   );
 `);
-

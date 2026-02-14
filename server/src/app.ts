@@ -49,8 +49,8 @@ export function createApp(config: AppConfig): App {
   const securityConfig = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
   const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
-  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo);
-  const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo);
+  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
+  const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
 
   // --- Transports ---
   const transport = new HttpTransport({ port });
@@ -74,7 +74,7 @@ export function createApp(config: AppConfig): App {
       const updatedSecurity = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
       const updatedDirs = updatedSecurity?.allowedWorkingDirs ?? [];
       workingDirValidator.setAllowedDirs(updatedDirs);
-      logger.log(`Security config updated: ${updatedDirs.length} allowed working director${updatedDirs.length === 1 ? 'y' : 'ies'}`);
+      logger.log({ msg: `Security config updated: ${updatedDirs.length} allowed working director${updatedDirs.length === 1 ? 'y' : 'ies'}`, op: 'server.config', context: { allowedDirs: updatedDirs.length } });
     }
   };
 
@@ -84,6 +84,7 @@ export function createApp(config: AppConfig): App {
     heartbeatService,
     configService,
     onConfigChanged,
+    logger,
   });
   transport.use('/', router);
 
@@ -91,18 +92,18 @@ export function createApp(config: AppConfig): App {
   async function start(): Promise<void> {
     // Security logging
     if (allowedDirs.length === 0) {
-      logger.log('WARNING: No allowed working directories configured. All session.start/resume requests will be denied.');
-      logger.log('Configure allowed directories via the admin UI at /admin');
+      logger.log({ msg: 'WARNING: No allowed working directories configured. All session.start/resume requests will be denied.', op: 'server.start' });
+      logger.log({ msg: 'Configure allowed directories via the admin UI at /admin', op: 'server.start' });
     } else {
-      logger.log(`Security: ${allowedDirs.length} allowed working director${allowedDirs.length === 1 ? 'y' : 'ies'} configured`);
+      logger.log({ msg: `Security: ${allowedDirs.length} allowed working director${allowedDirs.length === 1 ? 'y' : 'ies'} configured`, op: 'server.start', context: { allowedDirs: allowedDirs.length } });
     }
 
     // Start HTTP server (router is fully wired before accepting requests)
     await transport.start();
 
     const boundPort = transport.getPort();
-    logger.log(`Claude History Server running on http://0.0.0.0:${boundPort}`);
-    logger.log(`Database: ${DB_PATH}`);
+    logger.log({ msg: `Claude History Server running on http://0.0.0.0:${boundPort}`, op: 'server.start', context: { port: boundPort } });
+    logger.log({ msg: `Database: ${DB_PATH}`, op: 'server.start', context: { dbPath: DB_PATH } });
 
     // Initialize WebSocket transport (attached to HTTP server)
     const httpServer = transport.getServer();
@@ -112,14 +113,15 @@ export function createApp(config: AppConfig): App {
         path: '/ws',
         pingInterval: 30000,
         validator: workingDirValidator,
+        logger,
         onConnection: (ws: AuthenticatedWebSocket) => {
-          logger.log(`[WebSocket] Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
+          logger.log({ msg: `Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`, op: 'ws.connect', context: { clientId: ws.clientId, total: wsTransport?.getClientCount() } });
         },
         onDisconnection: (ws: AuthenticatedWebSocket) => {
-          logger.log(`[WebSocket] Client disconnected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`);
+          logger.log({ msg: `Client disconnected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`, op: 'ws.disconnect', context: { clientId: ws.clientId, total: wsTransport?.getClientCount() } });
         },
         onMessage: (ws: AuthenticatedWebSocket, message: WSMessage) => {
-          logger.log(`[WebSocket] Message from ${ws.clientId}:`, message.type);
+          logger.log({ msg: `Message from ${ws.clientId}: ${message.type}`, op: 'ws.message', context: { clientId: ws.clientId, type: message.type } });
           if (message.type === 'message') {
             wsTransport?.send(ws, {
               type: 'message',
@@ -130,25 +132,25 @@ export function createApp(config: AppConfig): App {
         }
       });
       wsTransport.start();
-      logger.log(`WebSocket server available at ws://0.0.0.0:${boundPort}/ws`);
+      logger.log({ msg: `WebSocket server available at ws://0.0.0.0:${boundPort}/ws`, op: 'server.start', context: { port: boundPort } });
     }
 
     // API key status
     if (hasApiKey()) {
-      logger.log('Authentication: API key required');
+      logger.log({ msg: 'Authentication: API key required', op: 'server.start' });
     } else {
-      logger.log('Authentication: No API key configured (run "npm run key:generate" to secure the server)');
+      logger.log({ msg: 'Authentication: No API key configured (run "npm run key:generate" to secure the server)', op: 'server.start' });
     }
 
     // Initial indexing
-    logger.log('\nStarting initial index...');
-    const result = await indexAllSessions(false, sessionRepo);
-    logger.log(`Initial index complete: ${result.indexed} sessions indexed\n`);
+    logger.log({ msg: 'Starting initial index...', op: 'server.start' });
+    const result = await indexAllSessions(false, sessionRepo, logger);
+    logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
 
     // Bonjour advertisement (auto-disabled if stealth mode is on)
     const stealthMode = isStealthModeEnabled();
     if (stealthMode) {
-      logger.log('Bonjour advertisement disabled (firewall stealth mode is on)');
+      logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
     } else {
       bonjour = new Bonjour.default();
       service = bonjour.publish({
@@ -157,7 +159,7 @@ export function createApp(config: AppConfig): App {
         port: boundPort,
         txt: { version: '1.0.0' }
       });
-      logger.log(`Bonjour service advertised as _${serviceType}._tcp on port ${boundPort}`);
+      logger.log({ msg: `Bonjour service advertised as _${serviceType}._tcp on port ${boundPort}`, op: 'server.start', context: { serviceType, port: boundPort } });
     }
 
     // File watcher
@@ -166,28 +168,28 @@ export function createApp(config: AppConfig): App {
     // Periodic reindex
     const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
     reindexTimer = setInterval(async () => {
-      logger.log('Running periodic reindex...');
-      const reindexResult = await indexAllSessions(false, sessionRepo);
+      logger.log({ msg: 'Running periodic reindex...', op: 'server.reindex' });
+      const reindexResult = await indexAllSessions(false, sessionRepo, logger);
       if (reindexResult.indexed > 0) {
-        logger.log(`Periodic reindex: ${reindexResult.indexed} new sessions indexed`);
+        logger.log({ msg: `Periodic reindex: ${reindexResult.indexed} new sessions indexed`, op: 'server.reindex', context: { indexed: reindexResult.indexed } });
       } else {
-        logger.log('Periodic reindex: no new sessions');
+        logger.log({ msg: 'Periodic reindex: no new sessions', op: 'server.reindex' });
       }
     }, REINDEX_INTERVAL);
-    logger.log(`Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes\n`);
+    logger.log({ msg: `Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes`, op: 'server.start', context: { intervalMinutes: REINDEX_INTERVAL / 1000 / 60 } });
 
     // Heartbeat scheduler
     const heartbeatConfig = heartbeatService.getConfig();
     if (heartbeatConfig.enabled) {
       heartbeatService.startScheduler();
-      logger.log(`Heartbeat working directory: ${heartbeatConfig.workingDirectory}\n`);
+      logger.log({ msg: `Heartbeat working directory: ${heartbeatConfig.workingDirectory}`, op: 'server.start', context: { workingDirectory: heartbeatConfig.workingDirectory } });
     } else {
-      logger.log('Heartbeat: disabled\n');
+      logger.log({ msg: 'Heartbeat: disabled', op: 'server.start' });
     }
   }
 
   async function stop(): Promise<void> {
-    logger.log('\nShutting down...');
+    logger.log({ msg: 'Shutting down...', op: 'server.stop' });
     if (reindexTimer) {
       clearInterval(reindexTimer);
       reindexTimer = null;
@@ -198,7 +200,7 @@ export function createApp(config: AppConfig): App {
     await fileWatcher.stop();
     await wsTransport?.stop();
     await transport.stop();
-    logger.log('Server stopped');
+    logger.log({ msg: 'Server stopped', op: 'server.stop' });
   }
 
   return {

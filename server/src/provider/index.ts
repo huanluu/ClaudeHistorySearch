@@ -3,4 +3,4 @@ export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './auth/
 export { WorkingDirValidator } from './security/index.js';
 export type { ValidationResult } from './security/index.js';
 export { createLogger, logger } from './logger.js';
-export type { Logger, LoggerOptions } from './logger.js';
+export type { Logger, LoggerOptions, LogEntry, ErrorType } from './logger.js';

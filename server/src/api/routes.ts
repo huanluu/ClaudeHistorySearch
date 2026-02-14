@@ -8,7 +8,8 @@ import {
 } from '../database/index.js';
 import { indexAllSessions } from '../services/index.js';
 import type { HeartbeatService, ConfigService } from '../services/index.js';
-import { logger } from '../provider/index.js';
+import { logger as defaultLogger } from '../provider/index.js';
+import type { Logger } from '../provider/index.js';
 
 // Read admin.html at module load
 const __filename = fileURLToPath(import.meta.url);
@@ -20,6 +21,7 @@ export interface RouteDeps {
   heartbeatService?: HeartbeatService;
   configService?: ConfigService;
   onConfigChanged?: (section: string) => void;
+  logger?: Logger;
 }
 
 // API Response types
@@ -63,6 +65,7 @@ interface SearchResultResponse {
 
 export function createRouter(deps: RouteDeps): Router {
   const { repo, heartbeatService, configService, onConfigChanged } = deps;
+  const logger = deps.logger ?? defaultLogger;
   const router = Router();
 
   /**
@@ -114,7 +117,7 @@ export function createRouter(deps: RouteDeps): Router {
         } as PaginationResponse
       });
     } catch (error) {
-      logger.error('Error fetching sessions:', error);
+      logger.error({ msg: 'Error fetching sessions', op: 'sessions.list', err: error, errType: 'db_error' });
       res.status(500).json({ error: 'Failed to fetch sessions' });
     }
   });
@@ -154,7 +157,7 @@ export function createRouter(deps: RouteDeps): Router {
         }))
       });
     } catch (error) {
-      logger.error('Error fetching session:', error);
+      logger.error({ msg: 'Error fetching session', op: 'sessions.get', err: error, errType: 'db_error' });
       res.status(500).json({ error: 'Failed to fetch session' });
     }
   });
@@ -219,6 +222,8 @@ export function createRouter(deps: RouteDeps): Router {
       // Apply pagination to deduplicated results
       const paginatedResults = uniqueResults.slice(offset, offset + limit);
 
+      logger.log({ msg: `Search: "${query}" → ${uniqueResults.length} sessions`, op: 'search.query', context: { query, results: uniqueResults.length, sort } });
+
       res.json({
         results: paginatedResults.map((r): SearchResultResponse => ({
           sessionId: r.session_id,
@@ -242,7 +247,7 @@ export function createRouter(deps: RouteDeps): Router {
         sort
       });
     } catch (error) {
-      logger.error('Error searching:', error);
+      logger.error({ msg: 'Error searching', op: 'search.query', err: error, errType: 'db_error' });
       res.status(500).json({ error: 'Search failed' });
     }
   });
@@ -264,7 +269,7 @@ export function createRouter(deps: RouteDeps): Router {
       repo.hideSession(id);
       res.json({ success: true });
     } catch (error) {
-      logger.error('Error deleting session:', error);
+      logger.error({ msg: 'Error deleting session', op: 'sessions.delete', err: error, errType: 'db_error' });
       res.status(500).json({ error: 'Failed to delete session' });
     }
   });
@@ -276,13 +281,13 @@ export function createRouter(deps: RouteDeps): Router {
   router.post('/reindex', async (req: Request, res: Response) => {
     try {
       const force = req.query.force === 'true';
-      const result = await indexAllSessions(force, repo);
+      const result = await indexAllSessions(force, repo, logger);
       res.json({
         success: true,
         ...result
       });
     } catch (error) {
-      logger.error('Error reindexing:', error);
+      logger.error({ msg: 'Error reindexing', op: 'server.reindex', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Reindex failed' });
     }
   });
@@ -307,7 +312,7 @@ export function createRouter(deps: RouteDeps): Router {
 
       res.json({ success: true });
     } catch (error) {
-      logger.error('Error marking session as read:', error);
+      logger.error({ msg: 'Error marking session as read', op: 'sessions.read', err: error, errType: 'db_error' });
       res.status(500).json({ error: 'Failed to mark session as read' });
     }
   });
@@ -326,7 +331,7 @@ export function createRouter(deps: RouteDeps): Router {
       const result = await heartbeatService.runHeartbeat(true);
       res.json(result);
     } catch (error) {
-      logger.error('Error running heartbeat:', error);
+      logger.error({ msg: 'Error running heartbeat', op: 'heartbeat.run', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Heartbeat failed' });
     }
   });
@@ -351,7 +356,7 @@ export function createRouter(deps: RouteDeps): Router {
         }))
       });
     } catch (error) {
-      logger.error('Error getting heartbeat status:', error);
+      logger.error({ msg: 'Error getting heartbeat status', op: 'heartbeat.run', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Failed to get heartbeat status' });
     }
   });
@@ -376,7 +381,7 @@ export function createRouter(deps: RouteDeps): Router {
       }
       res.json(configService.getAllEditableSections());
     } catch (error) {
-      logger.error('Error reading config:', error);
+      logger.error({ msg: 'Error reading config', op: 'server.config', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Failed to read config' });
     }
   });
@@ -399,7 +404,7 @@ export function createRouter(deps: RouteDeps): Router {
       }
       res.json(section);
     } catch (error) {
-      logger.error('Error reading config section:', error);
+      logger.error({ msg: 'Error reading config section', op: 'server.config', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Failed to read config section' });
     }
   });
@@ -429,7 +434,7 @@ export function createRouter(deps: RouteDeps): Router {
 
       res.json({ success: true });
     } catch (error) {
-      logger.error('Error updating config section:', error);
+      logger.error({ msg: 'Error updating config section', op: 'server.config', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Failed to update config section' });
     }
   });
