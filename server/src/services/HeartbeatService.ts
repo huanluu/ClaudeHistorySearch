@@ -1,10 +1,9 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { execSync, spawn, ChildProcess } from 'child_process';
+import { execSync, spawn, type ChildProcess } from 'child_process';
 import { logger } from '../logger.js';
-import type { HeartbeatRepository } from '../database/interfaces.js';
-import type { HeartbeatStateRecord } from '../database/connection.js';
+import type { HeartbeatRepository, HeartbeatStateRecord } from '../database/index.js';
 
 /**
  * Configuration for the heartbeat service

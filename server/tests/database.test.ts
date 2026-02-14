@@ -1,4 +1,4 @@
-import Database, { Statement } from 'better-sqlite3';
+import Database, { type Statement } from 'better-sqlite3';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

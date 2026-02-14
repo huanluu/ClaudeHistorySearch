@@ -7,9 +7,8 @@ import {
   type SortOption,
 } from './database/index.js';
 import { indexAllSessions } from './indexer.js';
-import type { HeartbeatService } from './services/HeartbeatService.js';
+import type { HeartbeatService, ConfigService } from './services/index.js';
 import { logger } from './logger.js';
-import type { ConfigService } from './services/ConfigService.js';
 
 // Read admin.html at module load
 const __filename = fileURLToPath(import.meta.url);

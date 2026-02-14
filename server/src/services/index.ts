@@ -1,12 +1,11 @@
-export {
-  HeartbeatService,
+export { HeartbeatService, getConfigDir } from './HeartbeatService.js';
+export type {
   HeartbeatConfig,
   HeartbeatTask,
   HeartbeatResult,
   WorkItem,
   ChangeSet,
   CommandExecutor,
-  getConfigDir
 } from './HeartbeatService.js';
 
 export { ConfigService } from './ConfigService.js';

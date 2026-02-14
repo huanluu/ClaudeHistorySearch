@@ -3,12 +3,9 @@ import { execSync } from 'child_process';
 import { indexAllSessions, PROJECTS_DIR } from './indexer.js';
 import { createRouter } from './routes.js';
 import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
-import { authMiddleware } from './auth/middleware.js';
-import { hasApiKey } from './auth/keyManager.js';
+import { authMiddleware, hasApiKey } from './auth/index.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
-import { HeartbeatService } from './services/HeartbeatService.js';
-import { ConfigService } from './services/ConfigService.js';
-import { FileWatcher } from './services/FileWatcher.js';
+import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher } from './services/index.js';
 import { WorkingDirValidator } from './security/WorkingDirValidator.js';
 import { logger } from './logger.js';
 
@@ -72,7 +69,7 @@ export function createApp(config: AppConfig): App {
     if (section === 'heartbeat') {
       const updatedSection = configService.getSection('heartbeat');
       if (updatedSection) {
-        heartbeatService.updateConfig(updatedSection as Partial<import('./services/HeartbeatService.js').HeartbeatConfig>);
+        heartbeatService.updateConfig(updatedSection as Partial<HeartbeatConfig>);
       }
       heartbeatService.startScheduler();
     }

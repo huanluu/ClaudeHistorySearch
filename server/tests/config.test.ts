@@ -1,5 +1,5 @@
 import request from 'supertest';
-import express, { Application, Request, Response, NextFunction } from 'express';
+import express, { type Application, type Request, type Response, type NextFunction } from 'express';
 import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

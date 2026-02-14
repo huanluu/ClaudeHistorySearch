@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
-import { validateApiKey, hasApiKey } from '../auth/keyManager.js';
+import { validateApiKey, hasApiKey } from '../auth/index.js';
 import { SessionStore, SessionExecutor } from '../sessions/index.js';
 import { logger } from '../logger.js';
 import { WorkingDirValidator } from '../security/WorkingDirValidator.js';

@@ -6,10 +6,10 @@ import { EventEmitter } from 'events';
 import { jest } from '@jest/globals';
 import {
   HeartbeatService,
-  HeartbeatConfig,
-  HeartbeatTask,
-  WorkItem,
-  CommandExecutor
+  type HeartbeatConfig,
+  type HeartbeatTask,
+  type WorkItem,
+  type CommandExecutor
 } from '../src/services/HeartbeatService.js';
 import type { HeartbeatRepository } from '../src/database/interfaces.js';
 import type { HeartbeatStateRecord } from '../src/database/connection.js';

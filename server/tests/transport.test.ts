@@ -1,6 +1,6 @@
 import { HttpTransport } from '../src/transport/index.js';
 import http from 'http';
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 
 describe('HttpTransport', () => {
   let transport: HttpTransport;
