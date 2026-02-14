@@ -11,6 +11,8 @@ interface FieldSchema {
   max?: number;
   /** For array type: the expected type of each item */
   itemType?: 'string' | 'number' | 'boolean';
+  /** For string type: allowed values */
+  enum?: string[];
 }
 
 /**
@@ -37,6 +39,11 @@ const EDITABLE_SECTIONS: Record<string, SectionDefinition> = {
   security: {
     fields: {
       allowedWorkingDirs: { type: 'array', itemType: 'string' },
+    },
+  },
+  logging: {
+    fields: {
+      requestLogLevel: { type: 'string', enum: ['off', 'errors-only', 'all'] },
     },
   },
 };
@@ -148,6 +155,13 @@ export class ConfigService {
       // Type check
       if (typeof value !== fieldDef.type) {
         return `Field "${key}" must be of type ${fieldDef.type}, got ${typeof value}`;
+      }
+
+      // Enum check for strings
+      if (fieldDef.type === 'string' && fieldDef.enum && typeof value === 'string') {
+        if (!fieldDef.enum.includes(value)) {
+          return `Field "${key}" must be one of: ${fieldDef.enum.join(', ')}`;
+        }
       }
 
       // Range checks for numbers

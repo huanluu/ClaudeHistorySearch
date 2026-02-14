@@ -1,7 +1,7 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
 import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
-import { authMiddleware, hasApiKey, WorkingDirValidator, logger } from './provider/index.js';
+import { authMiddleware, hasApiKey, WorkingDirValidator, logger, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
 import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, indexAllSessions, PROJECTS_DIR } from './services/index.js';
 import { createRouter } from './api/index.js';
@@ -52,8 +52,16 @@ export function createApp(config: AppConfig): App {
   const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
   const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
 
+  // --- Request logging ---
+  const loggingConfig = configService.getSection('logging') as { requestLogLevel?: string } | null;
+  const requestLoggerOptions: RequestLoggerOptions = {
+    level: (loggingConfig?.requestLogLevel as RequestLogLevel) ?? 'all',
+    logger,
+  };
+
   // --- Transports ---
   const transport = new HttpTransport({ port });
+  transport.use(createRequestLogger(requestLoggerOptions));
   transport.use(authMiddleware);
 
   let wsTransport: WebSocketTransport | null = null;
@@ -69,6 +77,11 @@ export function createApp(config: AppConfig): App {
         heartbeatService.updateConfig(updatedSection as Partial<HeartbeatConfig>);
       }
       heartbeatService.startScheduler();
+    }
+    if (section === 'logging') {
+      const updatedLogging = configService.getSection('logging') as { requestLogLevel?: string } | null;
+      requestLoggerOptions.level = (updatedLogging?.requestLogLevel as RequestLogLevel) ?? 'all';
+      logger.log({ msg: `Request log level updated: ${requestLoggerOptions.level}`, op: 'server.config' });
     }
     if (section === 'security') {
       const updatedSecurity = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
