@@ -116,6 +116,24 @@
     </div>
   </div>
 
+  <!-- Logging Configuration -->
+  <div class="card" id="logging-card">
+    <h2>Logging</h2>
+    <div class="field">
+      <label for="log-level">Request Log Level</label>
+      <select id="log-level" style="width:100%;padding:0.5rem 0.75rem;border:1px solid #ccc;border-radius:4px;font-size:0.875rem;font-family:inherit;">
+        <option value="all">All requests</option>
+        <option value="errors-only">Errors only (4xx/5xx)</option>
+        <option value="off">Off</option>
+      </select>
+      <div class="hint">Controls HTTP request logging verbosity. Changes take effect immediately.</div>
+    </div>
+    <div class="actions">
+      <button class="btn-primary" id="log-save">Save</button>
+      <span class="status" id="log-status"></span>
+    </div>
+  </div>
+
   <!-- Security Configuration -->
   <div class="card" id="security-card">
     <h2>Security</h2>
@@ -145,12 +163,17 @@
   const secSave = document.getElementById('sec-save');
   const secStatus = document.getElementById('sec-status');
 
+  const logLevel = document.getElementById('log-level');
+  const logSave = document.getElementById('log-save');
+  const logStatus = document.getElementById('log-status');
+
   const heartbeatCard = document.getElementById('heartbeat-card');
+  const loggingCard = document.getElementById('logging-card');
   const securityCard = document.getElementById('security-card');
   let configLoaded = false;
 
   function setCardsEnabled(enabled) {
-    [heartbeatCard, securityCard].forEach(card => {
+    [heartbeatCard, loggingCard, securityCard].forEach(card => {
       const inputs = card.querySelectorAll('input, button, textarea');
       inputs.forEach(el => { if (el.id !== 'apiKey') el.disabled = !enabled; });
       card.style.opacity = enabled ? '1' : '0.5';
@@ -205,6 +228,8 @@
       hbInterval.value = hb.intervalMs ? Math.round(hb.intervalMs / 60000) : 60;
       hbWorkdir.value = hb.workingDirectory || '';
       hbMaxitems.value = hb.maxItems ?? 0;
+      const log = data.logging || {};
+      logLevel.value = log.requestLogLevel || 'all';
       const sec = data.security || {};
       secAllowedDirs.value = (sec.allowedWorkingDirs || []).join('\n');
       configLoaded = true;
@@ -242,6 +267,29 @@
       showStatus(hbStatus, err.message, 'error');
     } finally {
       hbSave.disabled = false;
+    }
+  });
+
+  // Save logging section
+  logSave.addEventListener('click', async () => {
+    logSave.disabled = true;
+    showStatus(logStatus, 'Saving...', 'loading');
+    try {
+      const body = { requestLogLevel: logLevel.value };
+      const res = await fetch('/api/config/logging', {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      showStatus(logStatus, 'Saved', 'success');
+    } catch (err) {
+      showStatus(logStatus, err.message, 'error');
+    } finally {
+      logSave.disabled = false;
     }
   });
 
