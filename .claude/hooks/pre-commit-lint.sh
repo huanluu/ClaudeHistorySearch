@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs ESLint and tests before git commit.
+# Runs ESLint, server tests, and (conditionally) Swift tests before git commit.
 # Used as a Claude Code PreToolUse hook on Bash commands.
 
 INPUT=$(cat)
@@ -10,23 +10,32 @@ if ! echo "$COMMAND" | grep -q 'git commit'; then
   exit 0
 fi
 
-# Run checks from the server directory
-cd "$CLAUDE_PROJECT_DIR/server" || exit 0
+cd "$CLAUDE_PROJECT_DIR" || exit 0
 
 # --- ESLint ---
-LINT_OUTPUT=$(npm run lint 2>&1)
+LINT_OUTPUT=$(cd server && npm run lint 2>&1)
 if [ $? -ne 0 ]; then
   echo "ESLint failed — fix lint errors before committing:" >&2
   echo "$LINT_OUTPUT" >&2
   exit 2
 fi
 
-# --- Tests ---
-TEST_OUTPUT=$(npm test 2>&1)
+# --- Server tests ---
+TEST_OUTPUT=$(cd server && npm test 2>&1)
 if [ $? -ne 0 ]; then
-  echo "Tests failed — fix failing tests before committing:" >&2
+  echo "Server tests failed — fix failing tests before committing:" >&2
   echo "$TEST_OUTPUT" >&2
   exit 2
+fi
+
+# --- Swift tests (only if .swift files are staged) ---
+if git diff --cached --name-only | grep -q '\.swift$'; then
+  SWIFT_OUTPUT=$(cd Shared && swift test 2>&1)
+  if [ $? -ne 0 ]; then
+    echo "Swift tests failed — fix failing tests before committing:" >&2
+    echo "$SWIFT_OUTPUT" >&2
+    exit 2
+  fi
 fi
 
 exit 0
