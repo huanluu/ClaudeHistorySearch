@@ -71,6 +71,19 @@ export class HttpTransport extends Transport {
   }
 
   /**
+   * Get the actual bound port.
+   * When constructed with port 0, the OS assigns an ephemeral port;
+   * this returns that real port after start().
+   */
+  override getPort(): number {
+    const addr = this.server?.address();
+    if (addr && typeof addr === 'object') {
+      return addr.port;
+    }
+    return this.port;
+  }
+
+  /**
    * Get the underlying HTTP server instance
    */
   getServer(): Server | null {

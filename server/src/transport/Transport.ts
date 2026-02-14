@@ -51,6 +51,15 @@ export abstract class Transport {
   abstract stop(): Promise<void>;
 
   /**
+   * Get the port the transport is listening on.
+   * After start(), this returns the actual bound port (useful when
+   * constructed with port 0, which lets the OS assign an ephemeral port).
+   */
+  getPort(): number {
+    return this.port;
+  }
+
+  /**
    * Get the underlying server instance (for attaching WebSocket, etc.)
    */
   getServer(): Server | null {

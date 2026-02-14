@@ -118,6 +118,10 @@ export class HeartbeatService {
   private processedState: Map<string, string> = new Map();
   // Lock to prevent overlapping heartbeat runs
   private isRunning = false;
+  // Scheduler state
+  private schedulerTimer: NodeJS.Timeout | null = null;
+  private schedulerRunCount = 0;
+  private initialDelayTimer: NodeJS.Timeout | null = null;
 
   constructor(configDir?: string, executor?: CommandExecutor, repo?: HeartbeatRepository) {
     this.configDir = configDir || getConfigDir();
@@ -139,6 +143,83 @@ export class HeartbeatService {
    */
   updateConfig(partial: Partial<HeartbeatConfig>): void {
     this.config = { ...this.config, ...partial };
+  }
+
+  /**
+   * Start the heartbeat scheduler. Runs one heartbeat after a short delay,
+   * then repeats at the configured interval. Automatically stops any
+   * previously running scheduler first (safe for config hot-reload).
+   */
+  startScheduler(): void {
+    this.stopScheduler();
+
+    const config = this.getConfig();
+    if (!config.enabled) {
+      logger.log('Heartbeat rescheduled: disabled');
+      return;
+    }
+
+    const runHeartbeatOnce = async (label: string): Promise<void> => {
+      this.schedulerRunCount++;
+      logger.log(`${label} (run ${this.schedulerRunCount}${config.maxRuns > 0 ? `/${config.maxRuns}` : ''})...`);
+      try {
+        const heartbeatResult = await this.runHeartbeat();
+        if (heartbeatResult.sessionsCreated > 0) {
+          logger.log(`Heartbeat: ${heartbeatResult.sessionsCreated} sessions created`);
+        } else {
+          logger.log('Heartbeat: no changes detected');
+        }
+        if (heartbeatResult.errors.length > 0) {
+          logger.error('Heartbeat errors:', heartbeatResult.errors);
+        }
+      } catch (error) {
+        logger.error('Heartbeat error:', error);
+      }
+
+      // Stop scheduling if maxRuns reached
+      if (config.maxRuns > 0 && this.schedulerRunCount >= config.maxRuns) {
+        logger.log(`Heartbeat: maxRuns (${config.maxRuns}) reached, stopping scheduled heartbeats`);
+        if (this.schedulerTimer) {
+          clearInterval(this.schedulerTimer);
+          this.schedulerTimer = null;
+        }
+      }
+    };
+
+    // Run heartbeat periodically
+    this.schedulerTimer = setInterval(() => {
+      if (config.maxRuns > 0 && this.schedulerRunCount >= config.maxRuns) {
+        return; // Guard against race with clearInterval
+      }
+      runHeartbeatOnce('Running heartbeat');
+    }, config.intervalMs);
+
+    // Run once on startup (delayed to let indexer initialize)
+    this.initialDelayTimer = setTimeout(() => {
+      this.initialDelayTimer = null;
+      runHeartbeatOnce('Running initial heartbeat');
+    }, 5000);
+
+    logger.log(`Heartbeat rescheduled every ${config.intervalMs / 1000 / 60} minutes`);
+    if (config.maxRuns > 0) {
+      logger.log(`Heartbeat max runs: ${config.maxRuns}`);
+    }
+  }
+
+  /**
+   * Stop the heartbeat scheduler, clearing both the interval and any
+   * pending initial-delay timer.
+   */
+  stopScheduler(): void {
+    if (this.schedulerTimer) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+    }
+    if (this.initialDelayTimer) {
+      clearTimeout(this.initialDelayTimer);
+      this.initialDelayTimer = null;
+    }
+    this.schedulerRunCount = 0;
   }
 
   /**

@@ -10,3 +10,4 @@ export {
 } from './HeartbeatService.js';
 
 export { ConfigService } from './ConfigService.js';
+export { FileWatcher } from './FileWatcher.js';
