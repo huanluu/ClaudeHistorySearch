@@ -1,9 +1,9 @@
 import Database from 'better-sqlite3';
-import { SqliteHeartbeatRepository } from '../src/database/SqliteHeartbeatRepository.js';
+import { createHeartbeatRepository, type HeartbeatRepository } from '../src/database/index.js';
 
-describe('SqliteHeartbeatRepository', () => {
+describe('HeartbeatRepository (SQLite)', () => {
   let db: Database.Database;
-  let repo: SqliteHeartbeatRepository;
+  let repo: HeartbeatRepository;
 
   beforeEach(() => {
     db = new Database(':memory:');
@@ -14,7 +14,7 @@ describe('SqliteHeartbeatRepository', () => {
         last_processed INTEGER
       );
     `);
-    repo = new SqliteHeartbeatRepository(db);
+    repo = createHeartbeatRepository(db);
   });
 
   afterEach(() => {
