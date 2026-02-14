@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-commit-lint.sh",
-            "statusMessage": "Running ESLint before commit..."
+            "statusMessage": "Running lint and tests before commit..."
           }
         ]
       }
