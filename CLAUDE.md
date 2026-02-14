@@ -36,18 +36,19 @@ swift test         # Run Swift package tests
 
 ### Server Components (`server/src/`)
 
-| File | Purpose |
-|------|---------|
-| `index.ts` | Express app entry point, Bonjour advertisement, file watcher |
-| `database.ts` | SQLite (better-sqlite3) with FTS5 for full-text search |
-| `indexer.ts` | Parses Claude session JSONL files from `~/.claude/projects/` |
-| `routes.ts` | REST API endpoints |
-| `transport/HttpTransport.ts` | HTTP server wrapper (binds to `0.0.0.0`) |
-| `transport/WebSocketTransport.ts` | WebSocket server for live sessions |
-| `sessions/SessionExecutor.ts` | Spawns Claude CLI for live sessions |
-| `sessions/SessionStore.ts` | Tracks active sessions per client |
-| `auth/middleware.ts` | API key authentication middleware |
-| `auth/keyManager.ts` | API key generation and validation |
+Layered architecture with enforced dependency direction:
+`provider → database → services → sessions/transport → api`
+
+| Module | Purpose |
+|--------|---------|
+| `index.ts` | Entry point |
+| `app.ts` | Composition root — wires all services together |
+| `provider/` | Cross-cutting concerns (auth, security, logger) — anyone can import |
+| `database/` | SQLite (better-sqlite3) with FTS5 for full-text search |
+| `services/` | Business logic (indexer, FileWatcher, HeartbeatService, ConfigService) |
+| `sessions/` | Runtime layer (SessionExecutor, SessionStore) |
+| `transport/` | Runtime layer (HttpTransport, WebSocketTransport) |
+| `api/` | HTTP surface layer (routes, admin HTML) |
 
 Data flow: JSONL files → indexer → SQLite FTS5 → REST API
 

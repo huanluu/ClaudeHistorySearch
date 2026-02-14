@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from 'chokidar';
-import { indexSessionFile } from '../indexer.js';
+import { indexSessionFile } from './indexer.js';
 import type { SessionRepository } from '../database/index.js';
-import { logger } from '../logger.js';
+import { logger } from '../provider/index.js';
 
 /**
  * FileWatcher monitors the Claude projects directory for new or changed JSONL

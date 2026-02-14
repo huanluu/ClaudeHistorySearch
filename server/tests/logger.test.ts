@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { createLogger } from '../src/logger.js';
+import { createLogger } from '../src/provider/index.js';
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

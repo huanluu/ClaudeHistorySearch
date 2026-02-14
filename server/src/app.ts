@@ -1,13 +1,10 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
-import { indexAllSessions, PROJECTS_DIR } from './indexer.js';
-import { createRouter } from './routes.js';
 import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
-import { authMiddleware, hasApiKey } from './auth/index.js';
+import { authMiddleware, hasApiKey, WorkingDirValidator, logger } from './provider/index.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
-import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher } from './services/index.js';
-import { WorkingDirValidator } from './security/WorkingDirValidator.js';
-import { logger } from './logger.js';
+import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, indexAllSessions, PROJECTS_DIR } from './services/index.js';
+import { createRouter } from './api/index.js';
 
 export interface AppConfig {
   port: number;

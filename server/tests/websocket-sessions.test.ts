@@ -5,7 +5,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
-import { WorkingDirValidator } from '../src/security/WorkingDirValidator.js';
+import { WorkingDirValidator } from '../src/provider/index.js';
 
 // Create mock spawn function
 const mockSpawn = jest.fn();

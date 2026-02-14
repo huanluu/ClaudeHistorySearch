@@ -7,7 +7,7 @@ import { randomBytes, createHash } from 'crypto';
 import { jest } from '@jest/globals';
 import type { SessionRepository } from '../src/database/interfaces.js';
 import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/database/connection.js';
-import { createRouter, type RouteDeps } from '../src/routes.js';
+import { createRouter, type RouteDeps } from '../src/api/index.js';
 
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-${Date.now()}`);

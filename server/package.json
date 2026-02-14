@@ -9,7 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start:prod": "node dist/index.js",
-    "key:generate": "tsx src/auth/keyManager.ts generate",
+    "key:generate": "tsx src/provider/auth/keyManager.ts generate",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."

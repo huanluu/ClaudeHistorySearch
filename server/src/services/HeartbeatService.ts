@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { execSync, spawn, type ChildProcess } from 'child_process';
-import { logger } from '../logger.js';
+import { logger } from '../provider/index.js';
 import type { HeartbeatRepository, HeartbeatStateRecord } from '../database/index.js';
 
 /**

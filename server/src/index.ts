@@ -1,5 +1,5 @@
 import { createApp } from './app.js';
-import { logger } from './logger.js';
+import { logger } from './provider/index.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 

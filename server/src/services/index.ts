@@ -10,3 +10,6 @@ export type {
 
 export { ConfigService } from './ConfigService.js';
 export { FileWatcher } from './FileWatcher.js';
+
+export { indexAllSessions, indexSessionFile, PROJECTS_DIR, CLAUDE_DIR } from './indexer.js';
+export type { ParsedSession } from './indexer.js';
