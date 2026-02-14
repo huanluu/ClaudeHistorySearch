@@ -19,6 +19,10 @@ export default tseslint.config(
     extends: [tseslint.configs.base],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
+        // For each module, `*/${name}/*` matches imports that cross INTO the folder
+        // from outside (e.g. './auth/keyManager.js'), but NOT sibling imports within
+        // the folder (e.g. './keyManager.js') since those lack the folder prefix.
+        // The `!*/${name}/index*` exception allows the barrel file as the only entry point.
         patterns: moduleBoundaries.map(({ name, message }) => ({
           group: [`*/${name}/*`, `!*/${name}/index*`],
           allowTypeImports: true,
