@@ -40,6 +40,10 @@ export class FileWatcher {
       }
     });
 
+    this.watcher.on('error', (error: unknown) => {
+      this.logger.error({ msg: 'File watcher error', op: 'filewatcher.error', err: error });
+    });
+
     this.watcher.on('change', async (path: string) => {
       this.logger.log({ msg: `File changed: ${path}`, op: 'filewatcher.change', context: { path } });
       await indexSessionFile(path, true, new Map(), this.repo, this.logger);
