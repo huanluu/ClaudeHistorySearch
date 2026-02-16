@@ -58,6 +58,13 @@ export class FileWatcher {
   }
 
   /**
+   * Whether the file watcher is currently active.
+   */
+  isActive(): boolean {
+    return this.watcher !== null;
+  }
+
+  /**
    * Stop watching and release file system resources.
    */
   async stop(): Promise<void> {

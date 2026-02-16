@@ -15,7 +15,7 @@ export type {
   HeartbeatStateRecord,
 } from './connection.js';
 
-export type { SessionRepository, IndexSessionParams, HeartbeatRepository } from './interfaces.js';
+export type { SessionRepository, IndexSessionParams, HeartbeatRepository, DatabaseStats } from './interfaces.js';
 
 // Config
 export { DB_PATH } from './connection.js';

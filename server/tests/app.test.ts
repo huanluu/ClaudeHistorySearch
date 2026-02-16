@@ -34,7 +34,7 @@ describe('createApp integration', () => {
     expect(statusCode).toBe(200);
 
     const parsed = JSON.parse(body);
-    expect(parsed.status).toBe('ok');
+    expect(parsed.status).toBe('healthy');
     expect(parsed.timestamp).toBeDefined();
   });
 

@@ -41,9 +41,14 @@ function serializeError(err: unknown): string {
  * Create a logger that writes structured JSONL to a log file.
  * Console output is off by default (file-only); opt-in via `{ console: true }`.
  */
-export function createLogger(logPath: string, options: LoggerOptions = {}): Logger {
+export interface CreateLoggerOptions extends LoggerOptions {
+  errorBuffer?: ErrorRingBuffer;
+}
+
+export function createLogger(logPath: string, options: CreateLoggerOptions = {}): Logger {
   const verbose = options.verbose ?? (process.env.LOG_VERBOSE === '1');
   const useConsole = options.console ?? false;
+  const errorBuffer = options.errorBuffer;
 
   // Ensure parent directory exists
   const dir = dirname(logPath);
@@ -103,6 +108,15 @@ export function createLogger(logPath: string, options: LoggerOptions = {}): Logg
     error(entry: LogEntry): void {
       if (useConsole) writeConsole('ERROR', entry);
       writeToFile('ERROR', entry);
+      if (errorBuffer) {
+        errorBuffer.push({
+          timestamp: new Date().toISOString(),
+          op: entry.op,
+          errType: entry.errType,
+          message: entry.msg,
+          context: entry.context,
+        });
+      }
     },
     warn(entry: LogEntry): void {
       if (useConsole) writeConsole('WARN', entry);
@@ -119,5 +133,48 @@ export function createLogger(logPath: string, options: LoggerOptions = {}): Logg
 // Default singleton logger — writes to ~/.claude-history-server/server.log
 const DATA_DIR = join(homedir(), '.claude-history-server');
 const LOG_PATH = join(DATA_DIR, 'server.log');
+
+/**
+ * A single captured error for the diagnostics ring buffer.
+ */
+export interface ErrorEntry {
+  timestamp: string;
+  op?: string;
+  errType?: ErrorType;
+  message: string;
+  context?: Record<string, unknown>;
+}
+
+/**
+ * Fixed-capacity ring buffer that stores recent errors in memory.
+ * Oldest entries are evicted when capacity is exceeded.
+ */
+export class ErrorRingBuffer {
+  private buffer: ErrorEntry[] = [];
+  private readonly capacity: number;
+
+  constructor(capacity = 50) {
+    this.capacity = capacity;
+  }
+
+  push(entry: ErrorEntry): void {
+    if (this.buffer.length >= this.capacity) {
+      this.buffer.shift();
+    }
+    this.buffer.push(entry);
+  }
+
+  /** Returns the most recent N entries, newest first. */
+  getRecent(n?: number): ErrorEntry[] {
+    const entries = [...this.buffer].reverse();
+    return n !== undefined ? entries.slice(0, n) : entries;
+  }
+
+  /** Counts entries with timestamps after the given date. */
+  countSince(date: Date): number {
+    const iso = date.toISOString();
+    return this.buffer.filter(e => e.timestamp >= iso).length;
+  }
+}
 
 export const logger = createLogger(LOG_PATH);

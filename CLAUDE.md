@@ -83,7 +83,8 @@ Data flow: JSONL files → indexer → SQLite FTS5 → REST API
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check |
+| `/health` | GET | Health check with subsystem status (`healthy` / `degraded`) |
+| `/diagnostics` | GET | Full system diagnostics snapshot (503 if unhealthy) |
 | `/sessions` | GET | List sessions (pagination via `limit`, `offset`) |
 | `/sessions/:id` | GET | Get full conversation |
 | `/search?q=term` | GET | Full-text search (`sort=relevance|date`) |

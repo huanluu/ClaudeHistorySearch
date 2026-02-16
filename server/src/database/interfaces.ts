@@ -29,6 +29,15 @@ export interface SessionRepository {
   // Indexing (indexer)
   getSessionLastIndexed(id: string): LastIndexedRecord | undefined;
   indexSession(params: IndexSessionParams): void;
+
+  // Stats (diagnostics)
+  getStats(dbPath: string): DatabaseStats;
+}
+
+export interface DatabaseStats {
+  sessionCount: number;
+  messageCount: number;
+  dbSizeBytes: number;
 }
 
 export interface HeartbeatRepository {

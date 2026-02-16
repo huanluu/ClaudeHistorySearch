@@ -1,9 +1,11 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
 import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
-import { authMiddleware, hasApiKey, WorkingDirValidator, logger, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index.js';
+import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
-import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, indexAllSessions, PROJECTS_DIR } from './services/index.js';
+import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, DiagnosticsService, indexAllSessions, PROJECTS_DIR } from './services/index.js';
 import { createRouter } from './api/index.js';
 
 export interface AppConfig {
@@ -40,6 +42,13 @@ function isStealthModeEnabled(): boolean {
 export function createApp(config: AppConfig): App {
   const { port, serviceType = 'claudehistory' } = config;
 
+  // --- Logger with error ring buffer ---
+  const errorBuffer = new ErrorRingBuffer(50);
+  const logger = createLogger(
+    join(homedir(), '.claude-history-server', 'server.log'),
+    { errorBuffer }
+  );
+
   // --- Repositories ---
   const sessionRepo = createSessionRepository();
   const heartbeatRepo = createHeartbeatRepository();
@@ -51,6 +60,19 @@ export function createApp(config: AppConfig): App {
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
   const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
   const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
+
+  // --- Diagnostics ---
+  const startedAt = new Date();
+  const diagnosticsService = new DiagnosticsService({
+    repo: sessionRepo,
+    errorBuffer,
+    fileWatcher,
+    heartbeatService,
+    getWsClientCount: () => wsTransport?.getClientCount() ?? 0,
+    getActiveSessionCount: () => 0, // No centralized session store yet
+    startedAt,
+    dbPath: DB_PATH,
+  });
 
   // --- Request logging ---
   const loggingConfig = configService.getSection('logging') as { requestLogLevel?: string } | null;
@@ -96,6 +118,7 @@ export function createApp(config: AppConfig): App {
     repo: sessionRepo,
     heartbeatService,
     configService,
+    diagnosticsService,
     onConfigChanged,
     logger,
   });
@@ -158,6 +181,7 @@ export function createApp(config: AppConfig): App {
     // Initial indexing
     logger.log({ msg: 'Starting initial index...', op: 'server.start' });
     const result = await indexAllSessions(false, sessionRepo, logger);
+    diagnosticsService.setLastIndexResult(result);
     logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
 
     // Bonjour advertisement (auto-disabled if stealth mode is on)
@@ -183,6 +207,7 @@ export function createApp(config: AppConfig): App {
     reindexTimer = setInterval(async () => {
       logger.log({ msg: 'Running periodic reindex...', op: 'server.reindex' });
       const reindexResult = await indexAllSessions(false, sessionRepo, logger);
+      diagnosticsService.setLastIndexResult(reindexResult);
       if (reindexResult.indexed > 0) {
         logger.log({ msg: `Periodic reindex: ${reindexResult.indexed} new sessions indexed`, op: 'server.reindex', context: { indexed: reindexResult.indexed } });
       } else {

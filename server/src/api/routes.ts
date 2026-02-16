@@ -7,7 +7,7 @@ import {
   type SortOption,
 } from '../database/index.js';
 import { indexAllSessions } from '../services/index.js';
-import type { HeartbeatService, ConfigService, IndexAllResult } from '../services/index.js';
+import type { HeartbeatService, ConfigService, DiagnosticsService, IndexAllResult } from '../services/index.js';
 import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 
@@ -20,6 +20,7 @@ export interface RouteDeps {
   repo: SessionRepository;
   heartbeatService?: HeartbeatService;
   configService?: ConfigService;
+  diagnosticsService?: DiagnosticsService;
   onConfigChanged?: (section: string) => void;
   logger?: Logger;
   indexFn?: (force: boolean, repo: SessionRepository, logger: Logger) => Promise<IndexAllResult>;
@@ -65,19 +66,38 @@ interface SearchResultResponse {
 }
 
 export function createRouter(deps: RouteDeps): Router {
-  const { repo, heartbeatService, configService, onConfigChanged, indexFn = indexAllSessions } = deps;
+  const { repo, heartbeatService, configService, diagnosticsService, onConfigChanged, indexFn = indexAllSessions } = deps;
   const logger = deps.logger ?? defaultLogger;
   const router = Router();
 
   /**
    * GET /health
-   * Health check endpoint
+   * Health check endpoint with optional subsystem checks
    */
   router.get('/health', (_req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString()
-    });
+    if (diagnosticsService) {
+      const health = diagnosticsService.getHealth();
+      res.json(health);
+    } else {
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  /**
+   * GET /diagnostics
+   * Full system diagnostics snapshot
+   */
+  router.get('/diagnostics', (_req: Request, res: Response) => {
+    if (!diagnosticsService) {
+      res.status(503).json({ error: 'Diagnostics service not initialized' });
+      return;
+    }
+    const diagnostics = diagnosticsService.getDiagnostics();
+    const statusCode = diagnostics.status === 'unhealthy' ? 503 : 200;
+    res.status(statusCode).json(diagnostics);
   });
 
   /**

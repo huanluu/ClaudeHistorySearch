@@ -213,6 +213,13 @@ export class HeartbeatService {
   }
 
   /**
+   * Whether the scheduler timer is currently running.
+   */
+  isSchedulerActive(): boolean {
+    return this.schedulerTimer !== null;
+  }
+
+  /**
    * Stop the heartbeat scheduler, clearing both the interval and any
    * pending initial-delay timer.
    */

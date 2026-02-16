@@ -1,8 +1,10 @@
+import { statSync } from 'fs';
 import type { Database as DatabaseType, Statement } from 'better-sqlite3';
 import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord } from './connection.js';
-import type { SessionRepository, IndexSessionParams } from './interfaces.js';
+import type { SessionRepository, IndexSessionParams, DatabaseStats } from './interfaces.js';
 
 export class SqliteSessionRepository implements SessionRepository {
+  private readonly db: DatabaseType;
   private readonly stmts: {
     getRecentSessions: Statement<unknown[], SessionRecord>;
     getManualSessions: Statement<unknown[], SessionRecord>;
@@ -22,6 +24,7 @@ export class SqliteSessionRepository implements SessionRepository {
   private readonly indexSessionTx: (params: IndexSessionParams) => void;
 
   constructor(db: DatabaseType) {
+    this.db = db;
     this.stmts = {
       getRecentSessions: db.prepare(`
         SELECT * FROM sessions
@@ -181,5 +184,21 @@ export class SqliteSessionRepository implements SessionRepository {
 
   indexSession(params: IndexSessionParams): void {
     this.indexSessionTx(params);
+  }
+
+  getStats(dbPath: string): DatabaseStats {
+    const sessionRow = this.db.prepare(`SELECT COUNT(*) as cnt FROM sessions WHERE is_hidden = 0`).get() as { cnt: number };
+    const messageRow = this.db.prepare(`SELECT COUNT(*) as cnt FROM messages_fts`).get() as { cnt: number };
+    let dbSizeBytes = 0;
+    try {
+      dbSizeBytes = statSync(dbPath).size;
+    } catch {
+      // File may not exist in test environments
+    }
+    return {
+      sessionCount: sessionRow.cnt,
+      messageCount: messageRow.cnt,
+      dbSizeBytes,
+    };
   }
 }
