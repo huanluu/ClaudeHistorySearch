@@ -767,6 +767,14 @@ naming, create overly complex functions, skip TypeScript strict checks.
 - **FAIL** if any barrel export has zero consumers
 - **Enforced by**: `tests/scorecard.test.ts` → `'CQ-INV-2: No dead barrel exports'` (`it.fails`)
 
+#### CQ-INV-3: No .js Extensions in Imports
+> **TypeScript imports must not use `.js` extensions.**
+
+- After migrating to Vitest + tsup with `moduleResolution: "Bundler"`, `.js` extensions are unnecessary
+- Scan all `.ts` files in `src/` and `tests/` for `from '...*.js'` or `import('...*.js')`
+- **FAIL** if any non-comment line contains a `.js` import path
+- **Enforced by**: `eslint.config.js` Block 8 (`no-restricted-syntax`) + `tests/scorecard.test.ts` → `'CQ-INV-3: No .js extensions in TypeScript imports'`
+
 ### Metrics
 
 #### CQ-MET-1: Naming Consistency
@@ -966,11 +974,12 @@ patterns because they never found the patterns.
 | OPS-INV-2 | Log Rotation | PASS | Logger rotates at startup if file > threshold |
 | CQ-INV-1 | Zero `any` in Source | PASS | Grep confirmed zero `any` type annotations in src/ |
 | CQ-INV-2 | No Dead Public Exports | FAIL | `SessionStore.has()`, `.getByClient()`, `.getAll()` appear unused; `ConfigService.getEditableSectionNames()` potentially unused |
+| CQ-INV-3 | No .js in Imports | PASS | All `.js` extensions removed; ESLint rule + scorecard test enforce going forward |
 | AE-INV-1 | CLAUDE.md as Navigable Map | FAIL | Root CLAUDE.md is 130+ lines mixing architecture, API, operations, testing. No `docs/` directory exists. |
 | AE-INV-2 | Adding-Features Guide | FAIL | No `docs/adding-features.md` exists. Patterns must be reverse-engineered from code. |
 | AE-INV-3 | Agent Diagnostic Access | PASS | CLAUDE.md documents log paths, launchd commands, health endpoint, test commands |
 
-**Invariant Summary: 20/31 passing (65%)**
+**Invariant Summary: 21/32 passing (66%)**
 
 ### All Metrics
 
@@ -1040,7 +1049,7 @@ npm run scorecard:save      # Archive baseline + update with latest results
 
 | Status | Count | Invariants |
 |--------|-------|------------|
-| Passing (`it()`) | 14 | ARCH-INV-2/3, SEC-INV-1/2/3, PRIV-INV-3, PERF-INV-1/2, REL-INV-1/2/3, OPS-INV-1/2, AE-INV-3 |
+| Passing (`it()`) | 15 | ARCH-INV-2/3, SEC-INV-1/2/3, PRIV-INV-3, PERF-INV-1/2, REL-INV-1/2/3, OPS-INV-1/2, CQ-INV-3, AE-INV-3 |
 | Known failures (`it.fails()`) | 12 | ARCH-INV-4/5/6/7, TEST-INV-2, OBS-INV-2/3, SEC-INV-4, PERF-INV-3, CQ-INV-2, AE-INV-1/2 |
 | ESLint only | 5 | ARCH-INV-1, CQ-INV-1, TEST-INV-1/3, OBS-INV-1 |
 | Metrics (judgment-based) | 5 | PRIV-MET-2/3, REL-MET-3, OPS-MET-3, AE-MET-5 |

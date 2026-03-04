@@ -1114,6 +1114,36 @@ describe('Scorecard: Code Quality Invariants', () => {
 
     expect(deadExports).toEqual([]);
   });
+
+  // ─── CQ-INV-3: No .js Extensions in Imports ────────────────────────
+  // Scorecard CQ-INV-3: No .js Extensions in Imports
+  // See: scorecard/SCORECARD.md § Code Quality > Invariants > CQ-INV-3
+  it('CQ-INV-3: No .js extensions in TypeScript imports', () => {
+    const allFiles = [...collectTsFiles(SRC_DIR), ...collectTsFiles(TESTS_DIR)];
+    const violations: Array<{ file: string; line: number; text: string }> = [];
+
+    for (const file of allFiles) {
+      const relFile = relative(SERVER_DIR, file);
+      const content = readFileSync(file, 'utf-8');
+      const lines = content.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        // Skip comments
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
+        if (/from\s+['"][^'"]*\.js['"]/.test(line) || /import\(\s*['"][^'"]*\.js['"]/.test(line)) {
+          violations.push({
+            file: relFile,
+            line: i + 1,
+            text: line.trim().substring(0, 100),
+          });
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -140,7 +140,23 @@ export default tseslint.config(
   // barrel enforcement, and transport has no upward dependency restrictions
   // since it's a Runtime layer peer with sessions/.
 
-  // ── Block 8: Scorecard CQ-INV-1 — no explicit `any` in source ─────
+  // ── Block 8: No .js extensions in imports ───────────────────────────
+  // After migrating to Vitest + tsup with moduleResolution "Bundler",
+  // .js extensions are unnecessary and confusing.
+  {
+    files: ['src/**/*.ts', 'tests/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: 'ImportDeclaration[source.value=/\\.js$/]',
+        message: 'Do not use .js extensions in imports. Use extensionless paths (e.g., ./foo/index).',
+      }, {
+        selector: 'ExportNamedDeclaration[source.value=/\\.js$/]',
+        message: 'Do not use .js extensions in re-exports. Use extensionless paths.',
+      }],
+    },
+  },
+
+  // ── Block 9: Scorecard CQ-INV-1 — no explicit `any` in source ──────
   // Scorecard CQ-INV-1: Zero `any` Types in Source Code
   {
     files: ['src/**/*.ts'],
