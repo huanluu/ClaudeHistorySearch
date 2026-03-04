@@ -63,6 +63,7 @@ export default tseslint.config(
   },
 
   // ── Block 3: provider/ — free internally, blocked from ALL business logic ─
+  // Scorecard ARCH-INV-1: Layer Import Direction (Blocks 3–7 enforce this)
   {
     files: ['src/provider/**/*.ts'],
     rules: {
@@ -138,4 +139,37 @@ export default tseslint.config(
   // transport/ — no dedicated block needed. Global rule (Block 1) handles
   // barrel enforcement, and transport has no upward dependency restrictions
   // since it's a Runtime layer peer with sessions/.
+
+  // ── Block 8: Scorecard CQ-INV-1 — no explicit `any` in source ─────
+  // Scorecard CQ-INV-1: Zero `any` Types in Source Code
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+
+  // ── Block 9: Scorecard TEST-INV-1 — no explicit `any` in tests ────
+  // Scorecard TEST-INV-1: No Type Escape Hatches in Tests
+  // Using 'warn' because 3 known violations exist (tracked by scorecard test).
+  // Upgrade to 'error' after fixing: config.test.ts:84, config-security.test.ts:40,47
+  {
+    files: ['tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+
+  // ── Block 10: Scorecard OBS-INV-1 — no console in source ──────────
+  // Scorecard OBS-INV-1: No Console in Source Code
+  {
+    files: ['src/**/*.ts'],
+    ignores: [
+      'src/provider/logger/logger.ts',   // Logger wraps console behind opt-in flag
+      'src/provider/auth/keyManager.ts',  // CLI entry point (guarded by process.argv)
+    ],
+    rules: {
+      'no-console': 'error',
+    },
+  },
 );

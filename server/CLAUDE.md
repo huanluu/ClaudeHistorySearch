@@ -47,7 +47,7 @@ provider → database → services → sessions/transport → api
 - `sessions/` and `transport/`: Runtime layer (peers). Can import everything except `api/`.
 - `api/`: Top layer (routes). Can import everything.
 
-Violations cause ESLint errors. The architecture test (`tests/architecture.test.ts`) also validates this at test time.
+Violations cause ESLint errors. The scorecard test (`tests/scorecard.test.ts`) also validates this at test time.
 
 ## Barrel Export Pattern
 
@@ -82,7 +82,7 @@ Tests live in `tests/` (not `src/`). Key patterns:
 
 - **Isolation**: Each test creates its own temporary database via `tmpdir()`
 - **Fixtures**: Sample JSONL files in `tests/__fixtures__/` (standard, array-content, edge-cases, empty, heartbeat)
-- **Architecture tests**: `tests/architecture.test.ts` validates layer boundaries and barrel file existence
+- **Scorecard tests**: `tests/scorecard.test.ts` enforces 26 structural invariants (see `scorecard/SCORECARD.md`)
 - **HTTP tests**: Use `supertest` against the Express app directly (no server binding needed)
 
 Run tests with `node --experimental-vm-modules` (handled by the `npm test` script).
@@ -95,8 +95,10 @@ Run tests with `node --experimental-vm-modules` (handled by the `npm test` scrip
 | `src/database/interfaces.ts` | `SessionRepository` and `HeartbeatRepository` contracts |
 | `src/services/indexer.ts` | JSONL parsing and SQLite FTS5 indexing |
 | `src/sessions/SessionExecutor.ts` | Spawns headless `claude -p` subprocesses |
-| `eslint.config.js` | Module boundary rules (flat config format) |
+| `eslint.config.js` | Module boundary + quality rules (flat config format) |
 | `tests/__fixtures__/` | Sample JSONL files for testing |
+| `tests/scorecard.test.ts` | Structural invariant enforcement (31 invariants) |
+| `scorecard/SCORECARD.md` | Quality criteria, invariants, metrics, baseline |
 
 ## TypeScript Strictness
 
