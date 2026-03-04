@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { validateApiKey, hasApiKey } from './keyManager.js';
+import { validateApiKey, hasApiKey } from './keyManager';
 
 /**
  * Paths that don't require authentication

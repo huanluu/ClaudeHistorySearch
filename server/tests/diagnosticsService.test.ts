@@ -1,39 +1,39 @@
-import { jest } from '@jest/globals';
-import { ErrorRingBuffer } from '../src/provider/index.js';
-import { DiagnosticsService } from '../src/services/DiagnosticsService.js';
-import type { DiagnosticsSources } from '../src/services/DiagnosticsService.js';
-import type { SessionRepository, DatabaseStats } from '../src/database/index.js';
-import type { FileWatcher } from '../src/services/FileWatcher.js';
-import type { HeartbeatService } from '../src/services/HeartbeatService.js';
+import type { Mock } from 'vitest';
+import { ErrorRingBuffer } from '../src/provider/index';
+import { DiagnosticsService } from '../src/services/DiagnosticsService';
+import type { DiagnosticsSources } from '../src/services/DiagnosticsService';
+import type { SessionRepository, DatabaseStats } from '../src/database/index';
+import type { FileWatcher } from '../src/services/FileWatcher';
+import type { HeartbeatService } from '../src/services/HeartbeatService';
 
 function createMockSources(overrides?: Partial<DiagnosticsSources>): DiagnosticsSources {
   const mockRepo = {
-    getStats: jest.fn<(dbPath: string) => DatabaseStats>().mockReturnValue({
+    getStats: vi.fn<(dbPath: string) => DatabaseStats>().mockReturnValue({
       sessionCount: 100,
       messageCount: 5000,
       dbSizeBytes: 1024 * 1024,
     }),
-    getRecentSessions: jest.fn(),
-    getManualSessions: jest.fn(),
-    getAutomaticSessions: jest.fn(),
-    getSessionById: jest.fn(),
-    getMessagesBySessionId: jest.fn(),
-    searchMessages: jest.fn(),
-    markSessionAsRead: jest.fn(),
-    hideSession: jest.fn(),
-    getSessionLastIndexed: jest.fn(),
-    indexSession: jest.fn(),
+    getRecentSessions: vi.fn(),
+    getManualSessions: vi.fn(),
+    getAutomaticSessions: vi.fn(),
+    getSessionById: vi.fn(),
+    getMessagesBySessionId: vi.fn(),
+    searchMessages: vi.fn(),
+    markSessionAsRead: vi.fn(),
+    hideSession: vi.fn(),
+    getSessionLastIndexed: vi.fn(),
+    indexSession: vi.fn(),
   } as unknown as SessionRepository;
 
   const mockFileWatcher = {
-    isActive: jest.fn<() => boolean>().mockReturnValue(true),
-    start: jest.fn(),
-    stop: jest.fn(),
+    isActive: vi.fn<() => boolean>().mockReturnValue(true),
+    start: vi.fn(),
+    stop: vi.fn(),
   } as unknown as FileWatcher;
 
   const mockHeartbeat = {
-    getConfig: jest.fn().mockReturnValue({ enabled: true }),
-    isSchedulerActive: jest.fn<() => boolean>().mockReturnValue(true),
+    getConfig: vi.fn().mockReturnValue({ enabled: true }),
+    isSchedulerActive: vi.fn<() => boolean>().mockReturnValue(true),
   } as unknown as HeartbeatService;
 
   return {
@@ -63,7 +63,7 @@ describe('DiagnosticsService', () => {
 
     it('returns degraded when database throws', () => {
       const sources = createMockSources();
-      (sources.repo.getStats as jest.Mock).mockImplementation(() => {
+      (sources.repo.getStats as Mock).mockImplementation(() => {
         throw new Error('SQLITE_BUSY');
       });
       const service = new DiagnosticsService(sources);
@@ -101,7 +101,7 @@ describe('DiagnosticsService', () => {
 
     it('returns unhealthy when database throws', () => {
       const sources = createMockSources();
-      (sources.repo.getStats as jest.Mock).mockImplementation(() => {
+      (sources.repo.getStats as Mock).mockImplementation(() => {
         throw new Error('SQLITE_BUSY');
       });
       const service = new DiagnosticsService(sources);

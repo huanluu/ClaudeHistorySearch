@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { Logger } from './logger.js';
+import type { Logger } from './logger';
 
 export type RequestLogLevel = 'off' | 'errors-only' | 'all';
 

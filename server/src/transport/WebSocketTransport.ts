@@ -1,9 +1,9 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
-import { validateApiKey, hasApiKey, WorkingDirValidator } from '../provider/index.js';
-import type { Logger } from '../provider/index.js';
-import { SessionStore, SessionExecutor } from '../sessions/index.js';
+import { validateApiKey, hasApiKey, WorkingDirValidator } from '../provider/index';
+import type { Logger } from '../provider/index';
+import { SessionStore, SessionExecutor } from '../sessions/index';
 
 /**
  * Message types for WebSocket communication

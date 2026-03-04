@@ -5,10 +5,10 @@ import { Router, type Request, type Response } from 'express';
 import {
   type SessionRepository,
   type SortOption,
-} from '../database/index.js';
-import { indexAllSessions } from '../services/index.js';
-import type { HeartbeatService, ConfigService, DiagnosticsService, IndexAllResult } from '../services/index.js';
-import type { Logger } from '../provider/index.js';
+} from '../database/index';
+import { indexAllSessions } from '../services/index';
+import type { HeartbeatService, ConfigService, DiagnosticsService, IndexAllResult } from '../services/index';
+import type { Logger } from '../provider/index';
 
 // Read admin.html at module load
 const __filename = fileURLToPath(import.meta.url);

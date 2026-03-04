@@ -8,9 +8,9 @@
  *
  * Naming convention: 'SECTION-INV-N: Description'
  *
- * Tests marked with `it.failing()` represent known violations — they currently
+ * Tests marked with `it.fails()` represent known violations — they currently
  * fail the invariant but are tracked. When someone fixes the underlying issue,
- * Jest will say "this test was expected to fail but passed" and the developer
+ * Vitest will report "this test was expected to fail but passed" and the developer
  * removes `.failing`, permanently enforcing the invariant.
  *
  * ─── Invariants enforced by ESLint (not duplicated here) ──────────────
@@ -23,7 +23,6 @@
  *
  * Cross-reference: Each test has a comment linking back to SCORECARD.md.
  */
-import { describe, it, expect } from '@jest/globals';
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
 import { join, dirname, relative, basename } from 'path';
 import { fileURLToPath } from 'url';
@@ -213,7 +212,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // ─── ARCH-INV-5: Interface-Typed Module Boundaries ───────────────
   // Scorecard ARCH-INV-5: Interface-Typed Module Boundaries
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-5
-  it.failing('ARCH-INV-5: Interface-Typed Module Boundaries', () => {
+  it.fails('ARCH-INV-5: Interface-Typed Module Boundaries', () => {
     // Check: classes exported from barrels for cross-module use should have
     // a corresponding interface. If a module exports `class Foo`, there should
     // be an `interface Foo` or a corresponding interface type elsewhere in the module.
@@ -280,7 +279,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // ─── ARCH-INV-6: Test Existence Floor ────────────────────────────
   // Scorecard ARCH-INV-6: Test Existence Floor
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-6
-  it.failing('ARCH-INV-6: Test Existence Floor — every source module has a test', () => {
+  it.fails('ARCH-INV-6: Test Existence Floor — every source module has a test', () => {
     const srcFiles = collectTsFiles(SRC_DIR);
     const testFiles = collectTsFiles(TESTS_DIR).map(f => basename(f));
     const missingTests: string[] = [];
@@ -362,7 +361,7 @@ describe('Scorecard: Testability Invariants', () => {
   // ─── TEST-INV-2: No Global State Leaks Between Tests ────────────
   // Scorecard TEST-INV-2: No Global State Leaks Between Tests
   // See: scorecard/SCORECARD.md § Testability > Invariants > TEST-INV-2
-  it.failing('TEST-INV-2: No module-scope process.env mutations in tests', () => {
+  it.fails('TEST-INV-2: No module-scope process.env mutations in tests', () => {
     const testFiles = collectTsFiles(TESTS_DIR);
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
@@ -417,7 +416,7 @@ describe('Scorecard: Observability Invariants', () => {
   // ─── OBS-INV-2: All Error Paths Log Context ───────────────────────
   // Scorecard OBS-INV-2: All Error Paths Log Context
   // See: scorecard/SCORECARD.md § Observability > Invariants > OBS-INV-2
-  it.failing('OBS-INV-2: Every catch block logs or rethrows', () => {
+  it.fails('OBS-INV-2: Every catch block logs or rethrows', () => {
     const srcFiles = collectTsFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
@@ -460,7 +459,7 @@ describe('Scorecard: Observability Invariants', () => {
   // ─── OBS-INV-3: Health Endpoint Reflects All Subsystems ──────────
   // Scorecard OBS-INV-3: Health Endpoint Reflects All Subsystems
   // See: scorecard/SCORECARD.md § Observability > Invariants > OBS-INV-3
-  it.failing('OBS-INV-3: Health reflects all subsystems wired in app.ts', () => {
+  it.fails('OBS-INV-3: Health reflects all subsystems wired in app.ts', () => {
     const appContent = readFileSync(join(SRC_DIR, 'app.ts'), 'utf-8');
 
     // Services created in app.ts that should be monitored
@@ -640,7 +639,7 @@ describe('Scorecard: Security Invariants', () => {
   // ─── SEC-INV-4: Path Traversal Protection ─────────────────────────
   // Scorecard SEC-INV-4: Path Traversal Protection
   // See: scorecard/SCORECARD.md § Security > Invariants > SEC-INV-4
-  it.failing('SEC-INV-4: User-supplied paths validated before filesystem use', () => {
+  it.fails('SEC-INV-4: User-supplied paths validated before filesystem use', () => {
     // Files that handle user input and may touch the filesystem
     const handlerFiles = [
       join(SRC_DIR, 'api', 'routes.ts'),
@@ -861,7 +860,7 @@ describe('Scorecard: Performance Invariants', () => {
   // ─── PERF-INV-3: No Unbounded In-Memory Collections ─────────────
   // Scorecard PERF-INV-3: No Unbounded In-Memory Collections
   // See: scorecard/SCORECARD.md § Performance > Invariants > PERF-INV-3
-  it.failing('PERF-INV-3: No unbounded in-memory collections', () => {
+  it.fails('PERF-INV-3: No unbounded in-memory collections', () => {
     // Check long-lived Map/Set fields in classes for capacity limits
     const srcFiles = collectTsFiles(SRC_DIR);
     const violations: Array<{ file: string; className: string; field: string }> = [];
@@ -937,7 +936,7 @@ describe('Scorecard: Reliability Invariants', () => {
   // ─── REL-INV-2: Spawned Processes Tracked and Cleaned ──────────
   // Scorecard REL-INV-2: Spawned Processes Tracked and Cleaned
   // See: scorecard/SCORECARD.md § Reliability > Invariants > REL-INV-2
-  it.failing('REL-INV-2: All spawn() calls are tracked and cleaned on shutdown', () => {
+  it.fails('REL-INV-2: All spawn() calls are tracked and cleaned on shutdown', () => {
     const srcFiles = collectTsFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; issue: string }> = [];
 
@@ -1049,7 +1048,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   // ─── CQ-INV-2: No Dead Public Exports ───────────────────────────
   // Scorecard CQ-INV-2: No Dead Public Exports
   // See: scorecard/SCORECARD.md § Code Quality > Invariants > CQ-INV-2
-  it.failing('CQ-INV-2: No dead barrel exports — every export has a consumer', () => {
+  it.fails('CQ-INV-2: No dead barrel exports — every export has a consumer', () => {
     const modules = ['provider', 'database', 'services', 'sessions', 'transport', 'api'];
     const deadExports: Array<{ module: string; exportName: string }> = [];
 
@@ -1126,7 +1125,7 @@ describe('Scorecard: Agent Ergonomics Invariants', () => {
   // ─── AE-INV-1: CLAUDE.md as Navigable Map ───────────────────────
   // Scorecard AE-INV-1: CLAUDE.md as Navigable Map
   // See: scorecard/SCORECARD.md § Agent Ergonomics > Invariants > AE-INV-1
-  it.failing('AE-INV-1: CLAUDE.md is under 150 lines and links to docs/', () => {
+  it.fails('AE-INV-1: CLAUDE.md is under 150 lines and links to docs/', () => {
     const claudeMdPath = join(ROOT_DIR, 'CLAUDE.md');
     expect(existsSync(claudeMdPath)).toBe(true);
 
@@ -1143,7 +1142,7 @@ describe('Scorecard: Agent Ergonomics Invariants', () => {
   // ─── AE-INV-2: Adding-Features Guide Exists ─────────────────────
   // Scorecard AE-INV-2: Adding-Features Guide Exists
   // See: scorecard/SCORECARD.md § Agent Ergonomics > Invariants > AE-INV-2
-  it.failing('AE-INV-2: docs/adding-features.md exists', () => {
+  it.fails('AE-INV-2: docs/adding-features.md exists', () => {
     const guidePaths = [
       join(ROOT_DIR, 'docs', 'adding-features.md'),
       join(SERVER_DIR, 'docs', 'adding-features.md'),

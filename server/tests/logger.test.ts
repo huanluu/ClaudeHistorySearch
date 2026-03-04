@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
-import { createLogger } from '../src/provider/index.js';
-import type { LogEntry } from '../src/provider/index.js';
+import { createLogger } from '../src/provider/index';
+import type { LogEntry } from '../src/provider/index';
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -109,7 +108,7 @@ describe('Logger', () => {
 
   describe('console output', () => {
     it('default: no console output (file-only)', () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       try {
         const logger = createLogger(logPath);
         logger.log({ msg: 'silent' });
@@ -120,9 +119,9 @@ describe('Logger', () => {
     });
 
     it('console opt-in via { console: true }', () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const logger = createLogger(logPath, { console: true });
 
@@ -142,7 +141,7 @@ describe('Logger', () => {
     });
 
     it('console includes op prefix when provided', () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       try {
         const logger = createLogger(logPath, { console: true });
         logger.log({ msg: 'started', op: 'server.start' });

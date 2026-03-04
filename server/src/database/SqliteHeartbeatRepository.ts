@@ -1,6 +1,6 @@
 import type { Database as DatabaseType, Statement } from 'better-sqlite3';
-import type { HeartbeatStateRecord } from './connection.js';
-import type { HeartbeatRepository } from './interfaces.js';
+import type { HeartbeatStateRecord } from './connection';
+import type { HeartbeatRepository } from './interfaces';
 
 export class SqliteHeartbeatRepository implements HeartbeatRepository {
   private readonly stmts: {

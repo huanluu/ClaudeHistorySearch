@@ -1,4 +1,4 @@
-export { createLogger, LOG_PATH, ErrorRingBuffer } from './logger.js';
-export type { Logger, LoggerOptions, CreateLoggerOptions, LogEntry, ErrorType, ErrorEntry } from './logger.js';
-export { createRequestLogger } from './requestLogger.js';
-export type { RequestLogLevel, RequestLoggerOptions } from './requestLogger.js';
+export { createLogger, LOG_PATH, ErrorRingBuffer } from './logger';
+export type { Logger, LoggerOptions, CreateLoggerOptions, LogEntry, ErrorType, ErrorEntry } from './logger';
+export { createRequestLogger } from './requestLogger';
+export type { RequestLogLevel, RequestLoggerOptions } from './requestLogger';

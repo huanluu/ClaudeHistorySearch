@@ -1,4 +1,4 @@
-export { HeartbeatService, getConfigDir } from './HeartbeatService.js';
+export { HeartbeatService, getConfigDir } from './HeartbeatService';
 export type {
   HeartbeatConfig,
   HeartbeatTask,
@@ -6,12 +6,12 @@ export type {
   WorkItem,
   ChangeSet,
   CommandExecutor,
-} from './HeartbeatService.js';
+} from './HeartbeatService';
 
-export { ConfigService } from './ConfigService.js';
-export { FileWatcher } from './FileWatcher.js';
-export { DiagnosticsService } from './DiagnosticsService.js';
-export type { DiagnosticsSources, HealthResult, DiagnosticsResult } from './DiagnosticsService.js';
+export { ConfigService } from './ConfigService';
+export { FileWatcher } from './FileWatcher';
+export { DiagnosticsService } from './DiagnosticsService';
+export type { DiagnosticsSources, HealthResult, DiagnosticsResult } from './DiagnosticsService';
 
-export { indexAllSessions, indexSessionFile, PROJECTS_DIR, CLAUDE_DIR } from './indexer.js';
-export type { ParsedSession, IndexAllResult } from './indexer.js';
+export { indexAllSessions, indexSessionFile, PROJECTS_DIR, CLAUDE_DIR } from './indexer';
+export type { ParsedSession, IndexAllResult } from './indexer';

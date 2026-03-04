@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { spawn, type ChildProcess } from 'child_process';
-import type { Logger } from '../provider/index.js';
+import type { Logger } from '../provider/index';
 
 export interface SessionStartOptions {
   prompt: string;

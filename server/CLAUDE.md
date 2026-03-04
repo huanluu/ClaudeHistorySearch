@@ -5,31 +5,16 @@
 ## Development Commands
 
 ```bash
-npm test               # Run all Jest tests (requires --experimental-vm-modules)
+npm test               # Run all Vitest tests
 npm test -- --testNamePattern="search"   # Run specific test by name
+npm run test:watch     # Watch mode
 npm run lint           # ESLint with module boundary enforcement
 npm run typecheck      # tsc --noEmit
-npm run build          # Compile to dist/
+npm run build          # Build with tsup (esbuild-powered)
 npm run key:generate   # Generate API key (destructive — invalidates existing key, ask user first)
 ```
 
 **Do NOT run `npm start` or `npm run dev` as an agent** — they start long-lived processes that die with the Claude Code session. The production server is managed by launchd (see Server Management below). For testing worktree changes, see "Testing Server from a Worktree".
-
-## Critical Convention: ESM Imports with .js Extensions
-
-This project uses native ESM (`"type": "module"`). **All relative imports must use `.js` extensions**, even though the source files are `.ts`:
-
-```typescript
-// CORRECT
-import { logger } from './provider/index.js';
-import { createSessionRepository } from '../database/index.js';
-
-// WRONG — will fail at runtime
-import { logger } from './provider/index';
-import { createSessionRepository } from '../database/index.ts';
-```
-
-Jest maps `.js` back to `.ts` via `moduleNameMapper` in `jest.config.js`. TypeScript uses `verbatimModuleSyntax: true` to preserve these extensions in compiled output.
 
 ## Layered Architecture (ESLint-Enforced)
 
@@ -65,16 +50,16 @@ Every module has an `index.ts` barrel file as its public API. **All cross-module
 
 ```typescript
 // BEST — type-only import (preferred for all cross-module imports)
-import type { SessionRepository } from './database/index.js';
+import type { SessionRepository } from './database/index';
 
 // OK — value import from barrel (only when needed; prefer receiving values via constructor injection)
-import { createSessionRepository } from './database/index.js';
+import { createSessionRepository } from './database/index';
 
 // WRONG — bypasses barrel, ESLint error
-import { SqliteSessionRepository } from './database/SqliteSessionRepository.js';
+import { SqliteSessionRepository } from './database/SqliteSessionRepository';
 
 // EXCEPTION — type-only imports from internals are allowed
-import type { SessionRow } from './database/SqliteSessionRepository.js';
+import type { SessionRow } from './database/SqliteSessionRepository';
 ```
 
 **Goal** ([#41](https://github.com/huanluu/ClaudeHistorySearch/issues/41)): Cross-module imports should be type-only. Modules depend on interfaces (types), and concrete values flow through the composition root (`app.ts`). The only exception is `utils/` — a planned layer for stateless pure functions (no dependencies, no side effects) that anyone can value-import. Most service-layer boundaries already follow this; remaining value imports are tracked in [#40](https://github.com/huanluu/ClaudeHistorySearch/issues/40) and [#41](https://github.com/huanluu/ClaudeHistorySearch/issues/41).
@@ -128,15 +113,13 @@ describe('SessionRepository', () => {
 });
 ```
 
-Run tests with `node --experimental-vm-modules` (handled by the `npm test` script).
-
 ### Scorecard System
 
 The quality scorecard (`scorecard/SCORECARD.md`) tracks:
 - **Invariants** (Pass/Fail): Automated structural checks — architecture, security, observability
 - **Metrics** (Scored 1-5): Subjective quality measures evaluated by reading the code
 
-When adding features, check that scorecard tests still pass. Known failing invariants are tracked with `.failing()` — when you fix one, promote it to a regular `it()`.
+When adding features, check that scorecard tests still pass. Known failing invariants are tracked with `it.fails()` — when you fix one, promote it to a regular `it()`.
 
 ## API Endpoints
 

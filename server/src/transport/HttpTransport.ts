@@ -1,6 +1,6 @@
 import express, { type Application, type RequestHandler, type Router } from 'express';
 import type { Server } from 'http';
-import { Transport, type TransportOptions } from './Transport.js';
+import { Transport, type TransportOptions } from './Transport';
 
 /**
  * Options for configuring HttpTransport

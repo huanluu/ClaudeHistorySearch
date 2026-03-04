@@ -1,5 +1,5 @@
-import { SessionExecutor } from './SessionExecutor.js';
-import type { Logger } from '../provider/index.js';
+import { SessionExecutor } from './SessionExecutor';
+import type { Logger } from '../provider/index';
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.

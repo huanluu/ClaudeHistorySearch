@@ -1,5 +1,5 @@
-export { Transport, type TransportOptions, type RequestContext } from './Transport.js';
-export { HttpTransport, type HttpTransportOptions } from './HttpTransport.js';
+export { Transport, type TransportOptions, type RequestContext } from './Transport';
+export { HttpTransport, type HttpTransportOptions } from './HttpTransport';
 export {
   WebSocketTransport,
   type WebSocketTransportOptions,
@@ -8,4 +8,4 @@ export {
   type AuthenticatedWebSocket,
   type AuthPayload,
   type AuthResultPayload
-} from './WebSocketTransport.js';
+} from './WebSocketTransport';

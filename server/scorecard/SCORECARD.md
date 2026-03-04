@@ -101,7 +101,7 @@ composition root).
 - Check constructor params, function params, and fields for cross-module types
 - `app.ts` is exempt (wires concrete classes by design)
 - **FAIL** if any non-app.ts file has a cross-module dependency typed as a concrete class
-- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-5: Interface-Typed Module Boundaries'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-5: Interface-Typed Module Boundaries'` (`it.fails`)
 
 #### ARCH-INV-6: Test Existence Floor
 > **Every source module with exported logic has a corresponding test file.**
@@ -109,7 +109,7 @@ composition root).
 - For every `.ts` in `src/` exporting functions or classes, a `.test.ts` must exist
 - Type-only files and barrel files are exempt
 - **FAIL** if any exportable module lacks a test file
-- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-6: Test Existence Floor'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-6: Test Existence Floor'` (`it.fails`)
 
 #### ARCH-INV-7: No Exported Singleton Instances
 > **No module may export a `const` initialized with `new` at module scope.**
@@ -234,7 +234,7 @@ state between tests.
 - `as any` is never acceptable — it hides missing mock methods
 - `as unknown as ConcreteClass` indicates a missing interface (report as ARCH-INV-5 violation)
 - **FAIL** if any `as any` appears in mock/stub construction in test files
-- **Enforced by**: `tests/scorecard.test.ts` → `'TEST-INV-1: No as any in test files'` (`it.failing`) + `eslint.config.js` → `@typescript-eslint/no-explicit-any` (Block 9, warn)
+- **Enforced by**: `tests/scorecard.test.ts` → `'TEST-INV-1: No as any in test files'` (`it.fails`) + `eslint.config.js` → `@typescript-eslint/no-explicit-any` (Block 9, warn)
 
 #### TEST-INV-2: No Global State Leaks Between Tests
 > **Tests that modify `process.env` or global state must restore it in `afterEach`/`afterAll`.**
@@ -244,7 +244,7 @@ state between tests.
 - Module-scope `process.env` assignments (outside `describe`/`it`) are violations — they
   affect all tests in the file and potentially other test files
 - **FAIL** if any `process.env` mutation lacks cleanup
-- **Enforced by**: `tests/scorecard.test.ts` → `'TEST-INV-2: No module-scope process.env mutations'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'TEST-INV-2: No module-scope process.env mutations'` (`it.fails`)
 
 #### TEST-INV-3: Tests Use Public API Only
 > **Test files must not import internal module files — only barrels and test utilities.**
@@ -324,7 +324,7 @@ logging to "clean up," add code paths without logging, break structured log form
 - Empty `catch {}` blocks or `catch { /* ignore */ }` are violations
 - Intentional suppression must include a comment explaining why
 - **FAIL** if any catch block silently swallows errors without logging or documented reason
-- **Enforced by**: `tests/scorecard.test.ts` → `'OBS-INV-2: Every catch block logs or rethrows'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'OBS-INV-2: Every catch block logs or rethrows'` (`it.fails`)
 
 #### OBS-INV-3: Health Endpoint Reflects All Subsystems
 > **`/health` must check every active subsystem and report degraded status when any fails.**
@@ -332,7 +332,7 @@ logging to "clean up," add code paths without logging, break structured log form
 - Every service started in `app.ts` must have a health indicator in the diagnostics
 - Adding a new service without adding its health check is a violation
 - **FAIL** if any active subsystem is missing from health/diagnostics output
-- **Enforced by**: `tests/scorecard.test.ts` → `'OBS-INV-3: Health reflects all subsystems'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'OBS-INV-3: Health reflects all subsystems'` (`it.fails`)
 
 ### Metrics
 
@@ -414,7 +414,7 @@ concatenation for shell commands, hardcode secrets, forget auth on new routes.
   it through `WorkingDirValidator` or equivalent
 - No raw user paths passed to `fs.*` or `spawn` without validation
 - **FAIL** if any user-controlled path reaches filesystem operations unvalidated
-- **Enforced by**: `tests/scorecard.test.ts` → `'SEC-INV-4: User-supplied paths validated before filesystem use'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'SEC-INV-4: User-supplied paths validated before filesystem use'` (`it.fails`)
 
 ### Metrics
 
@@ -553,7 +553,7 @@ into memory, miss database indexes, create O(n^2) loops over session data.
 - Session store, error buffer, client tracking — all must have capacity limits
 - Indexing operations should process files one at a time (stream), not load all into memory
 - **FAIL** if any in-memory collection can grow unbounded based on external input
-- **Enforced by**: `tests/scorecard.test.ts` → `'PERF-INV-3: No unbounded in-memory collections'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'PERF-INV-3: No unbounded in-memory collections'` (`it.fails`)
 
 ### Metrics
 
@@ -765,7 +765,7 @@ naming, create overly complex functions, skip TypeScript strict checks.
 - Each export must be imported somewhere in `src/` or `tests/`
 - Unused exports are dead code that misleads agents about the public API
 - **FAIL** if any barrel export has zero consumers
-- **Enforced by**: `tests/scorecard.test.ts` → `'CQ-INV-2: No dead barrel exports'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'CQ-INV-2: No dead barrel exports'` (`it.fails`)
 
 ### Metrics
 
@@ -838,7 +838,7 @@ patterns because they never found the patterns.
 - It must NOT be a monolithic reference (> 150 lines) that mixes architecture, API reference,
   operations, and testing in one file
 - **FAIL** if CLAUDE.md exceeds 150 lines or lacks links to deeper documentation
-- **Enforced by**: `tests/scorecard.test.ts` → `'AE-INV-1: CLAUDE.md is under 150 lines'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'AE-INV-1: CLAUDE.md is under 150 lines'` (`it.fails`)
 
 #### AE-INV-2: Adding-Features Guide Exists and Matches Reality
 > **A step-by-step guide for adding new modules/features exists and is accurate.**
@@ -849,7 +849,7 @@ patterns because they never found the patterns.
 - Each step in the checklist must reference the actual file to modify
 - The checklist must match the current codebase structure (not stale)
 - **FAIL** if no adding-features guide exists, or if it references non-existent files/patterns
-- **Enforced by**: `tests/scorecard.test.ts` → `'AE-INV-2: docs/adding-features.md exists'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'AE-INV-2: docs/adding-features.md exists'` (`it.fails`)
 
 #### AE-INV-3: Agent Can Collect Diagnostic Data Without Human Help
 > **Logs, health status, and diagnostics are accessible to the agent via CLI commands documented in CLAUDE.md.**
@@ -1034,22 +1034,22 @@ npm run scorecard:save      # Archive baseline + update with latest results
 | Layer | Tool | What It Checks |
 |-------|------|---------------|
 | Per-file rules | ESLint (`npm run lint`) | Import direction, barrel encapsulation, `any` usage, `console` usage |
-| Cross-file analysis | Jest (`npm test`) | Cycles, composition root, side effects, test existence, dead exports, etc. |
+| Cross-file analysis | Vitest (`npm test`) | Cycles, composition root, side effects, test existence, dead exports, etc. |
 
 ### Invariant Automation Coverage
 
 | Status | Count | Invariants |
 |--------|-------|------------|
 | Passing (`it()`) | 14 | ARCH-INV-2/3, SEC-INV-1/2/3, PRIV-INV-3, PERF-INV-1/2, REL-INV-1/2/3, OPS-INV-1/2, AE-INV-3 |
-| Known failures (`it.failing()`) | 12 | ARCH-INV-4/5/6/7, TEST-INV-2, OBS-INV-2/3, SEC-INV-4, PERF-INV-3, CQ-INV-2, AE-INV-1/2 |
+| Known failures (`it.fails()`) | 12 | ARCH-INV-4/5/6/7, TEST-INV-2, OBS-INV-2/3, SEC-INV-4, PERF-INV-3, CQ-INV-2, AE-INV-1/2 |
 | ESLint only | 5 | ARCH-INV-1, CQ-INV-1, TEST-INV-1/3, OBS-INV-1 |
 | Metrics (judgment-based) | 5 | PRIV-MET-2/3, REL-MET-3, OPS-MET-3, AE-MET-5 |
 
-### The `it.failing()` Ratchet
+### The `it.fails()` Ratchet
 
-Tests marked `it.failing()` represent known violations that are tracked, not ignored:
+Tests marked `it.fails()` represent known violations that are tracked, not ignored:
 - They **pass** in Jest (the expected failure occurs) → CI stays green
-- When someone fixes the underlying violation, Jest says "this test was expected to fail but passed"
+- When someone fixes the underlying violation, Vitest says "this test was expected to fail but passed"
 - Developer removes `.failing` → invariant is now permanently enforced
 - This IS the ratchet — no baseline comparison logic needed
 

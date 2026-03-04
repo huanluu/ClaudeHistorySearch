@@ -4,11 +4,10 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
-import { jest } from '@jest/globals';
-import type { SessionRepository } from '../src/database/interfaces.js';
-import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/database/connection.js';
-import { createRouter, type RouteDeps } from '../src/api/index.js';
-import type { Logger } from '../src/provider/logger/logger.js';
+import type { SessionRepository } from '../src/database/interfaces';
+import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/database/connection';
+import { createRouter, type RouteDeps } from '../src/api/index';
+import type { Logger } from '../src/provider/logger/logger';
 
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-${Date.now()}`);
@@ -382,7 +381,7 @@ describe('API Routes (with mock repository)', () => {
     });
 
     it('should call searchMessages with sanitized query', async () => {
-      const searchSpy = jest.fn().mockReturnValue(sampleSearchResults);
+      const searchSpy = vi.fn().mockReturnValue(sampleSearchResults);
       const spyRepo = createMockRepository({ searchMessages: searchSpy as SessionRepository['searchMessages'] });
       const spyApp = createTestApp({ repo: spyRepo }, false);
 
@@ -397,7 +396,7 @@ describe('API Routes (with mock repository)', () => {
 
   describe('DELETE /sessions/:id', () => {
     it('should call hideSession on repository', async () => {
-      const hideSpy = jest.fn();
+      const hideSpy = vi.fn();
       const spyRepo = createMockRepository({
         getSessionById: () => sampleSession,
         hideSession: hideSpy,
@@ -423,7 +422,7 @@ describe('API Routes (with mock repository)', () => {
 
   describe('POST /sessions/:id/read', () => {
     it('should call markSessionAsRead on repository', async () => {
-      const readSpy = jest.fn();
+      const readSpy = vi.fn();
       const spyRepo = createMockRepository({
         getSessionById: () => heartbeatSession,
         markSessionAsRead: readSpy,
@@ -478,10 +477,10 @@ describe('POST /heartbeat', () => {
 
   it('should call runHeartbeat(true) and return result', async () => {
     const mockResult = { tasksProcessed: 1, sessionsCreated: 0, sessionIds: [], errors: [] };
-    const mockHeartbeat = { runHeartbeat: jest.fn().mockResolvedValue(mockResult) };
+    const mockHeartbeat = { runHeartbeat: vi.fn().mockResolvedValue(mockResult) };
     const app = createTestApp({
       repo: mockRepo,
-      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService.js').HeartbeatService,
+      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService').HeartbeatService,
     }, false);
 
     const res = await request(app).post('/heartbeat');
@@ -503,10 +502,10 @@ describe('GET /api/config', () => {
 
   it('should return sections when configService provided', async () => {
     const mockSections = { heartbeat: { enabled: false }, security: { allowedWorkingDirs: [] } };
-    const mockConfig = { getAllEditableSections: jest.fn().mockReturnValue(mockSections) };
+    const mockConfig = { getAllEditableSections: vi.fn().mockReturnValue(mockSections) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).get('/api/config');
@@ -526,11 +525,11 @@ describe('PUT /api/config/:section', () => {
   });
 
   it('should update section and call onConfigChanged callback', async () => {
-    const onChanged = jest.fn();
-    const mockConfig = { updateSection: jest.fn().mockReturnValue(null) };
+    const onChanged = vi.fn();
+    const mockConfig = { updateSection: vi.fn().mockReturnValue(null) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
       onConfigChanged: onChanged,
     }, false);
 
@@ -542,10 +541,10 @@ describe('PUT /api/config/:section', () => {
   });
 
   it('should return 400 for validation error', async () => {
-    const mockConfig = { updateSection: jest.fn().mockReturnValue('intervalMs must be >= 60000') };
+    const mockConfig = { updateSection: vi.fn().mockReturnValue('intervalMs must be >= 60000') };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).put('/api/config/heartbeat').send({ intervalMs: 100 });
@@ -558,7 +557,7 @@ describe('POST /reindex', () => {
   const mockRepo = createMockRepository();
 
   it('should call indexFn and return result with force=false by default', async () => {
-    const indexFn = jest.fn<() => Promise<{ indexed: number; skipped: number }>>()
+    const indexFn = vi.fn<() => Promise<{ indexed: number; skipped: number }>>()
       .mockResolvedValue({ indexed: 5, skipped: 10 });
     const app = createTestApp({ repo: mockRepo, indexFn }, false);
 
@@ -570,7 +569,7 @@ describe('POST /reindex', () => {
   });
 
   it('should pass force=true when ?force=true', async () => {
-    const indexFn = jest.fn<() => Promise<{ indexed: number; skipped: number }>>()
+    const indexFn = vi.fn<() => Promise<{ indexed: number; skipped: number }>>()
       .mockResolvedValue({ indexed: 0, skipped: 0 });
     const app = createTestApp({ repo: mockRepo, indexFn }, false);
 
@@ -580,7 +579,7 @@ describe('POST /reindex', () => {
   });
 
   it('should return 500 when indexFn rejects', async () => {
-    const indexFn = jest.fn<() => Promise<{ indexed: number; skipped: number }>>()
+    const indexFn = vi.fn<() => Promise<{ indexed: number; skipped: number }>>()
       .mockRejectedValue(new Error('disk full'));
     const app = createTestApp({ repo: mockRepo, indexFn }, false);
 
@@ -610,10 +609,10 @@ describe('GET /heartbeat/status', () => {
 
   it('should return mapped state from heartbeatService', async () => {
     const mockHeartbeat = {
-      getAllState: jest.fn().mockReturnValue([
+      getAllState: vi.fn().mockReturnValue([
         { key: 'item-1', last_changed: '2025-01-01', last_processed: '2025-01-01' },
       ]),
-      getConfig: jest.fn().mockReturnValue({
+      getConfig: vi.fn().mockReturnValue({
         enabled: true,
         intervalMs: 120000,
         workingDirectory: '/tmp/work',
@@ -621,7 +620,7 @@ describe('GET /heartbeat/status', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService.js').HeartbeatService,
+      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService').HeartbeatService,
     }, false);
 
     const res = await request(app).get('/heartbeat/status');
@@ -637,12 +636,12 @@ describe('GET /heartbeat/status', () => {
 
   it('should return 500 when getAllState throws', async () => {
     const mockHeartbeat = {
-      getAllState: jest.fn().mockImplementation(() => { throw new Error('db error'); }),
-      getConfig: jest.fn().mockReturnValue({ enabled: false, intervalMs: 0, workingDirectory: '' }),
+      getAllState: vi.fn().mockImplementation(() => { throw new Error('db error'); }),
+      getConfig: vi.fn().mockReturnValue({ enabled: false, intervalMs: 0, workingDirectory: '' }),
     };
     const app = createTestApp({
       repo: mockRepo,
-      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService.js').HeartbeatService,
+      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService').HeartbeatService,
     }, false);
 
     const res = await request(app).get('/heartbeat/status');
@@ -687,10 +686,10 @@ describe('GET /api/config/:section', () => {
 
   it('should return section data when found', async () => {
     const sectionData = { enabled: true, intervalMs: 120000 };
-    const mockConfig = { getSection: jest.fn().mockReturnValue(sectionData) };
+    const mockConfig = { getSection: vi.fn().mockReturnValue(sectionData) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).get('/api/config/heartbeat');
@@ -701,10 +700,10 @@ describe('GET /api/config/:section', () => {
   });
 
   it('should return 404 for unknown section', async () => {
-    const mockConfig = { getSection: jest.fn().mockReturnValue(null) };
+    const mockConfig = { getSection: vi.fn().mockReturnValue(null) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService.js').ConfigService,
+      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).get('/api/config/nonexistent');
@@ -719,7 +718,7 @@ describe('GET /health (with diagnosticsService)', () => {
 
   it('should return enhanced health when diagnosticsService is provided', async () => {
     const mockDiagnostics = {
-      getHealth: jest.fn().mockReturnValue({
+      getHealth: vi.fn().mockReturnValue({
         status: 'healthy',
         timestamp: '2025-01-01T00:00:00.000Z',
         checks: { database: true },
@@ -727,7 +726,7 @@ describe('GET /health (with diagnosticsService)', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService.js').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/health');
@@ -738,7 +737,7 @@ describe('GET /health (with diagnosticsService)', () => {
 
   it('should return degraded when database check fails', async () => {
     const mockDiagnostics = {
-      getHealth: jest.fn().mockReturnValue({
+      getHealth: vi.fn().mockReturnValue({
         status: 'degraded',
         timestamp: '2025-01-01T00:00:00.000Z',
         checks: { database: false },
@@ -746,7 +745,7 @@ describe('GET /health (with diagnosticsService)', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService.js').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/health');
@@ -777,7 +776,7 @@ describe('GET /diagnostics', () => {
 
   it('should return full diagnostics snapshot', async () => {
     const mockDiagnostics = {
-      getDiagnostics: jest.fn().mockReturnValue({
+      getDiagnostics: vi.fn().mockReturnValue({
         status: 'healthy',
         uptime: { startedAt: '2025-01-01T00:00:00.000Z', uptimeSeconds: 3600 },
         database: { connected: true, path: '/tmp/test.db', sessionCount: 50, messageCount: 1000, dbSizeBytes: 512000 },
@@ -790,7 +789,7 @@ describe('GET /diagnostics', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService.js').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/diagnostics');
@@ -805,7 +804,7 @@ describe('GET /diagnostics', () => {
 
   it('should return 503 when status is unhealthy', async () => {
     const mockDiagnostics = {
-      getDiagnostics: jest.fn().mockReturnValue({
+      getDiagnostics: vi.fn().mockReturnValue({
         status: 'unhealthy',
         uptime: { startedAt: '2025-01-01T00:00:00.000Z', uptimeSeconds: 100 },
         database: { connected: false, path: '/tmp/test.db', sessionCount: 0, messageCount: 0, dbSizeBytes: 0 },
@@ -818,7 +817,7 @@ describe('GET /diagnostics', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService.js').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/diagnostics');
