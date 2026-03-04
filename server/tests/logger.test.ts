@@ -1,5 +1,5 @@
-import { createLogger } from '../src/provider/index';
-import type { LogEntry } from '../src/provider/index';
+import { createLogger } from '../src/shared/provider/index';
+import type { LogEntry } from '../src/shared/provider/index';
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

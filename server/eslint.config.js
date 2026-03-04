@@ -5,16 +5,19 @@ import tseslint from 'typescript-eslint';
  * Each module exposes a barrel (index.ts) as its public API.
  * Imports that bypass the barrel are flagged by the lint rule below.
  *
- * Layer dependency direction (lower can't import higher):
- *   provider → database → services → sessions/transport → api
+ * Module structure:
+ *   shared/provider, shared/database, shared/transport, shared/runtime
+ *   features/search, features/live, features/scheduler, features/admin
  */
 const moduleBoundaries = [
-  { name: 'database',  message: "Import from './database/index' instead." },
-  { name: 'transport', message: "Import from './transport/index' instead." },
-  { name: 'sessions',  message: "Import from './sessions/index' instead." },
-  { name: 'services',  message: "Import from './services/index' instead." },
-  { name: 'provider',  message: "Import from './provider/index' — single entry point for cross-cutting concerns." },
-  { name: 'api',       message: "Import from './api/index' instead." },
+  { name: 'shared/provider',     message: "Import from 'shared/provider/index' instead." },
+  { name: 'shared/database',     message: "Import from 'shared/database/index' instead." },
+  { name: 'shared/transport',    message: "Import from 'shared/transport/index' instead." },
+  { name: 'shared/runtime',      message: "Import from 'shared/runtime/index' instead." },
+  { name: 'features/search',     message: "Import from 'features/search/index' instead." },
+  { name: 'features/live',       message: "Import from 'features/live/index' instead." },
+  { name: 'features/scheduler',  message: "Import from 'features/scheduler/index' instead." },
+  { name: 'features/admin',      message: "Import from 'features/admin/index' instead." },
 ];
 
 /**
@@ -48,101 +51,101 @@ export default tseslint.config(
   // ── Block 2: Barrel files — rule OFF (internal wiring) ─────────────
   {
     files: [
-      'src/database/index.ts',
-      'src/transport/index.ts',
-      'src/sessions/index.ts',
-      'src/services/index.ts',
-      'src/provider/index.ts',
-      'src/provider/security/index.ts',
-      'src/provider/auth/index.ts',
-      'src/api/index.ts',
+      'src/shared/database/index.ts',
+      'src/shared/transport/index.ts',
+      'src/shared/runtime/index.ts',
+      'src/shared/provider/index.ts',
+      'src/shared/provider/security/index.ts',
+      'src/shared/provider/auth/index.ts',
+      'src/shared/provider/logger/index.ts',
+      'src/features/search/index.ts',
+      'src/features/live/index.ts',
+      'src/features/scheduler/index.ts',
+      'src/features/admin/index.ts',
     ],
     rules: {
       '@typescript-eslint/no-restricted-imports': 'off',
     },
   },
 
-  // ── Block 3: provider/ — free internally, blocked from ALL business logic ─
-  // Scorecard ARCH-INV-1: Layer Import Direction (Blocks 3–7 enforce this)
+  // ── Block 3: shared/provider — cannot import any other module ──────
   {
-    files: ['src/provider/**/*.ts'],
+    files: ['src/shared/provider/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
         patterns: [
-          { group: ['*/database/*', '*/database'], message: 'provider/ cannot depend on database/.' },
-          { group: ['*/services/*', '*/services'], message: 'provider/ cannot depend on services/.' },
-          { group: ['*/sessions/*', '*/sessions'], message: 'provider/ cannot depend on sessions/.' },
-          { group: ['*/transport/*', '*/transport'], message: 'provider/ cannot depend on transport/.' },
-          { group: ['*/api/*', '*/api'], message: 'provider/ cannot depend on api/.' },
+          { group: ['*/shared/database/*', '*/shared/database'], message: 'shared/provider/ cannot depend on shared/database/.' },
+          { group: ['*/shared/transport/*', '*/shared/transport'], message: 'shared/provider/ cannot depend on shared/transport/.' },
+          { group: ['*/shared/runtime/*', '*/shared/runtime'], message: 'shared/provider/ cannot depend on shared/runtime/.' },
+          { group: ['*/features/*'], message: 'shared/provider/ cannot depend on features/.' },
         ],
       }],
     },
   },
 
-  // ── Block 4: database/ — can use provider. Blocked from services+. ─
+  // ── Block 4: shared/database — can import shared/provider only ─────
   {
-    files: ['src/database/**/*.ts'],
+    files: ['src/shared/database/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
         patterns: [
-          ...barrelPatterns('provider'),
-          { group: ['*/services/*', '*/services'], message: 'database/ cannot depend on services/.' },
-          { group: ['*/sessions/*', '*/sessions'], message: 'database/ cannot depend on sessions/.' },
-          { group: ['*/transport/*', '*/transport'], message: 'database/ cannot depend on transport/.' },
-          { group: ['*/api/*', '*/api'], message: 'database/ cannot depend on api/.' },
+          ...barrelPatterns('shared/provider'),
+          { group: ['*/shared/transport/*', '*/shared/transport'], message: 'shared/database/ cannot depend on shared/transport/.' },
+          { group: ['*/shared/runtime/*', '*/shared/runtime'], message: 'shared/database/ cannot depend on shared/runtime/.' },
+          { group: ['*/features/*'], message: 'shared/database/ cannot depend on features/.' },
         ],
       }],
     },
   },
 
-  // ── Block 5: services/ — can use provider, database. Blocked from sessions+. ─
+  // ── Block 5: shared/transport — can import shared/provider only ────
   {
-    files: ['src/services/**/*.ts'],
+    files: ['src/shared/transport/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
         patterns: [
-          ...barrelPatterns('provider', 'database'),
-          { group: ['*/sessions/*', '*/sessions'], message: 'services/ cannot depend on sessions/.' },
-          { group: ['*/transport/*', '*/transport'], message: 'services/ cannot depend on transport/.' },
-          { group: ['*/api/*', '*/api'], message: 'services/ cannot depend on api/.' },
+          ...barrelPatterns('shared/provider'),
+          { group: ['*/shared/database/*', '*/shared/database'], message: 'shared/transport/ cannot depend on shared/database/.' },
+          { group: ['*/shared/runtime/*', '*/shared/runtime'], message: 'shared/transport/ cannot depend on shared/runtime/.' },
+          { group: ['*/features/*'], message: 'shared/transport/ cannot depend on features/.' },
         ],
       }],
     },
   },
 
-  // ── Block 6: sessions/ — can use provider, database, services. Blocked from transport+. ─
+  // ── Block 6: shared/runtime — can import shared/provider only ──────
   {
-    files: ['src/sessions/**/*.ts'],
+    files: ['src/shared/runtime/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
         patterns: [
-          ...barrelPatterns('provider', 'database', 'services'),
-          { group: ['*/transport/*', '*/transport'], message: 'sessions/ cannot depend on transport/.' },
-          { group: ['*/api/*', '*/api'], message: 'sessions/ cannot depend on api/.' },
+          ...barrelPatterns('shared/provider'),
+          { group: ['*/shared/database/*', '*/shared/database'], message: 'shared/runtime/ cannot depend on shared/database/.' },
+          { group: ['*/shared/transport/*', '*/shared/transport'], message: 'shared/runtime/ cannot depend on shared/transport/.' },
+          { group: ['*/features/*'], message: 'shared/runtime/ cannot depend on features/.' },
         ],
       }],
     },
   },
 
-  // ── Block 7: api/ — can use all barrels (top layer). ───────────────
+  // ── Block 7: features/* — can import shared/* via barrel. Cross-feature type imports only ──
   {
-    files: ['src/api/**/*.ts'],
+    files: ['src/features/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
         patterns: [
-          ...barrelPatterns('provider', 'database', 'services', 'sessions', 'transport'),
+          ...barrelPatterns('shared/provider', 'shared/database', 'shared/transport', 'shared/runtime'),
+          // Cross-feature imports: allowed as type-only
+          { group: ['*/features/search/*', '!*/features/search/index*'], allowTypeImports: true, message: "Import from 'features/search/index' instead." },
+          { group: ['*/features/live/*', '!*/features/live/index*'], allowTypeImports: true, message: "Import from 'features/live/index' instead." },
+          { group: ['*/features/scheduler/*', '!*/features/scheduler/index*'], allowTypeImports: true, message: "Import from 'features/scheduler/index' instead." },
+          { group: ['*/features/admin/*', '!*/features/admin/index*'], allowTypeImports: true, message: "Import from 'features/admin/index' instead." },
         ],
       }],
     },
   },
-
-  // transport/ — no dedicated block needed. Global rule (Block 1) handles
-  // barrel enforcement, and transport has no upward dependency restrictions
-  // since it's a Runtime layer peer with sessions/.
 
   // ── Block 8: No .js extensions in imports ───────────────────────────
-  // After migrating to Vitest + tsup with moduleResolution "Bundler",
-  // .js extensions are unnecessary and confusing.
   {
     files: ['src/**/*.ts', 'tests/**/*.ts'],
     rules: {
@@ -157,7 +160,6 @@ export default tseslint.config(
   },
 
   // ── Block 9: Scorecard CQ-INV-1 — no explicit `any` in source ──────
-  // Scorecard CQ-INV-1: Zero `any` Types in Source Code
   {
     files: ['src/**/*.ts'],
     rules: {
@@ -165,10 +167,7 @@ export default tseslint.config(
     },
   },
 
-  // ── Block 9: Scorecard TEST-INV-1 — no explicit `any` in tests ────
-  // Scorecard TEST-INV-1: No Type Escape Hatches in Tests
-  // Using 'warn' because 3 known violations exist (tracked by scorecard test).
-  // Upgrade to 'error' after fixing: config.test.ts:84, config-security.test.ts:40,47
+  // ── Block 9b: Scorecard TEST-INV-1 — no explicit `any` in tests ────
   {
     files: ['tests/**/*.ts'],
     rules: {
@@ -177,12 +176,11 @@ export default tseslint.config(
   },
 
   // ── Block 10: Scorecard OBS-INV-1 — no console in source ──────────
-  // Scorecard OBS-INV-1: No Console in Source Code
   {
     files: ['src/**/*.ts'],
     ignores: [
-      'src/provider/logger/logger.ts',   // Logger wraps console behind opt-in flag
-      'src/provider/auth/keyManager.ts',  // CLI entry point (guarded by process.argv)
+      'src/shared/provider/logger/logger.ts',
+      'src/shared/provider/auth/keyManager.ts',
     ],
     rules: {
       'no-console': 'error',

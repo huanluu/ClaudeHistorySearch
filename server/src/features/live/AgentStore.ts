@@ -1,11 +1,11 @@
-import { SessionExecutor } from './SessionExecutor';
-import type { Logger } from '../provider/index';
+import { AgentExecutor } from '../../shared/runtime/index';
+import type { Logger } from '../../shared/provider/index';
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.
  */
-export class SessionStore {
-  private sessions: Map<string, SessionExecutor> = new Map();
+export class AgentStore {
+  private sessions: Map<string, AgentExecutor> = new Map();
   private clientSessions: Map<string, Set<string>> = new Map();
   private logger: Logger;
 
@@ -16,8 +16,8 @@ export class SessionStore {
   /**
    * Create a new session executor and track it.
    */
-  create(sessionId: string, clientId: string): SessionExecutor {
-    const executor = new SessionExecutor(sessionId, this.logger);
+  create(sessionId: string, clientId: string): AgentExecutor {
+    const executor = new AgentExecutor(sessionId, this.logger);
 
     // Track session
     this.sessions.set(sessionId, executor);
@@ -34,7 +34,7 @@ export class SessionStore {
   /**
    * Get a session by ID.
    */
-  get(sessionId: string): SessionExecutor | undefined {
+  get(sessionId: string): AgentExecutor | undefined {
     return this.sessions.get(sessionId);
   }
 
@@ -48,7 +48,7 @@ export class SessionStore {
   /**
    * Remove a session and return it.
    */
-  remove(sessionId: string): SessionExecutor | undefined {
+  remove(sessionId: string): AgentExecutor | undefined {
     const executor = this.sessions.get(sessionId);
     if (executor) {
       this.sessions.delete(sessionId);
@@ -67,7 +67,7 @@ export class SessionStore {
   /**
    * Get all sessions for a client.
    */
-  getByClient(clientId: string): SessionExecutor[] {
+  getByClient(clientId: string): AgentExecutor[] {
     const sessionIds = this.clientSessions.get(clientId);
     if (!sessionIds) {
       return [];
@@ -75,19 +75,19 @@ export class SessionStore {
 
     return Array.from(sessionIds)
       .map(id => this.sessions.get(id))
-      .filter((e): e is SessionExecutor => e !== undefined);
+      .filter((e): e is AgentExecutor => e !== undefined);
   }
 
   /**
    * Remove all sessions for a client.
    */
-  removeByClient(clientId: string): SessionExecutor[] {
+  removeByClient(clientId: string): AgentExecutor[] {
     const sessionIds = this.clientSessions.get(clientId);
     if (!sessionIds) {
       return [];
     }
 
-    const removed: SessionExecutor[] = [];
+    const removed: AgentExecutor[] = [];
     for (const sessionId of sessionIds) {
       const executor = this.sessions.get(sessionId);
       if (executor) {
@@ -103,7 +103,7 @@ export class SessionStore {
   /**
    * Get all sessions.
    */
-  getAll(): SessionExecutor[] {
+  getAll(): AgentExecutor[] {
     return Array.from(this.sessions.values());
   }
 }

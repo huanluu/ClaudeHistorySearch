@@ -35,7 +35,17 @@ cd Shared && swift test            # Swift package tests
 
 ## Architecture
 
-The server uses a layered architecture (`provider → database → services → sessions/transport → api`) with ESLint-enforced boundaries. See `server/CLAUDE.md` for full details.
+The server uses a **feature-first** architecture with a shared linear dependency chain, enforced by ESLint. See `server/CLAUDE.md` for full details.
+
+```
+shared/provider → shared/database → shared/runtime
+         ↓               ↓               ↓
+    features/search, features/live, features/scheduler, features/admin
+                              ↓
+                           app.ts (composition root)
+```
+
+Features import from `shared/` but never from each other. Cross-feature wiring happens in `app.ts`.
 
 ### Shared Package (`Shared/Sources/ClaudeHistoryShared/`)
 

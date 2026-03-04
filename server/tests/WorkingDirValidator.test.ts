@@ -1,7 +1,7 @@
 import { mkdirSync, symlinkSync, rmSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { WorkingDirValidator } from '../src/provider/index';
+import { WorkingDirValidator } from '../src/shared/provider/index';
 
 describe('WorkingDirValidator', () => {
   // Resolve tmpdir to handle macOS /var → /private/var symlink

@@ -1,9 +1,10 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
-import { validateApiKey, hasApiKey, WorkingDirValidator } from '../provider/index';
-import type { Logger } from '../provider/index';
-import { SessionStore, SessionExecutor } from '../sessions/index';
+import { validateApiKey, hasApiKey, WorkingDirValidator } from '../../shared/provider/index';
+import type { Logger } from '../../shared/provider/index';
+import { AgentStore } from './AgentStore';
+import { AgentExecutor } from '../../shared/runtime/index';
 
 /**
  * Message types for WebSocket communication
@@ -80,7 +81,7 @@ export interface WebSocketTransportOptions {
   /** Logger instance */
   logger: Logger;
   /** Session store for tracking active sessions */
-  sessionStore: SessionStore;
+  sessionStore: AgentStore;
   /** Message handler callback */
   onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
   /** Connection handler callback */
@@ -108,7 +109,7 @@ export class WebSocketTransport {
   private pingInterval: number;
   private pingTimer: NodeJS.Timeout | null = null;
   private clients: Set<AuthenticatedWebSocket> = new Set();
-  private sessionStore: SessionStore;
+  private sessionStore: AgentStore;
   private validator?: WorkingDirValidator;
   private logger: Logger;
 
@@ -437,7 +438,7 @@ export class WebSocketTransport {
   /**
    * Wire up session executor events to WebSocket messages
    */
-  private _wireSessionEvents(ws: AuthenticatedWebSocket, executor: SessionExecutor, sessionId: string): void {
+  private _wireSessionEvents(ws: AuthenticatedWebSocket, executor: AgentExecutor, sessionId: string): void {
     this.logger.verbose({ msg: `Wiring session events for: ${sessionId}`, op: 'ws.message', context: { sessionId } });
 
     executor.on('message', (message: unknown) => {

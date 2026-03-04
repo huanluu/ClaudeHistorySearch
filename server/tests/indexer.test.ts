@@ -1,6 +1,6 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { parseSessionFile, type ParsedSession, detectAutomaticSession } from '../src/services/indexer';
+import { parseSessionFile, type ParsedSession, detectAutomaticSession } from '../src/features/search/indexer';
 
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));

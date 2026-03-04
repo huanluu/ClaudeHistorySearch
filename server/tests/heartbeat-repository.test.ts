@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { createHeartbeatRepository, type HeartbeatRepository } from '../src/database/index';
+import { createHeartbeatRepository, type HeartbeatRepository } from '../src/shared/database/index';
 
 describe('HeartbeatRepository (SQLite)', () => {
   let db: Database.Database;

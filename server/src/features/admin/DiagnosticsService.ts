@@ -1,7 +1,7 @@
-import type { SessionRepository, DatabaseStats } from '../database/index';
-import type { ErrorRingBuffer } from '../provider/index';
-import type { FileWatcher } from './FileWatcher';
-import type { HeartbeatService } from './HeartbeatService';
+import type { SessionRepository, DatabaseStats } from '../../shared/database/index';
+import type { ErrorRingBuffer } from '../../shared/provider/index';
+import type { FileWatcher } from '../search/index';
+import type { HeartbeatService } from '../scheduler/index';
 
 export interface DiagnosticsSources {
   repo: SessionRepository;

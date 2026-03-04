@@ -4,10 +4,13 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
-import type { SessionRepository } from '../src/database/interfaces';
-import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/database/connection';
-import { createRouter, type RouteDeps } from '../src/api/index';
-import type { Logger } from '../src/provider/logger/logger';
+import { Router } from 'express';
+import type { SessionRepository } from '../src/shared/database/index';
+import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/shared/database/index';
+import { registerSearchRoutes, type SearchRouteDeps } from '../src/features/search/index';
+import { registerSchedulerRoutes, type SchedulerRouteDeps } from '../src/features/scheduler/index';
+import { registerAdminRoutes, type AdminRouteDeps } from '../src/features/admin/index';
+import type { Logger } from '../src/shared/provider/index';
 
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-${Date.now()}`);
@@ -67,8 +70,19 @@ function createMockRepository(overrides?: Partial<SessionRepository>): SessionRe
   };
 }
 
-// Create a test app that uses the real createRouter with RouteDeps
-function createTestApp(deps: Omit<RouteDeps, 'logger'> & { logger?: Logger }, withAuth = true): Application {
+// Combined deps interface for test convenience
+interface TestRouteDeps {
+  repo: SessionRepository;
+  heartbeatService?: SchedulerRouteDeps['heartbeatService'];
+  configService?: AdminRouteDeps['configService'];
+  diagnosticsService?: AdminRouteDeps['diagnosticsService'];
+  onConfigChanged?: (section: string) => void;
+  logger?: Logger;
+  indexFn?: SearchRouteDeps['indexFn'];
+}
+
+// Create a test app that uses the new register functions
+function createTestApp(deps: TestRouteDeps, withAuth = true): Application {
   const app = express();
   app.use(express.json());
 
@@ -113,8 +127,13 @@ function createTestApp(deps: Omit<RouteDeps, 'logger'> & { logger?: Logger }, wi
     next();
   });
 
-  // Mount the REAL router with deps (inject noop logger if not provided)
-  app.use('/', createRouter({ logger: noopLogger, ...deps }));
+  // Mount routes using the new register functions
+  const logger = deps.logger ?? noopLogger;
+  const router = Router();
+  registerSearchRoutes(router, { repo: deps.repo, logger, indexFn: deps.indexFn });
+  registerSchedulerRoutes(router, { heartbeatService: deps.heartbeatService, logger });
+  registerAdminRoutes(router, { diagnosticsService: deps.diagnosticsService, configService: deps.configService, onConfigChanged: deps.onConfigChanged, logger });
+  app.use('/', router);
 
   return app;
 }
@@ -480,7 +499,7 @@ describe('POST /heartbeat', () => {
     const mockHeartbeat = { runHeartbeat: vi.fn().mockResolvedValue(mockResult) };
     const app = createTestApp({
       repo: mockRepo,
-      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService').HeartbeatService,
+      heartbeatService: mockHeartbeat as unknown as import('../src/features/scheduler/HeartbeatService').HeartbeatService,
     }, false);
 
     const res = await request(app).post('/heartbeat');
@@ -505,7 +524,7 @@ describe('GET /api/config', () => {
     const mockConfig = { getAllEditableSections: vi.fn().mockReturnValue(mockSections) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
+      configService: mockConfig as unknown as import('../src/features/admin/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).get('/api/config');
@@ -529,7 +548,7 @@ describe('PUT /api/config/:section', () => {
     const mockConfig = { updateSection: vi.fn().mockReturnValue(null) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
+      configService: mockConfig as unknown as import('../src/features/admin/ConfigService').ConfigService,
       onConfigChanged: onChanged,
     }, false);
 
@@ -544,7 +563,7 @@ describe('PUT /api/config/:section', () => {
     const mockConfig = { updateSection: vi.fn().mockReturnValue('intervalMs must be >= 60000') };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
+      configService: mockConfig as unknown as import('../src/features/admin/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).put('/api/config/heartbeat').send({ intervalMs: 100 });
@@ -620,7 +639,7 @@ describe('GET /heartbeat/status', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService').HeartbeatService,
+      heartbeatService: mockHeartbeat as unknown as import('../src/features/scheduler/HeartbeatService').HeartbeatService,
     }, false);
 
     const res = await request(app).get('/heartbeat/status');
@@ -641,7 +660,7 @@ describe('GET /heartbeat/status', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      heartbeatService: mockHeartbeat as unknown as import('../src/services/HeartbeatService').HeartbeatService,
+      heartbeatService: mockHeartbeat as unknown as import('../src/features/scheduler/HeartbeatService').HeartbeatService,
     }, false);
 
     const res = await request(app).get('/heartbeat/status');
@@ -689,7 +708,7 @@ describe('GET /api/config/:section', () => {
     const mockConfig = { getSection: vi.fn().mockReturnValue(sectionData) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
+      configService: mockConfig as unknown as import('../src/features/admin/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).get('/api/config/heartbeat');
@@ -703,7 +722,7 @@ describe('GET /api/config/:section', () => {
     const mockConfig = { getSection: vi.fn().mockReturnValue(null) };
     const app = createTestApp({
       repo: mockRepo,
-      configService: mockConfig as unknown as import('../src/services/ConfigService').ConfigService,
+      configService: mockConfig as unknown as import('../src/features/admin/ConfigService').ConfigService,
     }, false);
 
     const res = await request(app).get('/api/config/nonexistent');
@@ -726,7 +745,7 @@ describe('GET /health (with diagnosticsService)', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/features/admin/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/health');
@@ -745,7 +764,7 @@ describe('GET /health (with diagnosticsService)', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/features/admin/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/health');
@@ -789,7 +808,7 @@ describe('GET /diagnostics', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/features/admin/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/diagnostics');
@@ -817,7 +836,7 @@ describe('GET /diagnostics', () => {
     };
     const app = createTestApp({
       repo: mockRepo,
-      diagnosticsService: mockDiagnostics as unknown as import('../src/services/DiagnosticsService').DiagnosticsService,
+      diagnosticsService: mockDiagnostics as unknown as import('../src/features/admin/DiagnosticsService').DiagnosticsService,
     }, false);
 
     const res = await request(app).get('/diagnostics');

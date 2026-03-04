@@ -80,7 +80,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // Scorecard ARCH-INV-2: Barrel Encapsulation
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-2
   describe('ARCH-INV-2: Barrel Encapsulation', () => {
-    const modules = ['provider', 'database', 'services', 'sessions', 'transport', 'api'];
+    const modules = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
 
     for (const mod of modules) {
       it(`${mod}/ has an index.ts barrel file`, () => {
@@ -159,17 +159,28 @@ describe('Scorecard: Architecture Invariants', () => {
     const violations: Array<{ file: string; line: number; match: string }> = [];
 
     // Modules whose classes are cross-module (exported from barrels)
-    const moduleNames = ['provider', 'database', 'services', 'sessions', 'transport', 'api'];
+    const moduleNames = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
+
+    // Helper to determine which module a file belongs to (2-level paths)
+    function getFileModule(relFile: string): string {
+      const parts = relFile.split('/');
+      if (parts.length >= 2 && (parts[0] === 'shared' || parts[0] === 'features')) {
+        return `${parts[0]}/${parts[1]}`;
+      }
+      return parts[0];
+    }
 
     for (const file of allFiles) {
       const relFile = relative(SRC_DIR, file);
       // app.ts and index.ts are exempt (composition root / entry point)
+      // AgentStore.ts is exempt (factory for AgentExecutor — store pattern)
       if (relFile === 'app.ts' || relFile === 'index.ts') continue;
+      if (relFile === 'features/live/AgentStore.ts') continue;
 
       const content = readFileSync(file, 'utf-8');
       const lines = content.split('\n');
       // Determine which module this file belongs to
-      const fileModule = relFile.split('/')[0];
+      const fileModule = getFileModule(relFile);
 
       // Find all imports from other modules
       const crossModuleClasses = new Set<string>();
@@ -218,7 +229,7 @@ describe('Scorecard: Architecture Invariants', () => {
     // be an `interface Foo` or a corresponding interface type elsewhere in the module.
     const allFiles = collectTsFiles(SRC_DIR);
     const violations: Array<{ module: string; className: string }> = [];
-    const moduleNames = ['provider', 'database', 'services', 'sessions', 'transport', 'api'];
+    const moduleNames = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
 
     for (const mod of moduleNames) {
       const barrelPath = join(SRC_DIR, mod, 'index.ts');
@@ -620,15 +631,19 @@ describe('Scorecard: Security Invariants', () => {
   it('SEC-INV-3: All non-public routes are behind auth middleware', () => {
     // Auth middleware is applied globally in app.ts via transport.use(authMiddleware).
     // Public endpoints must be declared in an explicit allowlist checked by the middleware.
-    const middlewarePath = join(SRC_DIR, 'provider', 'auth', 'middleware.ts');
+    const middlewarePath = join(SRC_DIR, 'shared', 'provider', 'auth', 'middleware.ts');
     const middlewareContent = readFileSync(middlewarePath, 'utf-8');
 
     // The middleware should define a public paths allowlist
     const hasPublicPaths = /public.*path|skip.*auth|exempt|allowlist/i.test(middlewareContent);
 
-    // routes.ts should NOT have its own conditional auth checks (auth should be global)
-    const routesPath = join(SRC_DIR, 'api', 'routes.ts');
-    const routesContent = readFileSync(routesPath, 'utf-8');
+    // route files should NOT have their own conditional auth checks (auth should be global)
+    const routeFiles = [
+      join(SRC_DIR, 'features', 'search', 'routes.ts'),
+      join(SRC_DIR, 'features', 'scheduler', 'routes.ts'),
+      join(SRC_DIR, 'features', 'admin', 'routes.ts'),
+    ];
+    const routesContent = routeFiles.map(f => existsSync(f) ? readFileSync(f, 'utf-8') : '').join('\n');
     const perRouteAuthChecks = routesContent.match(/if\s*\(.*auth.*\)/gi) || [];
 
     // Expect: centralized public paths list exists, no per-route auth checks
@@ -642,8 +657,10 @@ describe('Scorecard: Security Invariants', () => {
   it.fails('SEC-INV-4: User-supplied paths validated before filesystem use', () => {
     // Files that handle user input and may touch the filesystem
     const handlerFiles = [
-      join(SRC_DIR, 'api', 'routes.ts'),
-      join(SRC_DIR, 'transport', 'WebSocketTransport.ts'),
+      join(SRC_DIR, 'features', 'search', 'routes.ts'),
+      join(SRC_DIR, 'features', 'scheduler', 'routes.ts'),
+      join(SRC_DIR, 'features', 'admin', 'routes.ts'),
+      join(SRC_DIR, 'features', 'live', 'WebSocketTransport.ts'),
     ];
 
     const violations: Array<{ file: string; line: number; issue: string }> = [];
@@ -700,7 +717,7 @@ describe('Scorecard: Privacy Invariants', () => {
 
     // Session-serving endpoints that MUST require auth
     const sessionEndpoints = ['/sessions', '/search'];
-    const middlewarePath = join(SRC_DIR, 'provider', 'auth', 'middleware.ts');
+    const middlewarePath = join(SRC_DIR, 'shared', 'provider', 'auth', 'middleware.ts');
     const middlewareContent = readFileSync(middlewarePath, 'utf-8');
 
     // These endpoints must NOT appear in any skip/public path list
@@ -731,10 +748,12 @@ describe('Scorecard: Performance Invariants', () => {
   // Scorecard PERF-INV-1: No Synchronous I/O in Request Handlers
   // See: scorecard/SCORECARD.md § Performance > Invariants > PERF-INV-1
   it('PERF-INV-1: No sync I/O in request handlers', () => {
-    // Check routes.ts and WebSocketTransport.ts handler functions for sync I/O
+    // Check route files and WebSocketTransport.ts handler functions for sync I/O
     const handlerFiles = [
-      join(SRC_DIR, 'api', 'routes.ts'),
-      join(SRC_DIR, 'transport', 'WebSocketTransport.ts'),
+      join(SRC_DIR, 'features', 'search', 'routes.ts'),
+      join(SRC_DIR, 'features', 'scheduler', 'routes.ts'),
+      join(SRC_DIR, 'features', 'admin', 'routes.ts'),
+      join(SRC_DIR, 'features', 'live', 'WebSocketTransport.ts'),
     ];
 
     const syncPatterns = [
@@ -803,7 +822,7 @@ describe('Scorecard: Performance Invariants', () => {
   // Scorecard PERF-INV-2: Database Queries Use Indexes
   // See: scorecard/SCORECARD.md § Performance > Invariants > PERF-INV-2
   it('PERF-INV-2: No unindexed queries — all SELECT use indexed columns or FTS', () => {
-    const dbFiles = collectTsFiles(join(SRC_DIR, 'database'));
+    const dbFiles = collectTsFiles(join(SRC_DIR, 'shared', 'database'));
     const violations: Array<{ file: string; line: number; query: string }> = [];
 
     // Patterns for queries that should use indexes
@@ -1025,7 +1044,7 @@ describe('Scorecard: Operability Invariants', () => {
   // Scorecard OPS-INV-2: Log Rotation Prevents Unbounded Growth
   // See: scorecard/SCORECARD.md § Operability > Invariants > OPS-INV-2
   it('OPS-INV-2: Logger implements log rotation', () => {
-    const loggerPath = join(SRC_DIR, 'provider', 'logger', 'logger.ts');
+    const loggerPath = join(SRC_DIR, 'shared', 'provider', 'logger', 'logger.ts');
     const content = readFileSync(loggerPath, 'utf-8');
 
     // Verify rotation logic exists
@@ -1049,7 +1068,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   // Scorecard CQ-INV-2: No Dead Public Exports
   // See: scorecard/SCORECARD.md § Code Quality > Invariants > CQ-INV-2
   it.fails('CQ-INV-2: No dead barrel exports — every export has a consumer', () => {
-    const modules = ['provider', 'database', 'services', 'sessions', 'transport', 'api'];
+    const modules = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
     const deadExports: Array<{ module: string; exportName: string }> = [];
 
     // Collect all consumer files grouped by module

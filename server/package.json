@@ -9,7 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsup",
     "start:prod": "node dist/index.js",
-    "key:generate": "tsx src/provider/auth/keyManager.ts generate",
+    "key:generate": "tsx src/shared/provider/auth/keyManager.ts generate",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

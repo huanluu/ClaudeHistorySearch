@@ -1,11 +1,13 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
-import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index';
-import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index';
-import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index';
-import { SessionStore } from './sessions/index';
-import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, DiagnosticsService, indexAllSessions, PROJECTS_DIR } from './services/index';
-import { createRouter } from './api/index';
+import { Router } from 'express';
+import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/database/index';
+import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './shared/provider/index';
+import { HttpTransport } from './shared/transport/index';
+import { AgentStore, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './features/live/index';
+import { indexAllSessions, PROJECTS_DIR, FileWatcher, registerSearchRoutes } from './features/search/index';
+import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
+import { ConfigService, DiagnosticsService, registerAdminRoutes } from './features/admin/index';
 
 export interface AppConfig {
   port: number;
@@ -113,14 +115,10 @@ export function createApp(config: AppConfig): App {
   };
 
   // --- Router ---
-  const router = createRouter({
-    repo: sessionRepo,
-    heartbeatService,
-    configService,
-    diagnosticsService,
-    onConfigChanged,
-    logger,
-  });
+  const router = Router();
+  registerSearchRoutes(router, { repo: sessionRepo, logger, indexFn: indexAllSessions });
+  registerSchedulerRoutes(router, { heartbeatService, logger });
+  registerAdminRoutes(router, { diagnosticsService, configService, onConfigChanged, logger });
   transport.use('/', router);
 
   // --- Lifecycle ---
@@ -143,14 +141,14 @@ export function createApp(config: AppConfig): App {
     // Initialize WebSocket transport (attached to HTTP server)
     const httpServer = transport.getServer();
     if (httpServer) {
-      const sessionStore = new SessionStore(logger);
+      const agentStore = new AgentStore(logger);
       wsTransport = new WebSocketTransport({
         server: httpServer,
         path: '/ws',
         pingInterval: 30000,
         validator: workingDirValidator,
         logger,
-        sessionStore,
+        sessionStore: agentStore,
         onConnection: (ws: AuthenticatedWebSocket) => {
           logger.log({ msg: `Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`, op: 'ws.connect', context: { clientId: ws.clientId, total: wsTransport?.getClientCount() } });
         },

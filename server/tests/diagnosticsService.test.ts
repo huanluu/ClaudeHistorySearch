@@ -1,8 +1,8 @@
 import type { Mock } from 'vitest';
-import { ErrorRingBuffer } from '../src/provider/index';
-import { DiagnosticsService } from '../src/services/DiagnosticsService';
-import type { DiagnosticsSources } from '../src/services/DiagnosticsService';
-import type { SessionRepository, DatabaseStats } from '../src/database/index';
+import { ErrorRingBuffer } from '../src/shared/provider/index';
+import { DiagnosticsService } from '../src/features/admin/DiagnosticsService';
+import type { DiagnosticsSources } from '../src/features/admin/DiagnosticsService';
+import type { SessionRepository, DatabaseStats } from '../src/shared/database/index';
 import type { FileWatcher } from '../src/services/FileWatcher';
 import type { HeartbeatService } from '../src/services/HeartbeatService';
 

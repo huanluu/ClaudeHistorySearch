@@ -12,7 +12,7 @@ export interface SessionStartOptions {
  * Executes a Claude Code session using `claude -p` headless mode.
  * Emits events for message output, errors, and completion.
  */
-export class SessionExecutor extends EventEmitter {
+export class AgentExecutor extends EventEmitter {
   private sessionId: string;
   private logger: Logger;
   private process: ChildProcess | null = null;

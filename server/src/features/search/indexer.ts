@@ -2,8 +2,8 @@ import { createReadStream, readdirSync, statSync, existsSync, readFileSync } fro
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import type { SessionRepository } from '../database/index';
-import type { Logger } from '../provider/index';
+import type { SessionRepository } from '../../shared/database/index';
+import type { Logger } from '../../shared/provider/index';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');

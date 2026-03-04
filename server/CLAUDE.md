@@ -16,62 +16,74 @@ npm run key:generate   # Generate API key (destructive — invalidates existing 
 
 **Do NOT run `npm start` or `npm run dev` as an agent** — they start long-lived processes that die with the Claude Code session. The production server is managed by launchd (see Server Management below). For testing worktree changes, see "Testing Server from a Worktree".
 
-## Layered Architecture (ESLint-Enforced)
+## Feature-First Architecture (ESLint-Enforced)
 
-Dependency direction flows left-to-right — a module can only import from modules to its left:
+The server is organized by **feature** (vertical slices) with shared infrastructure:
 
 ```
-provider → database → services → sessions/transport → api
+shared/provider → shared/database → shared/runtime
+         ↓               ↓               ↓
+    features/search, features/live, features/scheduler, features/admin
+                              ↓
+                           app.ts (composition root)
 ```
 
-| Module | Purpose |
-|--------|---------|
-| `index.ts` | Entry point |
-| `app.ts` | Composition root — wires all services together (sole place for `new` across modules) |
-| `provider/` | Cross-cutting (logger, auth, security). Cannot import any other module |
-| `database/` | Data access (SQLite, FTS5). Can import `provider/` |
-| `services/` | Business logic (indexer, FileWatcher, etc.). Can import `provider/`, `database/` |
-| `sessions/` and `transport/` | Runtime layer (peers). Can import everything except `api/` |
-| `api/` | Top layer (routes). Can import everything |
+### Shared Modules
 
-Data flow: JSONL files → indexer → SQLite FTS5 → REST API
+| Module | Purpose | Can Import |
+|--------|---------|------------|
+| `shared/provider/` | Cross-cutting: logger, auth, security | Nothing |
+| `shared/database/` | Data access: SQLite, FTS5, repository interfaces + implementations | `shared/provider` |
+| `shared/transport/` | HTTP server infrastructure: Express, Transport base class | `shared/provider` |
+| `shared/runtime/` | Agent execution: `AgentExecutor` spawns headless `claude -p` processes | `shared/provider` |
 
-**Invariants (enforced by ESLint + scorecard tests):**
-- No file in a lower layer imports from a higher layer
-- All cross-module imports go through `index.ts` barrels — never import internal files directly
-- No circular dependencies between modules
-- Cross-module `new` instantiation only in `app.ts`
+### Feature Modules
+
+| Module | Purpose | Key Files |
+|--------|---------|-----------|
+| `features/search/` | Session indexing, FTS5 search, file watching | `indexer.ts`, `FileWatcher.ts`, `routes.ts` |
+| `features/live/` | Interactive agent sessions via WebSocket | `AgentStore.ts`, `WebSocketTransport.ts` |
+| `features/scheduler/` | Autonomous agent runs on a schedule (ADO work items) | `HeartbeatService.ts`, `routes.ts` |
+| `features/admin/` | Observability, config management, admin UI | `DiagnosticsService.ts`, `ConfigService.ts`, `routes.ts` |
+
+### Root Files
+
+| File | Purpose |
+|------|---------|
+| `index.ts` | Entry point, signal handlers, error safety net |
+| `app.ts` | Composition root — wires shared + features, only place for cross-module `new` |
+
+**Key rules (enforced by ESLint + scorecard):**
+- Features import from `shared/`, never from each other (type-only cross-feature imports allowed)
+- All cross-module imports go through `index.ts` barrels
+- No circular dependencies
+- Each feature exports `registerXxxRoutes(router, deps)` — `app.ts` calls all of them
 
 Violations cause ESLint errors. The scorecard test (`tests/scorecard.test.ts`) also validates at test time.
 
 ## Barrel Export Pattern
 
-Every module has an `index.ts` barrel file as its public API. **All cross-module imports must go through barrels** (enforced by ESLint):
+Every module has an `index.ts` barrel as its public API. **All cross-module imports must go through barrels** (enforced by ESLint):
 
 ```typescript
-// BEST — type-only import (preferred for all cross-module imports)
-import type { SessionRepository } from './database/index';
+// BEST — type-only import
+import type { SessionRepository } from '../../shared/database/index';
 
-// OK — value import from barrel (only when needed; prefer receiving values via constructor injection)
-import { createSessionRepository } from './database/index';
+// OK — value import from barrel
+import { createSessionRepository } from '../../shared/database/index';
 
 // WRONG — bypasses barrel, ESLint error
-import { SqliteSessionRepository } from './database/SqliteSessionRepository';
-
-// EXCEPTION — type-only imports from internals are allowed
-import type { SessionRow } from './database/SqliteSessionRepository';
+import { SqliteSessionRepository } from '../../shared/database/SqliteSessionRepository';
 ```
 
-**Goal** ([#41](https://github.com/huanluu/ClaudeHistorySearch/issues/41)): Cross-module imports should be type-only. Modules depend on interfaces (types), and concrete values flow through the composition root (`app.ts`). The only exception is `utils/` — a planned layer for stateless pure functions (no dependencies, no side effects) that anyone can value-import. Most service-layer boundaries already follow this; remaining value imports are tracked in [#40](https://github.com/huanluu/ClaudeHistorySearch/issues/40) and [#41](https://github.com/huanluu/ClaudeHistorySearch/issues/41).
-
-Only barrel files (`src/*/index.ts`) are exempt from this rule since they wire internal imports.
+Barrel files are exempt from this rule since they wire internal imports.
 
 ## Code Conventions
 
 - **No `any`**: ESLint forbids `any` in source code. Use precise types or `unknown`
-- **No `console`**: Use the structured logger from `provider/`. `console` is ESLint-banned outside logger
+- **No `console`**: Use the structured logger from `shared/provider/`. `console` is ESLint-banned outside logger
 - **Constructor injection**: Services receive dependencies explicitly via the composition root (`app.ts`). No global singletons
-- **Repository pattern**: Data access behind interfaces (`SessionRepository`, `HeartbeatRepository`) in `database/interfaces.ts`
+- **Repository pattern**: Data access behind interfaces (`SessionRepository`, `HeartbeatRepository`) in `shared/database/interfaces.ts`
 - **TypeScript strictness**: `tsconfig.json` enables all strict checks — `noImplicitAny`, `strictNullChecks`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`. Code must compile cleanly
 
 ## Composition Root
@@ -125,14 +137,22 @@ When adding features, check that scorecard tests still pass. Known failing invar
 
 ### REST API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check with subsystem status (`healthy` / `degraded`) |
-| `/diagnostics` | GET | Full system diagnostics snapshot (503 if unhealthy) |
-| `/sessions` | GET | List sessions (pagination via `limit`, `offset`) |
-| `/sessions/:id` | GET | Get full conversation |
-| `/search?q=term` | GET | Full-text search (`sort=relevance|date`) |
-| `/reindex` | POST | Trigger reindex (`force=true` to reindex all) |
+| Endpoint | Method | Feature | Description |
+|----------|--------|---------|-------------|
+| `/health` | GET | admin | Health check with subsystem status |
+| `/diagnostics` | GET | admin | Full system diagnostics snapshot |
+| `/admin` | GET | admin | Admin control panel UI |
+| `/api/config` | GET | admin | All editable config sections |
+| `/api/config/:section` | GET | admin | Single config section |
+| `/api/config/:section` | PUT | admin | Update config section (triggers hot-reload) |
+| `/sessions` | GET | search | List sessions (pagination via `limit`, `offset`) |
+| `/sessions/:id` | GET | search | Get full conversation |
+| `/sessions/:id` | DELETE | search | Soft-delete (hide) a session |
+| `/sessions/:id/read` | POST | search | Mark session as read |
+| `/search?q=term` | GET | search | Full-text search (`sort=relevance\|date`) |
+| `/reindex` | POST | search | Trigger reindex (`force=true` to reindex all) |
+| `/heartbeat` | POST | scheduler | Manually trigger heartbeat run |
+| `/heartbeat/status` | GET | scheduler | Heartbeat config and state |
 
 ### WebSocket Messages (`/ws`)
 
@@ -190,10 +210,13 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | Path | Purpose |
 |------|---------|
 | `src/app.ts` | Composition root — start here to understand wiring |
-| `src/database/interfaces.ts` | `SessionRepository` and `HeartbeatRepository` contracts |
-| `src/services/indexer.ts` | JSONL parsing and SQLite FTS5 indexing |
-| `src/sessions/SessionExecutor.ts` | Spawns headless `claude -p` subprocesses |
+| `src/shared/database/interfaces.ts` | `SessionRepository` and `HeartbeatRepository` contracts |
+| `src/shared/runtime/AgentExecutor.ts` | Spawns headless `claude -p` subprocesses |
+| `src/features/search/indexer.ts` | JSONL parsing and SQLite FTS5 indexing |
+| `src/features/live/WebSocketTransport.ts` | WebSocket protocol, auth, session lifecycle |
+| `src/features/scheduler/HeartbeatService.ts` | Autonomous agent runs on a schedule |
+| `src/features/admin/DiagnosticsService.ts` | Health checks, system diagnostics |
 | `eslint.config.js` | Module boundary + quality rules (flat config format) |
 | `tests/__fixtures__/` | Sample JSONL files for testing |
-| `tests/scorecard.test.ts` | Structural invariant enforcement (31 invariants) |
+| `tests/scorecard.test.ts` | Structural invariant enforcement |
 | `scorecard/SCORECARD.md` | Quality criteria, invariants, metrics, baseline |

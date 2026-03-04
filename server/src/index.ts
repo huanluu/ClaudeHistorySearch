@@ -1,5 +1,5 @@
 import { createApp, type App } from './app';
-import { createLogger, LOG_PATH } from './provider/index';
+import { createLogger, LOG_PATH } from './shared/provider/index';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 

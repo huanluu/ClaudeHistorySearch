@@ -1,12 +1,11 @@
-import { WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from '../src/transport/index';
-import { HttpTransport } from '../src/transport/index';
-import { SessionStore } from '../src/sessions/index';
+import { WebSocketTransport, type AuthenticatedWebSocket, type WSMessage, AgentStore } from '../src/features/live/index';
+import { HttpTransport } from '../src/shared/transport/index';
 import WebSocket from 'ws';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
-import type { Logger } from '../src/provider/logger/logger';
+import type { Logger } from '../src/shared/provider/index';
 
 const noopLogger: Logger = {
   log: () => {},
@@ -72,13 +71,13 @@ describe('WebSocketTransport', () => {
   describe('constructor and start', () => {
     it('should initialize with isRunning false', () => {
       const server = httpTransport.getServer()!;
-      const transport = new WebSocketTransport({ server, logger: noopLogger, sessionStore: new SessionStore(noopLogger) });
+      const transport = new WebSocketTransport({ server, logger: noopLogger, sessionStore: new AgentStore(noopLogger) });
       expect(transport.isRunning).toBe(false);
     });
 
     it('should start and set isRunning to true', () => {
       const server = httpTransport.getServer()!;
-      wsTransport = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new SessionStore(noopLogger) });
+      wsTransport = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new AgentStore(noopLogger) });
       wsTransport.start();
       expect(wsTransport.isRunning).toBe(true);
     });
@@ -324,7 +323,7 @@ describe('WebSocketTransport', () => {
         const server = noAuthHttp.getServer()!;
         const address = server.address() as { port: number };
 
-        noAuthWs = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new SessionStore(noopLogger) });
+        noAuthWs = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new AgentStore(noopLogger) });
         noAuthWs.start();
 
         await new Promise<void>((resolve, reject) => {

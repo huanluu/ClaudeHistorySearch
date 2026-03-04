@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigService } from '../src/services/ConfigService';
+import { ConfigService } from '../src/features/admin/ConfigService';
 
 describe('ConfigService security section', () => {
   let configDir: string;

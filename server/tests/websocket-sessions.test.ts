@@ -4,10 +4,10 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
-import { WorkingDirValidator } from '../src/provider/index';
-import { HttpTransport, WebSocketTransport } from '../src/transport/index';
-import { SessionStore } from '../src/sessions/index';
-import type { Logger } from '../src/provider/logger/logger';
+import { WorkingDirValidator } from '../src/shared/provider/index';
+import { HttpTransport } from '../src/shared/transport/index';
+import { WebSocketTransport, AgentStore } from '../src/features/live/index';
+import type { Logger } from '../src/shared/provider/index';
 
 const noopLogger: Logger = {
   log: () => {},
@@ -85,7 +85,7 @@ describe('WebSocket Session Integration', () => {
     const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
     const resolvedTmp = realpathSync('/tmp');
     const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
-    const sessionStore = new SessionStore(noopLogger);
+    const sessionStore = new AgentStore(noopLogger);
     wsTransport = new WebSocketTransport({ server, path: '/ws', validator, logger: noopLogger, sessionStore });
     wsTransport.start();
   });
