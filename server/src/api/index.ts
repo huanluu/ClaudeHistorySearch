@@ -1,2 +1,2 @@
-export { createRouter } from './routes.js';
-export type { RouteDeps } from './routes.js';
+export { createRouter } from './routes';
+export type { RouteDeps } from './routes';

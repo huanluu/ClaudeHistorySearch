@@ -2,7 +2,7 @@ import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { logger } from '../provider/index.js';
+import { logger } from '../provider/index';
 
 // Types for database records
 export interface SessionRecord {

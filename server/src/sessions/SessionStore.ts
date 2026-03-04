@@ -1,4 +1,4 @@
-import { SessionExecutor } from './SessionExecutor.js';
+import { SessionExecutor } from './SessionExecutor';
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.

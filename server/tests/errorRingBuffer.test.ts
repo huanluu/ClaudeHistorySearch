@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ErrorRingBuffer, createLogger } from '../src/provider/index.js';
-import type { ErrorEntry } from '../src/provider/index.js';
+import { ErrorRingBuffer, createLogger } from '../src/provider/index';
+import type { ErrorEntry } from '../src/provider/index';
 
 function makeEntry(overrides: Partial<ErrorEntry> = {}): ErrorEntry {
   return {

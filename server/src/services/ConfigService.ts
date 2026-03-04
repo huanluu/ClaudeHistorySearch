@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { getConfigDir } from './HeartbeatService.js';
+import { getConfigDir } from './HeartbeatService';
 
 /**
  * Field schema for validation

@@ -2,11 +2,11 @@ import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
 import { join } from 'path';
 import { homedir } from 'os';
-import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
-import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index.js';
-import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
-import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, DiagnosticsService, indexAllSessions, PROJECTS_DIR } from './services/index.js';
-import { createRouter } from './api/index.js';
+import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index';
+import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index';
+import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index';
+import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, DiagnosticsService, indexAllSessions, PROJECTS_DIR } from './services/index';
+import { createRouter } from './api/index';
 
 export interface AppConfig {
   port: number;
@@ -87,8 +87,8 @@ export function createApp(config: AppConfig): App {
   transport.use(authMiddleware);
 
   let wsTransport: WebSocketTransport | null = null;
-  let bonjour: Bonjour.default | null = null;
-  let service: ReturnType<Bonjour.default['publish']> | null = null;
+  let bonjour: Bonjour | null = null;
+  let service: ReturnType<Bonjour['publish']> | null = null;
   let reindexTimer: NodeJS.Timeout | null = null;
 
   // --- Config hot-reload ---
@@ -189,7 +189,7 @@ export function createApp(config: AppConfig): App {
     if (stealthMode) {
       logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
     } else {
-      bonjour = new Bonjour.default();
+      bonjour = new Bonjour();
       service = bonjour.publish({
         name: 'Claude History Server',
         type: serviceType,

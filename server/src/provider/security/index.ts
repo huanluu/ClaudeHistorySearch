@@ -1,2 +1,2 @@
-export { WorkingDirValidator } from './WorkingDirValidator.js';
-export type { ValidationResult } from './WorkingDirValidator.js';
+export { WorkingDirValidator } from './WorkingDirValidator';
+export type { ValidationResult } from './WorkingDirValidator';

@@ -1,4 +1,4 @@
-import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord } from './connection.js';
+import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord } from './connection';
 
 export interface IndexSessionParams {
   sessionId: string;

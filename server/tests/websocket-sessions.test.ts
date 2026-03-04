@@ -1,18 +1,18 @@
-import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { EventEmitter } from 'events';
 import { mkdirSync, writeFileSync, rmSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
-import { WorkingDirValidator } from '../src/provider/index.js';
+import { WorkingDirValidator } from '../src/provider/index';
+import { HttpTransport, WebSocketTransport } from '../src/transport/index';
 
-// Create mock spawn function
-const mockSpawn = jest.fn();
+const { mockSpawn } = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+}));
 
-// Mock child_process for session execution
-jest.unstable_mockModule('child_process', () => ({
-  spawn: mockSpawn
+vi.mock('child_process', () => ({
+  spawn: mockSpawn,
 }));
 
 // Test configuration
@@ -39,8 +39,8 @@ function createMockProcess() {
   const mockProcess = Object.assign(new EventEmitter(), {
     stdout: new EventEmitter(),
     stderr: new EventEmitter(),
-    stdin: { write: jest.fn(), end: jest.fn() },
-    kill: jest.fn(),
+    stdin: { write: vi.fn(), end: vi.fn() },
+    kill: vi.fn(),
     pid: Math.floor(Math.random() * 10000)
   });
   return mockProcess;
@@ -53,22 +53,15 @@ interface WSMessage {
 }
 
 describe('WebSocket Session Integration', () => {
-  let httpTransport: Awaited<ReturnType<typeof import('../src/transport/index.js')>>['HttpTransport'] extends new (...args: unknown[]) => infer R ? R : never;
-  let wsTransport: Awaited<ReturnType<typeof import('../src/transport/index.js')>>['WebSocketTransport'] extends new (...args: unknown[]) => infer R ? R : never;
+  let httpTransport: InstanceType<typeof HttpTransport>;
+  let wsTransport: InstanceType<typeof WebSocketTransport>;
   let testApiKey: string;
   let serverPort: number;
-  let HttpTransport: Awaited<ReturnType<typeof import('../src/transport/index.js')>>['HttpTransport'];
-  let WebSocketTransport: Awaited<ReturnType<typeof import('../src/transport/index.js')>>['WebSocketTransport'];
 
   beforeAll(async () => {
     mkdirSync(TEST_CONFIG_DIR, { recursive: true });
     process.env.CLAUDE_HISTORY_CONFIG_DIR = TEST_CONFIG_DIR;
     testApiKey = createTestApiKey();
-
-    // Import after mock setup
-    const transportModule = await import('../src/transport/index.js');
-    HttpTransport = transportModule.HttpTransport;
-    WebSocketTransport = transportModule.WebSocketTransport;
 
     // Start HTTP server
     httpTransport = new HttpTransport({ port: 0 });

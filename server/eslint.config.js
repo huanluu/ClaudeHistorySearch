@@ -9,12 +9,12 @@ import tseslint from 'typescript-eslint';
  *   provider → database → services → sessions/transport → api
  */
 const moduleBoundaries = [
-  { name: 'database',  message: "Import from './database/index.js' instead." },
-  { name: 'transport', message: "Import from './transport/index.js' instead." },
-  { name: 'sessions',  message: "Import from './sessions/index.js' instead." },
-  { name: 'services',  message: "Import from './services/index.js' instead." },
-  { name: 'provider',  message: "Import from './provider/index.js' — single entry point for cross-cutting concerns." },
-  { name: 'api',       message: "Import from './api/index.js' instead." },
+  { name: 'database',  message: "Import from './database/index' instead." },
+  { name: 'transport', message: "Import from './transport/index' instead." },
+  { name: 'sessions',  message: "Import from './sessions/index' instead." },
+  { name: 'services',  message: "Import from './services/index' instead." },
+  { name: 'provider',  message: "Import from './provider/index' — single entry point for cross-cutting concerns." },
+  { name: 'api',       message: "Import from './api/index' instead." },
 ];
 
 /**

@@ -1,9 +1,9 @@
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { db } from './connection.js';
-import { SqliteSessionRepository } from './SqliteSessionRepository.js';
-import { SqliteHeartbeatRepository } from './SqliteHeartbeatRepository.js';
-import type { SessionRepository } from './interfaces.js';
-import type { HeartbeatRepository } from './interfaces.js';
+import { db } from './connection';
+import { SqliteSessionRepository } from './SqliteSessionRepository';
+import { SqliteHeartbeatRepository } from './SqliteHeartbeatRepository';
+import type { SessionRepository } from './interfaces';
+import type { HeartbeatRepository } from './interfaces';
 
 // Types
 export type {
@@ -13,12 +13,12 @@ export type {
   SortOption,
   LastIndexedRecord,
   HeartbeatStateRecord,
-} from './connection.js';
+} from './connection';
 
-export type { SessionRepository, IndexSessionParams, HeartbeatRepository, DatabaseStats } from './interfaces.js';
+export type { SessionRepository, IndexSessionParams, HeartbeatRepository, DatabaseStats } from './interfaces';
 
 // Config
-export { DB_PATH } from './connection.js';
+export { DB_PATH } from './connection';
 
 // Factories
 export function createSessionRepository(customDb?: DatabaseType): SessionRepository {

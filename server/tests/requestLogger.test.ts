@@ -1,15 +1,14 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import express, { type Application } from 'express';
 import request from 'supertest';
-import { createRequestLogger, type RequestLoggerOptions } from '../src/provider/index.js';
-import type { Logger, LogEntry } from '../src/provider/index.js';
+import { createRequestLogger, type RequestLoggerOptions } from '../src/provider/index';
+import type { Logger, LogEntry } from '../src/provider/index';
 
 function createMockLogger() {
   return {
-    log: jest.fn<(entry: LogEntry) => void>(),
-    error: jest.fn<(entry: LogEntry) => void>(),
-    warn: jest.fn<(entry: LogEntry) => void>(),
-    verbose: jest.fn<(entry: LogEntry) => void>(),
+    log: vi.fn<(entry: LogEntry) => void>(),
+    error: vi.fn<(entry: LogEntry) => void>(),
+    warn: vi.fn<(entry: LogEntry) => void>(),
+    verbose: vi.fn<(entry: LogEntry) => void>(),
   };
 }
 

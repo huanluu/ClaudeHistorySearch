@@ -3,16 +3,15 @@ import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir, homedir } from 'os';
 import { EventEmitter } from 'events';
-import { jest } from '@jest/globals';
 import {
   HeartbeatService,
   type HeartbeatConfig,
   type HeartbeatTask,
   type WorkItem,
   type CommandExecutor
-} from '../src/services/HeartbeatService.js';
-import type { HeartbeatRepository } from '../src/database/interfaces.js';
-import type { HeartbeatStateRecord } from '../src/database/connection.js';
+} from '../src/services/HeartbeatService';
+import type { HeartbeatRepository } from '../src/database/interfaces';
+import type { HeartbeatStateRecord } from '../src/database/connection';
 
 /**
  * Create a mock ChildProcess that emits a stream-json init message on stdout,
@@ -313,8 +312,8 @@ describe('Production Database Module (Heartbeat Schema)', () => {
   // These tests import from the actual database module to verify migrations work
 
   it('should construct SqliteHeartbeatRepository from production db', async () => {
-    const dbModule = await import('../src/database/connection.js');
-    const { SqliteHeartbeatRepository } = await import('../src/database/SqliteHeartbeatRepository.js');
+    const dbModule = await import('../src/database/connection');
+    const { SqliteHeartbeatRepository } = await import('../src/database/SqliteHeartbeatRepository');
 
     expect(typeof dbModule.db).toBe('object');
 
@@ -331,7 +330,7 @@ describe('Production Database Module (Heartbeat Schema)', () => {
   });
 
   it('should have heartbeat_state table in production database', async () => {
-    const dbModule = await import('../src/database/connection.js');
+    const dbModule = await import('../src/database/connection');
 
     const tables = dbModule.db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='heartbeat_state'")

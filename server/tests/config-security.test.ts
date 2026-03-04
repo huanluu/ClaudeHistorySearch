@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdirSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigService } from '../src/services/ConfigService.js';
+import { ConfigService } from '../src/services/ConfigService';
 
 describe('ConfigService security section', () => {
   let configDir: string;

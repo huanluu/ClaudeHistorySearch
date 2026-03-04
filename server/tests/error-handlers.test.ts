@@ -1,11 +1,11 @@
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import type { MockInstance } from 'vitest';
 import { mkdirSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createLogger } from '../src/provider/index.js';
-import type { Logger } from '../src/provider/index.js';
-import { FileWatcher } from '../src/services/FileWatcher.js';
-import type { SessionRepository } from '../src/database/index.js';
+import { createLogger } from '../src/provider/index';
+import type { Logger } from '../src/provider/index';
+import { FileWatcher } from '../src/services/FileWatcher';
+import type { SessionRepository } from '../src/database/index';
 
 let testDir: string;
 let logPath: string;
@@ -79,10 +79,10 @@ describe('Global error handlers', () => {
 
   describe('uncaughtException handler', () => {
     let handler: (error: Error) => void;
-    let exitSpy: jest.Spied<typeof process.exit>;
+    let exitSpy: MockInstance<typeof process.exit>;
 
     beforeEach(() => {
-      exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+      exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
       handler = (error: Error) => {
         logger.error({
           msg: 'Uncaught exception — shutting down',

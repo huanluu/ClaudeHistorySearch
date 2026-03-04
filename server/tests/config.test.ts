@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
-import { ConfigService } from '../src/services/ConfigService.js';
+import { ConfigService } from '../src/services/ConfigService';
 
 // =============================================================================
 // ConfigService Unit Tests

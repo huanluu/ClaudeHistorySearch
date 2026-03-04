@@ -1,4 +1,4 @@
-import { HttpTransport } from '../src/transport/index.js';
+import { HttpTransport } from '../src/transport/index';
 import http from 'http';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 

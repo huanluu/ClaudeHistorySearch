@@ -1,2 +1,2 @@
-export { authMiddleware } from './middleware.js';
-export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './keyManager.js';
+export { authMiddleware } from './middleware';
+export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './keyManager';
