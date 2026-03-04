@@ -13,6 +13,14 @@ import {
 } from '../src/services/HeartbeatService.js';
 import type { HeartbeatRepository } from '../src/database/interfaces.js';
 import type { HeartbeatStateRecord } from '../src/database/connection.js';
+import type { Logger } from '../src/provider/logger/logger.js';
+
+const noopLogger: Logger = {
+  log: () => {},
+  error: () => {},
+  warn: () => {},
+  verbose: () => {},
+};
 
 /**
  * Create a mock ChildProcess that emits a stream-json init message on stdout,
@@ -310,34 +318,41 @@ describe('Heartbeat Database Schema', () => {
 // =============================================================================
 
 describe('Production Database Module (Heartbeat Schema)', () => {
-  // These tests import from the actual database module to verify migrations work
+  // These tests verify the createDatabase factory creates the schema correctly
 
-  it('should construct SqliteHeartbeatRepository from production db', async () => {
-    const dbModule = await import('../src/database/connection.js');
+  it('should construct SqliteHeartbeatRepository from createDatabase result', async () => {
+    const { createDatabase } = await import('../src/database/connection.js');
     const { SqliteHeartbeatRepository } = await import('../src/database/SqliteHeartbeatRepository.js');
 
-    expect(typeof dbModule.db).toBe('object');
+    const db = createDatabase(':memory:', noopLogger);
+    expect(typeof db).toBe('object');
 
     // Should not throw — heartbeat_state table exists
-    const repo = new SqliteHeartbeatRepository(dbModule.db);
+    const repo = new SqliteHeartbeatRepository(db);
     expect(repo).toBeDefined();
 
-    // Verify sessions table has heartbeat columns in production DB
-    const columns = dbModule.db.prepare("PRAGMA table_info(sessions)").all() as ColumnInfo[];
+    // Verify sessions table has heartbeat columns
+    const columns = db.prepare("PRAGMA table_info(sessions)").all() as ColumnInfo[];
     const columnNames = columns.map(c => c.name);
 
     expect(columnNames).toContain('is_automatic');
     expect(columnNames).toContain('is_unread');
+
+    db.close();
   });
 
-  it('should have heartbeat_state table in production database', async () => {
-    const dbModule = await import('../src/database/connection.js');
+  it('should have heartbeat_state table in created database', async () => {
+    const { createDatabase } = await import('../src/database/connection.js');
 
-    const tables = dbModule.db
+    const db = createDatabase(':memory:', noopLogger);
+
+    const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='heartbeat_state'")
       .all() as TableInfo[];
 
     expect(tables.length).toBe(1);
+
+    db.close();
   });
 });
 
@@ -364,7 +379,7 @@ describe('HeartbeatService', () => {
 
   describe('config loading', () => {
     it('should use default values when config file is missing', () => {
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(true);
@@ -382,7 +397,7 @@ describe('HeartbeatService', () => {
         }
       }));
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(false);
@@ -408,7 +423,7 @@ describe('HeartbeatService', () => {
       process.env.HEARTBEAT_INTERVAL_MS = '30000';
       process.env.HEARTBEAT_WORKING_DIR = '/from/env';
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(false);
@@ -428,7 +443,7 @@ describe('HeartbeatService', () => {
         }
       }));
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(true); // default
@@ -443,7 +458,7 @@ describe('HeartbeatService', () => {
       const configPath = join(TEST_CONFIG_DIR, 'config.json');
       writeFileSync(configPath, 'not valid json {{{');
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const config = service.getConfig();
 
       // Should fall back to defaults
@@ -468,7 +483,7 @@ describe('HeartbeatService', () => {
 - [ ] Check for PRs needing review
 `);
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(2);
@@ -490,7 +505,7 @@ describe('HeartbeatService', () => {
 - [ ] Another disabled task
 `);
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(1);
@@ -507,7 +522,7 @@ describe('HeartbeatService', () => {
         rmSync(heartbeatPath);
       }
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks).toEqual([]);
@@ -517,7 +532,7 @@ describe('HeartbeatService', () => {
       const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
       writeFileSync(heartbeatPath, '');
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks).toEqual([]);
@@ -540,7 +555,7 @@ describe('HeartbeatService', () => {
 - [x] Task in custom section
 `);
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(3);
@@ -567,7 +582,7 @@ Regular bullet point:
 More text.
 `);
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(1);
@@ -609,7 +624,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const changes = await service.checkForChanges();
 
       expect(changes.newItems.length).toBe(1);
@@ -643,7 +658,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
 
       // Record work item as processed with OLD date
       service.recordProcessedItem('workitem:12345', '2024-01-14T10:00:00Z');
@@ -681,7 +696,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
 
       // Record work item as processed with SAME date
       service.recordProcessedItem('workitem:12345', '2024-01-15T10:00:00Z');
@@ -706,7 +721,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const changes = await service.checkForChanges();
 
       expect(changes.newItems.length).toBe(0);
@@ -737,7 +752,7 @@ More text.
         }
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const workItem: WorkItem = {
         id: 99999,
         fields: {
@@ -783,7 +798,7 @@ More text.
         }
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const workItem: WorkItem = {
         id: 88888,
         fields: {
@@ -825,7 +840,7 @@ More text.
         }
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const workItem: WorkItem = {
         id: 77777,
         fields: {
@@ -856,7 +871,7 @@ More text.
         heartbeat: { enabled: false }
       }));
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(0);
@@ -899,7 +914,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(1);
@@ -933,7 +948,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
 
       // Pre-record the item as already processed
       service.recordProcessedItem('workitem:33333', '2024-01-15T10:00:00Z');
@@ -975,7 +990,7 @@ More text.
         spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const result = await service.runHeartbeat(true);
 
       expect(result.tasksProcessed).toBe(1);
@@ -992,7 +1007,7 @@ More text.
         heartbeat: { enabled: false }
       }));
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(0);
@@ -1040,7 +1055,7 @@ More text.
         }
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.sessionsCreated).toBe(0);
@@ -1074,7 +1089,7 @@ More text.
         spawn: () => createMockChildProcess(0, 'test-session-abc123')
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.sessionsCreated).toBe(1);
@@ -1106,7 +1121,7 @@ More text.
         },
       });
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo, noopLogger);
       service.recordProcessedItem('workitem:100', '2024-06-01T00:00:00Z');
 
       expect(calls).toHaveLength(1);
@@ -1125,7 +1140,7 @@ More text.
         },
       });
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo, noopLogger);
 
       expect(service.getProcessedItemState('workitem:200')).toBe('2024-07-01T00:00:00Z');
       expect(service.getProcessedItemState('workitem:999')).toBeUndefined();
@@ -1140,12 +1155,12 @@ More text.
         getAllState: () => records,
       });
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, repo, noopLogger);
       expect(service.getAllState()).toEqual(records);
     });
 
     it('getAllState returns [] when no repo is provided', () => {
-      const service = new HeartbeatService(TEST_CONFIG_DIR);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
       expect(service.getAllState()).toEqual([]);
     });
   });

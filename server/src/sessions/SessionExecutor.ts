@@ -1,6 +1,5 @@
 import { EventEmitter } from 'events';
 import { spawn, type ChildProcess } from 'child_process';
-import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 
 export interface SessionStartOptions {
@@ -19,7 +18,7 @@ export class SessionExecutor extends EventEmitter {
   private process: ChildProcess | null = null;
   private buffer: string = '';
 
-  constructor(sessionId: string, logger: Logger = defaultLogger) {
+  constructor(sessionId: string, logger: Logger) {
     super();
     this.sessionId = sessionId;
     this.logger = logger;

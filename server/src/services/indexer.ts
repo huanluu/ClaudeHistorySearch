@@ -3,7 +3,6 @@ import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import type { SessionRepository } from '../database/index.js';
-import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
@@ -93,7 +92,7 @@ export function detectAutomaticSession(session: ParsedSession): boolean {
 /**
  * Load sessions-index.json from a project directory and return a map of sessionId → title
  */
-function loadSessionsIndex(projectPath: string, logger: Logger = defaultLogger): Map<string, string> {
+function loadSessionsIndex(projectPath: string, logger: Logger): Map<string, string> {
   const indexPath = join(projectPath, 'sessions-index.json');
   const titleMap = new Map<string, string>();
 
@@ -232,7 +231,7 @@ export async function indexSessionFile(
   forceReindex: boolean = false,
   titleMap: Map<string, string> = new Map(),
   repo: SessionRepository,
-  logger: Logger = defaultLogger
+  logger: Logger
 ): Promise<IndexResult | null> {
   const fileName = basename(filePath, '.jsonl');
 
@@ -292,7 +291,7 @@ export async function indexSessionFile(
 export async function indexAllSessions(
   forceReindex: boolean = false,
   repo: SessionRepository,
-  logger: Logger = defaultLogger
+  logger: Logger
 ): Promise<IndexAllResult> {
   logger.log({ msg: 'Starting indexing of Claude sessions...', op: 'indexer.run' });
 

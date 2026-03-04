@@ -89,16 +89,15 @@ Only barrel files (`src/*/index.ts`) are exempt from this rule since they wire i
 - **Repository pattern**: Data access behind interfaces (`SessionRepository`, `HeartbeatRepository`) in `database/interfaces.ts`
 - **TypeScript strictness**: `tsconfig.json` enables all strict checks — `noImplicitAny`, `strictNullChecks`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`. Code must compile cleanly
 
-### Known Debt
-
-`logger.ts` and `connection.ts` export module-level singletons. `app.ts` creates its own logger and injects it, but `connection.ts` still imports the singleton logger directly and creates the DB at import time. These should be refactored so the DB and logger are created in `app.ts` and injected into the database module. Tracked in [#40](https://github.com/huanluu/ClaudeHistorySearch/issues/40).
-
 ## Composition Root
 
-`app.ts` is the sole composition root. All service wiring happens there via constructor injection. Services receive their dependencies explicitly:
+`app.ts` is the sole composition root. All service wiring happens there via constructor injection. Services receive their dependencies explicitly — no singletons, no defaults:
 
 ```typescript
-const sessionRepo = createSessionRepository();
+const logger = createLogger(LOG_PATH, { errorBuffer });
+const db = createDatabase(DB_PATH, logger);
+const sessionRepo = createSessionRepository(db);
+const heartbeatRepo = createHeartbeatRepository(db);
 const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
 const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
 ```

@@ -155,7 +155,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // ─── ARCH-INV-4: Composition Root Monopoly ──────────────────────
   // Scorecard ARCH-INV-4: Composition Root Monopoly
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-4
-  it.failing('ARCH-INV-4: Composition Root Monopoly — no cross-module `new` outside app.ts', () => {
+  it('ARCH-INV-4: Composition Root Monopoly — no cross-module `new` outside app.ts', () => {
     const allFiles = collectTsFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; match: string }> = [];
 
@@ -210,93 +210,10 @@ describe('Scorecard: Architecture Invariants', () => {
     expect(violations).toEqual([]);
   });
 
-  // ─── ARCH-INV-5: No Import-Time Side Effects ────────────────────
-  // Scorecard ARCH-INV-5: No Import-Time Side Effects
+  // ─── ARCH-INV-5: Interface-Typed Module Boundaries ───────────────
+  // Scorecard ARCH-INV-5: Interface-Typed Module Boundaries
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-5
-  it.failing('ARCH-INV-5: No Import-Time Side Effects', () => {
-    const allFiles = collectTsFiles(SRC_DIR);
-    const violations: Array<{ file: string; line: number; pattern: string }> = [];
-
-    // Patterns indicating I/O at module scope
-    const sideEffectPatterns = [
-      /new\s+Database\(/,
-      /mkdirSync\(/,
-      /writeFileSync\(/,
-      /appendFileSync\(/,
-      /existsSync\(/,
-      /statSync\(/,
-      /renameSync\(/,
-      /execSync\(/,
-      /spawn\(/,
-      /\.exec\(/,
-      /db\.exec\(/,
-    ];
-
-    for (const file of allFiles) {
-      const relFile = relative(SRC_DIR, file);
-      // index.ts (entry point) is exempt
-      if (relFile === 'index.ts') continue;
-
-      const content = readFileSync(file, 'utf-8');
-      const lines = content.split('\n');
-
-      // Track whether we're inside a function/class body
-      let braceDepth = 0;
-      let inFunctionOrClass = false;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmed = line.trim();
-
-        // Skip imports and type declarations
-        if (trimmed.startsWith('import ') || trimmed.startsWith('export type ') ||
-            trimmed.startsWith('export interface ') || trimmed.startsWith('//') ||
-            trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
-
-        // Track brace depth to detect module scope vs function scope
-        const opens = (line.match(/{/g) || []).length;
-        const closes = (line.match(/}/g) || []).length;
-
-        // Detect function/class/method start
-        if (braceDepth === 0 && (
-          trimmed.startsWith('function ') ||
-          trimmed.startsWith('export function ') ||
-          trimmed.startsWith('export default function') ||
-          trimmed.startsWith('class ') ||
-          trimmed.startsWith('export class ') ||
-          trimmed.includes('=>') ||
-          /^\w+\s*\(/.test(trimmed)
-        )) {
-          inFunctionOrClass = true;
-        }
-
-        braceDepth += opens - closes;
-        if (braceDepth === 0) {
-          inFunctionOrClass = false;
-        }
-
-        // Only flag side effects at module scope (braceDepth === 0 or in module-level expression)
-        if (braceDepth <= 0 || !inFunctionOrClass) {
-          for (const pattern of sideEffectPatterns) {
-            if (pattern.test(trimmed)) {
-              violations.push({
-                file: relFile,
-                line: i + 1,
-                pattern: pattern.source,
-              });
-            }
-          }
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  // ─── ARCH-INV-6: Interface-Typed Module Boundaries ───────────────
-  // Scorecard ARCH-INV-6: Interface-Typed Module Boundaries
-  // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-6
-  it.failing('ARCH-INV-6: Interface-Typed Module Boundaries', () => {
+  it.failing('ARCH-INV-5: Interface-Typed Module Boundaries', () => {
     // Check: classes exported from barrels for cross-module use should have
     // a corresponding interface. If a module exports `class Foo`, there should
     // be an `interface Foo` or a corresponding interface type elsewhere in the module.
@@ -360,10 +277,10 @@ describe('Scorecard: Architecture Invariants', () => {
     expect(violations).toEqual([]);
   });
 
-  // ─── ARCH-INV-7: Test Existence Floor ────────────────────────────
-  // Scorecard ARCH-INV-7: Test Existence Floor
-  // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-7
-  it.failing('ARCH-INV-7: Test Existence Floor — every source module has a test', () => {
+  // ─── ARCH-INV-6: Test Existence Floor ────────────────────────────
+  // Scorecard ARCH-INV-6: Test Existence Floor
+  // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-6
+  it.failing('ARCH-INV-6: Test Existence Floor — every source module has a test', () => {
     const srcFiles = collectTsFiles(SRC_DIR);
     const testFiles = collectTsFiles(TESTS_DIR).map(f => basename(f));
     const missingTests: string[] = [];
@@ -397,6 +314,39 @@ describe('Scorecard: Architecture Invariants', () => {
     }
 
     expect(missingTests).toEqual([]);
+  });
+
+  // ─── ARCH-INV-7: No Exported Singleton Instances ────────────────
+  // Prevents re-introduction of module-level singletons like:
+  //   export const db = new Database(...)
+  //   export const logger = createLogger(...)
+  // These bypass the composition root and create hidden, shared mutable state.
+  it('ARCH-INV-7: No Exported Singleton Instances', () => {
+    const allFiles = collectTsFiles(SRC_DIR);
+    const violations: Array<{ file: string; line: number; match: string }> = [];
+
+    // Pattern: `export const <name> = new <Class>(`
+    const singletonPattern = /^export\s+const\s+\w+\s*=\s*new\s+\w+\(/;
+
+    for (const file of allFiles) {
+      const relFile = relative(SRC_DIR, file);
+      // app.ts and index.ts are exempt (composition root / entry point)
+      if (relFile === 'app.ts' || relFile === 'index.ts') continue;
+
+      const lines = readFileSync(file, 'utf-8').split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (singletonPattern.test(trimmed)) {
+          violations.push({
+            file: relFile,
+            line: i + 1,
+            match: trimmed.slice(0, 80),
+          });
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 });
 

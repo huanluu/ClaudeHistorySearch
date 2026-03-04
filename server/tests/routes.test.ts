@@ -8,6 +8,7 @@ import { jest } from '@jest/globals';
 import type { SessionRepository } from '../src/database/interfaces.js';
 import type { SessionRecord, MessageRecord, SearchResultRecord } from '../src/database/connection.js';
 import { createRouter, type RouteDeps } from '../src/api/index.js';
+import type { Logger } from '../src/provider/logger/logger.js';
 
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-${Date.now()}`);
@@ -17,6 +18,13 @@ interface Config {
   apiKeyHash?: string;
   apiKeyCreatedAt?: string;
 }
+
+const noopLogger: Logger = {
+  log: () => {},
+  error: () => {},
+  warn: () => {},
+  verbose: () => {},
+};
 
 // Setup test config directory before importing modules
 mkdirSync(TEST_CONFIG_DIR, { recursive: true });
@@ -61,7 +69,7 @@ function createMockRepository(overrides?: Partial<SessionRepository>): SessionRe
 }
 
 // Create a test app that uses the real createRouter with RouteDeps
-function createTestApp(deps: RouteDeps, withAuth = true): Application {
+function createTestApp(deps: Omit<RouteDeps, 'logger'> & { logger?: Logger }, withAuth = true): Application {
   const app = express();
   app.use(express.json());
 
@@ -106,8 +114,8 @@ function createTestApp(deps: RouteDeps, withAuth = true): Application {
     next();
   });
 
-  // Mount the REAL router with deps
-  app.use('/', createRouter(deps));
+  // Mount the REAL router with deps (inject noop logger if not provided)
+  app.use('/', createRouter({ logger: noopLogger, ...deps }));
 
   return app;
 }

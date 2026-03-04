@@ -1,4 +1,5 @@
 import { SessionExecutor } from './SessionExecutor.js';
+import type { Logger } from '../provider/index.js';
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.
@@ -6,12 +7,17 @@ import { SessionExecutor } from './SessionExecutor.js';
 export class SessionStore {
   private sessions: Map<string, SessionExecutor> = new Map();
   private clientSessions: Map<string, Set<string>> = new Map();
+  private logger: Logger;
+
+  constructor(logger: Logger) {
+    this.logger = logger;
+  }
 
   /**
    * Create a new session executor and track it.
    */
   create(sessionId: string, clientId: string): SessionExecutor {
-    const executor = new SessionExecutor(sessionId);
+    const executor = new SessionExecutor(sessionId, this.logger);
 
     // Track session
     this.sessions.set(sessionId, executor);

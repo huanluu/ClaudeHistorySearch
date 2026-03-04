@@ -130,9 +130,9 @@ export function createLogger(logPath: string, options: CreateLoggerOptions = {})
   };
 }
 
-// Default singleton logger — writes to ~/.claude-history-server/server.log
+// Default log path — used by entry point and composition root
 const DATA_DIR = join(homedir(), '.claude-history-server');
-const LOG_PATH = join(DATA_DIR, 'server.log');
+export const LOG_PATH = join(DATA_DIR, 'server.log');
 
 /**
  * A single captured error for the diagnostics ring buffer.
@@ -177,4 +177,3 @@ export class ErrorRingBuffer {
   }
 }
 
-export const logger = createLogger(LOG_PATH);

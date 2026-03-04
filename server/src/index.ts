@@ -1,8 +1,9 @@
 import { createApp, type App } from './app.js';
-import { logger } from './provider/index.js';
+import { createLogger, LOG_PATH } from './provider/index.js';
 
 const PORT = parseInt(process.env.PORT || '3847', 10);
 
+const logger = createLogger(LOG_PATH);
 let currentApp: App | null = null;
 
 // --- Global error safety net ---

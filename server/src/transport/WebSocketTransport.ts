@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
-import { validateApiKey, hasApiKey, WorkingDirValidator, logger as defaultLogger } from '../provider/index.js';
+import { validateApiKey, hasApiKey, WorkingDirValidator } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 import { SessionStore, SessionExecutor } from '../sessions/index.js';
 
@@ -78,7 +78,9 @@ export interface WebSocketTransportOptions {
   /** Working directory validator (optional, no validation if not set) */
   validator?: WorkingDirValidator;
   /** Logger instance */
-  logger?: Logger;
+  logger: Logger;
+  /** Session store for tracking active sessions */
+  sessionStore: SessionStore;
   /** Message handler callback */
   onMessage?: (ws: AuthenticatedWebSocket, message: WSMessage) => void;
   /** Connection handler callback */
@@ -106,7 +108,7 @@ export class WebSocketTransport {
   private pingInterval: number;
   private pingTimer: NodeJS.Timeout | null = null;
   private clients: Set<AuthenticatedWebSocket> = new Set();
-  private sessionStore: SessionStore = new SessionStore();
+  private sessionStore: SessionStore;
   private validator?: WorkingDirValidator;
   private logger: Logger;
 
@@ -122,7 +124,8 @@ export class WebSocketTransport {
     this.path = options.path ?? '/ws';
     this.pingInterval = options.pingInterval ?? 30000;
     this.validator = options.validator;
-    this.logger = options.logger ?? defaultLogger;
+    this.logger = options.logger;
+    this.sessionStore = options.sessionStore;
     this.onMessage = options.onMessage;
     this.onConnection = options.onConnection;
     this.onDisconnection = options.onDisconnection;

@@ -1,10 +1,19 @@
 import { WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from '../src/transport/index.js';
 import { HttpTransport } from '../src/transport/index.js';
+import { SessionStore } from '../src/sessions/index.js';
 import WebSocket from 'ws';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
+import type { Logger } from '../src/provider/logger/logger.js';
+
+const noopLogger: Logger = {
+  log: () => {},
+  error: () => {},
+  warn: () => {},
+  verbose: () => {},
+};
 
 // Test configuration for API key
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-ws-test-${Date.now()}`);
@@ -63,13 +72,13 @@ describe('WebSocketTransport', () => {
   describe('constructor and start', () => {
     it('should initialize with isRunning false', () => {
       const server = httpTransport.getServer()!;
-      const transport = new WebSocketTransport({ server });
+      const transport = new WebSocketTransport({ server, logger: noopLogger, sessionStore: new SessionStore(noopLogger) });
       expect(transport.isRunning).toBe(false);
     });
 
     it('should start and set isRunning to true', () => {
       const server = httpTransport.getServer()!;
-      wsTransport = new WebSocketTransport({ server, path: '/ws' });
+      wsTransport = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new SessionStore(noopLogger) });
       wsTransport.start();
       expect(wsTransport.isRunning).toBe(true);
     });
@@ -296,7 +305,7 @@ describe('WebSocketTransport', () => {
         const server = noAuthHttp.getServer()!;
         const address = server.address() as { port: number };
 
-        const noAuthWs = new WebSocketTransport({ server, path: '/ws' });
+        const noAuthWs = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new SessionStore(noopLogger) });
         noAuthWs.start();
 
         const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);

@@ -1,7 +1,6 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { indexSessionFile } from './indexer.js';
 import type { SessionRepository } from '../database/index.js';
-import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 
 /**
@@ -16,7 +15,7 @@ export class FileWatcher {
   private logger: Logger;
   private watcher: FSWatcher | null = null;
 
-  constructor(projectsDir: string, repo: SessionRepository, logger: Logger = defaultLogger) {
+  constructor(projectsDir: string, repo: SessionRepository, logger: Logger) {
     this.projectsDir = projectsDir;
     this.repo = repo;
     this.logger = logger;

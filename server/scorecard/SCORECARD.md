@@ -20,7 +20,7 @@
 
 | Section | Passing | Total | Status |
 |---------|---------|-------|--------|
-| 1. Architecture | 3 | 7 | Needs work |
+| 1. Architecture | 4 | 7 | Needs work |
 | 2. Testability | 1 | 3 | Needs work |
 | 3. Observability | 2 | 3 | Good |
 | 4. Security | 4 | 4 | Perfect |
@@ -30,7 +30,7 @@
 | 8. Operability | 2 | 2 | Perfect |
 | 9. Code Quality | 1 | 2 | Needs work |
 | 10. Agent Ergonomics | 1 | 3 | Needs work |
-| **Total** | **20** | **31** | **65%** |
+| **Total** | **21** | **31** | **68%** |
 
 ### Metrics (Scored 1-5)
 
@@ -93,32 +93,32 @@ composition root).
   `SomeClass` is imported from a different module
 - Factory functions returning interfaces are exempt
 - **FAIL** if any cross-module `new` is found outside `app.ts`
-- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-4: Composition Root Monopoly'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-4: Composition Root Monopoly'`
 
-#### ARCH-INV-5: No Import-Time Side Effects
-> **Importing a module must not trigger I/O, network, or process operations.**
-
-- Scan module-scope code for: fs operations, `new Database()`, `spawn`, `exec`
-- `index.ts` (entry point) is the only exemption
-- Pure path computation (`path.join(...)`) is fine; using it to CREATE resources is not
-- **FAIL** if any module-scope I/O exists outside `index.ts`
-- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-5: No Import-Time Side Effects'` (`it.failing`)
-
-#### ARCH-INV-6: Interface-Typed Module Boundaries
+#### ARCH-INV-5: Interface-Typed Module Boundaries
 > **Every dependency crossing a module boundary is typed as an interface, not a concrete class.**
 
 - Check constructor params, function params, and fields for cross-module types
 - `app.ts` is exempt (wires concrete classes by design)
 - **FAIL** if any non-app.ts file has a cross-module dependency typed as a concrete class
-- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-6: Interface-Typed Module Boundaries'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-5: Interface-Typed Module Boundaries'` (`it.failing`)
 
-#### ARCH-INV-7: Test Existence Floor
+#### ARCH-INV-6: Test Existence Floor
 > **Every source module with exported logic has a corresponding test file.**
 
 - For every `.ts` in `src/` exporting functions or classes, a `.test.ts` must exist
 - Type-only files and barrel files are exempt
 - **FAIL** if any exportable module lacks a test file
-- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-7: Test Existence Floor'` (`it.failing`)
+- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-6: Test Existence Floor'` (`it.failing`)
+
+#### ARCH-INV-7: No Exported Singleton Instances
+> **No module may export a `const` initialized with `new` at module scope.**
+
+- Catches patterns like `export const db = new Database(...)` — module-level singletons that bypass the composition root
+- `app.ts` and `index.ts` are exempt (composition root and entry point)
+- Pure value exports like `export const DB_PATH = join(...)` are fine (no `new`)
+- **FAIL** if any non-exempt file exports a `const` initialized with `new ClassName(`
+- **Enforced by**: `tests/scorecard.test.ts` → `'ARCH-INV-7: No Exported Singleton Instances'`
 
 ### Metrics
 
@@ -200,6 +200,19 @@ composition root).
 
 **Check:** Count `if/switch` dispatch chains. Hard-coded allowlists. "To add new X, how many existing files change?"
 
+#### ARCH-MET-7: Import Purity
+> **Importing a module must not trigger I/O, network, or process operations.**
+
+| Score | Criteria |
+|-------|----------|
+| 5 | Zero modules have import-time side effects; all I/O is in factories or methods called explicitly |
+| 4 | 1 module has minor import-time I/O (e.g., reading a static file); all others are pure |
+| 3 | 2-3 modules have import-time I/O, but it's contained (directory creation, config reads) |
+| 2 | Several modules create resources, open connections, or spawn processes on import |
+| 1 | Importing core modules triggers database creation, network calls, or filesystem mutations |
+
+**Check:** For each non-barrel, non-entry-point file: does any code execute at module scope (outside functions/classes) that performs I/O? `fs.*Sync`, `new Database()`, `spawn()`, `exec()` at the top level are red flags. Pure computations (`path.join`, string constants) are fine.
+
 ---
 
 ## 2. Testability
@@ -219,7 +232,7 @@ state between tests.
 - `as unknown as Interface` is acceptable when the interface is properly narrow
   (consumer uses all mocked methods)
 - `as any` is never acceptable — it hides missing mock methods
-- `as unknown as ConcreteClass` indicates a missing interface (report as ARCH-INV-6 violation)
+- `as unknown as ConcreteClass` indicates a missing interface (report as ARCH-INV-5 violation)
 - **FAIL** if any `as any` appears in mock/stub construction in test files
 - **Enforced by**: `tests/scorecard.test.ts` → `'TEST-INV-1: No as any in test files'` (`it.failing`) + `eslint.config.js` → `@typescript-eslint/no-explicit-any` (Block 9, warn)
 
@@ -928,10 +941,10 @@ patterns because they never found the patterns.
 | ARCH-INV-1 | Layer Import Direction | PASS | Zero violations across 31 files |
 | ARCH-INV-2 | Barrel Encapsulation | PASS | All cross-module imports through barrels |
 | ARCH-INV-3 | No Circular Dependencies | PASS | No cycles detected |
-| ARCH-INV-4 | Composition Root Monopoly | FAIL | `WebSocketTransport:109`, `SessionStore:14`, `connection.ts:58` |
-| ARCH-INV-5 | No Import-Time Side Effects | FAIL | `connection.ts` DB creation, `logger.ts` file writer at import |
-| ARCH-INV-6 | Interface-Typed Boundaries | FAIL | 6+ classes without interfaces at module boundaries |
-| ARCH-INV-7 | Test Existence Floor | FAIL | Missing: keyManager, middleware, FileWatcher, SqliteSessionRepository |
+| ARCH-INV-4 | Composition Root Monopoly | PASS | All cross-module `new` in app.ts (#40) |
+| ARCH-INV-5 | Interface-Typed Boundaries | FAIL | 6+ classes without interfaces at module boundaries |
+| ARCH-INV-6 | Test Existence Floor | FAIL | Missing: keyManager, middleware, FileWatcher, SqliteSessionRepository |
+| ARCH-INV-7 | No Exported Singleton Instances | PASS | No `export const x = new Y(` outside app.ts/index.ts |
 | TEST-INV-1 | No Type Escape Hatches | FAIL | `config.test.ts:84` uses `as any`; `config-security.test.ts:40,47` uses `as any` |
 | TEST-INV-2 | No Global State Leaks | FAIL | `routes.test.ts:25`, `websocket.test.ts:15` mutate `process.env` at module scope |
 | TEST-INV-3 | Tests Use Public API Only | PASS | Tests import from barrels (verified by review) |

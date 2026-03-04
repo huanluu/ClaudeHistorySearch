@@ -1,5 +1,13 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { EventEmitter } from 'events';
+import type { Logger } from '../src/provider/logger/logger.js';
+
+const noopLogger: Logger = {
+  log: () => {},
+  error: () => {},
+  warn: () => {},
+  verbose: () => {},
+};
 
 // Create mock spawn function
 const mockSpawn = jest.fn();
@@ -44,7 +52,7 @@ describe('SessionExecutor', () => {
     it('spawns claude with correct arguments for new session', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-1');
+      const executor = new SessionExecutor('test-session-1', noopLogger);
       executor.start({
         prompt: 'List files in current directory',
         workingDir: '/tmp/test-project'
@@ -65,7 +73,7 @@ describe('SessionExecutor', () => {
     it('spawns claude with --resume flag when resumeSessionId provided', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('new-session-1');
+      const executor = new SessionExecutor('new-session-1', noopLogger);
       executor.start({
         prompt: 'continue from here',
         workingDir: '/tmp/test-project',
@@ -86,7 +94,7 @@ describe('SessionExecutor', () => {
     it('emits message events for JSON output lines', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-2');
+      const executor = new SessionExecutor('test-session-2', noopLogger);
       const messages: unknown[] = [];
 
       executor.on('message', (msg) => messages.push(msg));
@@ -104,7 +112,7 @@ describe('SessionExecutor', () => {
     it('emits error events for stderr output', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-3');
+      const executor = new SessionExecutor('test-session-3', noopLogger);
       const errors: string[] = [];
 
       executor.on('error', (err) => errors.push(err));
@@ -119,7 +127,7 @@ describe('SessionExecutor', () => {
     it('emits complete event with exit code', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-4');
+      const executor = new SessionExecutor('test-session-4', noopLogger);
 
       const completePromise = new Promise<number>((resolve) => {
         executor.on('complete', (exitCode) => resolve(exitCode));
@@ -135,7 +143,7 @@ describe('SessionExecutor', () => {
     it('emits complete event with non-zero exit code on error', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-5');
+      const executor = new SessionExecutor('test-session-5', noopLogger);
 
       const completePromise = new Promise<number>((resolve) => {
         executor.on('complete', (exitCode) => resolve(exitCode));
@@ -153,7 +161,7 @@ describe('SessionExecutor', () => {
     it('sends SIGTERM to process', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-6');
+      const executor = new SessionExecutor('test-session-6', noopLogger);
       executor.start({ prompt: 'test', workingDir: '/tmp' });
       executor.cancel();
 
@@ -163,7 +171,7 @@ describe('SessionExecutor', () => {
     it('does nothing if process not started', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('test-session-7');
+      const executor = new SessionExecutor('test-session-7', noopLogger);
       // Don't call start()
       expect(() => executor.cancel()).not.toThrow();
     });
@@ -173,7 +181,7 @@ describe('SessionExecutor', () => {
     it('returns the session ID', async () => {
       const { SessionExecutor } = await importSessions();
 
-      const executor = new SessionExecutor('my-session-id');
+      const executor = new SessionExecutor('my-session-id', noopLogger);
       expect(executor.getSessionId()).toBe('my-session-id');
     });
   });
@@ -198,7 +206,7 @@ describe('SessionStore', () => {
     it('creates and tracks sessions by ID', async () => {
       const { SessionStore, SessionExecutor } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       const executor = store.create('session-1', 'client-A');
 
       expect(executor).toBeInstanceOf(SessionExecutor);
@@ -208,7 +216,7 @@ describe('SessionStore', () => {
     it('associates sessions with client IDs', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       store.create('session-1', 'client-A');
       store.create('session-2', 'client-A');
       store.create('session-3', 'client-B');
@@ -224,7 +232,7 @@ describe('SessionStore', () => {
     it('removes session and returns the executor', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       const executor = store.create('session-1', 'client-A');
       const removed = store.remove('session-1');
 
@@ -235,7 +243,7 @@ describe('SessionStore', () => {
     it('returns undefined for non-existent session', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       const removed = store.remove('non-existent');
 
       expect(removed).toBeUndefined();
@@ -246,7 +254,7 @@ describe('SessionStore', () => {
     it('removes all sessions for a client', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       store.create('session-1', 'client-A');
       store.create('session-2', 'client-A');
       store.create('session-3', 'client-B');
@@ -262,7 +270,7 @@ describe('SessionStore', () => {
     it('returns empty array for non-existent client', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       const removed = store.removeByClient('non-existent');
 
       expect(removed).toHaveLength(0);
@@ -273,7 +281,7 @@ describe('SessionStore', () => {
     it('returns true for existing session', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       store.create('session-1', 'client-A');
 
       expect(store.has('session-1')).toBe(true);
@@ -282,7 +290,7 @@ describe('SessionStore', () => {
     it('returns false for non-existent session', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
 
       expect(store.has('session-1')).toBe(false);
     });
@@ -292,7 +300,7 @@ describe('SessionStore', () => {
     it('returns all sessions', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       store.create('session-1', 'client-A');
       store.create('session-2', 'client-B');
 
@@ -303,7 +311,7 @@ describe('SessionStore', () => {
     it('returns empty array when no sessions', async () => {
       const { SessionStore } = await importSessions();
 
-      const store = new SessionStore();
+      const store = new SessionStore(noopLogger);
       expect(store.getAll()).toHaveLength(0);
     });
   });

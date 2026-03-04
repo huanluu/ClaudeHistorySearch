@@ -8,7 +8,6 @@ import {
 } from '../database/index.js';
 import { indexAllSessions } from '../services/index.js';
 import type { HeartbeatService, ConfigService, DiagnosticsService, IndexAllResult } from '../services/index.js';
-import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 
 // Read admin.html at module load
@@ -22,7 +21,7 @@ export interface RouteDeps {
   configService?: ConfigService;
   diagnosticsService?: DiagnosticsService;
   onConfigChanged?: (section: string) => void;
-  logger?: Logger;
+  logger: Logger;
   indexFn?: (force: boolean, repo: SessionRepository, logger: Logger) => Promise<IndexAllResult>;
 }
 
@@ -67,7 +66,7 @@ interface SearchResultResponse {
 
 export function createRouter(deps: RouteDeps): Router {
   const { repo, heartbeatService, configService, diagnosticsService, onConfigChanged, indexFn = indexAllSessions } = deps;
-  const logger = deps.logger ?? defaultLogger;
+  const { logger } = deps;
   const router = Router();
 
   /**

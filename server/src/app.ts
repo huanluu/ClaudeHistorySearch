@@ -1,10 +1,9 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
-import { join } from 'path';
-import { homedir } from 'os';
-import { createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
-import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index.js';
+import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './database/index.js';
+import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './provider/index.js';
 import { HttpTransport, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './transport/index.js';
+import { SessionStore } from './sessions/index.js';
 import { HeartbeatService, type HeartbeatConfig, ConfigService, FileWatcher, DiagnosticsService, indexAllSessions, PROJECTS_DIR } from './services/index.js';
 import { createRouter } from './api/index.js';
 
@@ -44,14 +43,14 @@ export function createApp(config: AppConfig): App {
 
   // --- Logger with error ring buffer ---
   const errorBuffer = new ErrorRingBuffer(50);
-  const logger = createLogger(
-    join(homedir(), '.claude-history-server', 'server.log'),
-    { errorBuffer }
-  );
+  const logger = createLogger(LOG_PATH, { errorBuffer });
+
+  // --- Database ---
+  const db = createDatabase(DB_PATH, logger);
 
   // --- Repositories ---
-  const sessionRepo = createSessionRepository();
-  const heartbeatRepo = createHeartbeatRepository();
+  const sessionRepo = createSessionRepository(db);
+  const heartbeatRepo = createHeartbeatRepository(db);
 
   // --- Services ---
   const configService = new ConfigService();
@@ -144,12 +143,14 @@ export function createApp(config: AppConfig): App {
     // Initialize WebSocket transport (attached to HTTP server)
     const httpServer = transport.getServer();
     if (httpServer) {
+      const sessionStore = new SessionStore(logger);
       wsTransport = new WebSocketTransport({
         server: httpServer,
         path: '/ws',
         pingInterval: 30000,
         validator: workingDirValidator,
         logger,
+        sessionStore,
         onConnection: (ws: AuthenticatedWebSocket) => {
           logger.log({ msg: `Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`, op: 'ws.connect', context: { clientId: ws.clientId, total: wsTransport?.getClientCount() } });
         },

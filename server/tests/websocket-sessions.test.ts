@@ -6,6 +6,14 @@ import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
 import { WorkingDirValidator } from '../src/provider/index.js';
+import type { Logger } from '../src/provider/logger/logger.js';
+
+const noopLogger: Logger = {
+  log: () => {},
+  error: () => {},
+  warn: () => {},
+  verbose: () => {},
+};
 
 // Create mock spawn function
 const mockSpawn = jest.fn();
@@ -83,7 +91,9 @@ describe('WebSocket Session Integration', () => {
     const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
     const resolvedTmp = realpathSync('/tmp');
     const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
-    wsTransport = new WebSocketTransport({ server, path: '/ws', validator });
+    const { SessionStore } = await import('../src/sessions/index.js');
+    const sessionStore = new SessionStore(noopLogger);
+    wsTransport = new WebSocketTransport({ server, path: '/ws', validator, logger: noopLogger, sessionStore });
     wsTransport.start();
   });
 

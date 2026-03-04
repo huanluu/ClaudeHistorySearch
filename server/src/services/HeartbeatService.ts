@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { execSync, spawn, type ChildProcess } from 'child_process';
-import { logger as defaultLogger } from '../provider/index.js';
 import type { Logger } from '../provider/index.js';
 import type { HeartbeatRepository, HeartbeatStateRecord } from '../database/index.js';
 
@@ -124,7 +123,7 @@ export class HeartbeatService {
   private schedulerRunCount = 0;
   private initialDelayTimer: NodeJS.Timeout | null = null;
 
-  constructor(configDir?: string, executor?: CommandExecutor, repo?: HeartbeatRepository, logger: Logger = defaultLogger) {
+  constructor(configDir: string | undefined, executor: CommandExecutor | undefined, repo: HeartbeatRepository | undefined, logger: Logger) {
     this.configDir = configDir || getConfigDir();
     this.executor = executor || defaultExecutor;
     this.repo = repo ?? null;
