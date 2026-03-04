@@ -189,6 +189,7 @@ For server test conventions, see `server/CLAUDE.md`.
 
 ## Git Hygiene
 
+- **Solo project — never create pull requests.** Merge worktree branches directly into main
 - One logical change per commit
 - Present tense, imperative mood: "Add caching" not "Added caching"
 - First line ≤50 chars, blank line, then details if needed
