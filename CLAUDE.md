@@ -190,6 +190,7 @@ For server test conventions, see `server/CLAUDE.md`.
 ## Git Hygiene
 
 - **Solo project — never create pull requests.** Merge worktree branches directly into main
+- **Never commit or merge to `main` without the user explicitly asking you to.** This is enforced by a hook — commits on main will be blocked unless the user has instructed you to commit
 - One logical change per commit
 - Present tense, imperative mood: "Add caching" not "Added caching"
 - First line ≤50 chars, blank line, then details if needed
