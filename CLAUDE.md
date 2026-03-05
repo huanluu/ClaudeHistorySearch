@@ -2,12 +2,47 @@
 
 > Rules for AI agents working on this codebase. Be literal. Follow numbered steps. When ambiguous, ask.
 
+## Product Vision
+
+### What We're Building
+
+A personal AI work assistant for a solo engineer at Microsoft. The assistant runs locally on a Mac, connects to work systems (Azure DevOps, MS Graph, GitHub), and helps with daily work: triaging bugs, reviewing PRs, preparing for meetings, and prioritizing the day.
+
+This started as a Claude Code session search tool and is evolving into a personal assistant — scoped to one person's work life, not a general-purpose AI gateway. Inspired by NanoClaw's simplicity (small codebase, skills over features) with work-system integrations.
+
+### Constraints
+
+| Constraint | Implication |
+|------------|-------------|
+| Solo engineer, side project | Keep the codebase small. Prefer skills/config over new code. Question every addition |
+| Corporate environment | Be cautious with dependencies — **always flag new npm/Swift packages and ask permission before adding** |
+| Available tools | Claude CLI, Copilot CLI, Azure CLI, WorkIQ MCP (ADO + MS Graph access) |
+| Primary UI | Mac menu bar app (chat + dashboard). Web UI for admin/config only. iOS app exists but secondary |
+
+### Interaction Model (Target — Not Yet Built)
+
+The Mac menu bar app will be the **only channel** — chat interface and dashboard in one:
+
+| Mode | When | Example | Status |
+|------|------|---------|--------|
+| **Chat** | Ad-hoc questions and commands | "What's the status on work item 4521?" | Partially exists (live sessions) |
+| **Proactive push** | Background agent surfaces something | "PR #89 has new comments" | Not yet built |
+| **Structured views** | Scheduled briefings | Morning dashboard: calendar, PRs, priorities | Not yet built |
+| **Background agentic** | Long-running tasks | "Investigate this bug" → notifies when done | Partially exists (HeartbeatService) |
+
+### Architecture Direction
+
+- **Simplicity first**: Small codebase, minimal dependencies, workflows defined as config/prompts not code
+- **Multi-CLI runtime**: Abstract over Claude CLI and Copilot CLI. Run both for LLM council when needed (Copilot gives access to GPT, Gemini)
+- **Workflow system**: Each use case (day briefing, PR review, work item triage) is a workflow with its own prompt template, tool config, and persistent memory
+- **What we're NOT building**: Not multi-user. Not a multi-channel gateway. Not a plugin framework
+
 ## Project Overview
 
-Claude History Search: a local search system for Claude Code session history.
-- **TypeScript server** (`server/`): Indexes JSONL sessions into SQLite FTS5, REST API, WebSocket for live sessions → see `server/CLAUDE.md` for all server conventions
-- **iOS app** (`ClaudeHistorySearch/`): SwiftUI client for iPhone/iPad
-- **Mac app** (`ClaudeHistorySearchMac/`): SwiftUI client for macOS
+Personal AI work assistant with local search, live sessions, and autonomous workflows.
+- **TypeScript server** (`server/`): Agent orchestration, search indexing (SQLite FTS5), REST API, WebSocket → see `server/CLAUDE.md` for all server conventions
+- **Mac app** (`ClaudeHistorySearchMac/`): SwiftUI menu bar app — primary user interface (chat + dashboard)
+- **iOS app** (`ClaudeHistorySearch/`): SwiftUI client for iPhone/iPad (secondary, limited by security constraints)
 - **Shared package** (`Shared/`): Swift package with shared models, services, and view models
 
 ## Engineering Principles
@@ -23,7 +58,7 @@ Claude History Search: a local search system for Claude Code session history.
 
 ```bash
 # Server — see server/CLAUDE.md for full commands, launchd management, and worktree testing
-cd server && npm test              # Jest tests
+cd server && npm test              # Vitest tests
 cd server && npm run lint          # ESLint with architecture enforcement
 
 # Swift
