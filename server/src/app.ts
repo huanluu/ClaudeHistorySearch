@@ -5,6 +5,7 @@ import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_
 import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './shared/provider/index';
 import { HttpTransport } from './shared/transport/index';
 import { AgentStore, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './features/live/index';
+import { AgentExecutor } from './shared/runtime/index';
 import { indexAllSessions, PROJECTS_DIR, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
 import { ConfigService, DiagnosticsService, registerAdminRoutes } from './features/admin/index';
@@ -61,6 +62,7 @@ export function createApp(config: AppConfig): App {
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
   const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
   const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
+  const agentStore = new AgentStore(logger, (id, log) => new AgentExecutor(id, log));
 
   // --- Diagnostics ---
   const startedAt = new Date();
@@ -70,7 +72,7 @@ export function createApp(config: AppConfig): App {
     fileWatcher,
     heartbeatService,
     getWsClientCount: () => wsTransport?.getClientCount() ?? 0,
-    getActiveSessionCount: () => 0, // No centralized session store yet
+    getActiveSessionCount: () => agentStore.getAll().length,
     startedAt,
     dbPath: DB_PATH,
   });
@@ -141,7 +143,6 @@ export function createApp(config: AppConfig): App {
     // Initialize WebSocket transport (attached to HTTP server)
     const httpServer = transport.getServer();
     if (httpServer) {
-      const agentStore = new AgentStore(logger);
       wsTransport = new WebSocketTransport({
         server: httpServer,
         path: '/ws',

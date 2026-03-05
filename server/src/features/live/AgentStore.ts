@@ -1,5 +1,7 @@
-import { AgentExecutor } from '../../shared/runtime/index';
+import type { AgentExecutor } from '../../shared/runtime/index';
 import type { Logger } from '../../shared/provider/index';
+
+export type ExecutorFactory = (sessionId: string, logger: Logger) => AgentExecutor;
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.
@@ -8,16 +10,18 @@ export class AgentStore {
   private sessions: Map<string, AgentExecutor> = new Map();
   private clientSessions: Map<string, Set<string>> = new Map();
   private logger: Logger;
+  private createExecutor: ExecutorFactory;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, createExecutor: ExecutorFactory) {
     this.logger = logger;
+    this.createExecutor = createExecutor;
   }
 
   /**
    * Create a new session executor and track it.
    */
   create(sessionId: string, clientId: string): AgentExecutor {
-    const executor = new AgentExecutor(sessionId, this.logger);
+    const executor = this.createExecutor(sessionId, this.logger);
 
     // Track session
     this.sessions.set(sessionId, executor);

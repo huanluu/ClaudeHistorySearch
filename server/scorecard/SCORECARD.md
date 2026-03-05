@@ -958,7 +958,7 @@ patterns because they never found the patterns.
 | TEST-INV-3 | Tests Use Public API Only | PASS | Tests import from barrels (verified by review) |
 | OBS-INV-1 | No Console in Source | PASS | Only in logger (opt-in) and keyManager CLI entry point (exempt) |
 | OBS-INV-2 | Error Paths Log Context | PASS | All catch blocks log via `logger.error()` with context |
-| OBS-INV-3 | Health Reflects Subsystems | FAIL | `getActiveSessionCount` hardcoded to 0 (session store hidden in WS transport) |
+| OBS-INV-3 | Health Reflects Subsystems | PASS | `agentStore` hoisted in app.ts; `getActiveSessionCount` wired to real `agentStore.getAll().length` |
 | SEC-INV-1 | No Hardcoded Secrets | PASS | API keys generated at runtime, config.json gitignored |
 | SEC-INV-2 | Array-Based Subprocess Args | PASS | `spawn('claude', args)` uses arrays; `execSync` calls use hardcoded strings only |
 | SEC-INV-3 | Auth on Non-Public Endpoints | FAIL | Auth is optional (disabled by default); when enabled, coverage is complete |
@@ -979,7 +979,7 @@ patterns because they never found the patterns.
 | AE-INV-2 | Adding-Features Guide | FAIL | No `docs/adding-features.md` exists. Patterns must be reverse-engineered from code. |
 | AE-INV-3 | Agent Diagnostic Access | PASS | CLAUDE.md documents log paths, launchd commands, health endpoint, test commands |
 
-**Invariant Summary: 21/32 passing (66%)**
+**Invariant Summary: 22/32 passing (69%)**
 
 ### All Metrics
 
@@ -996,7 +996,7 @@ patterns because they never found the patterns.
 | TEST-MET-3 | Test Isolation | 3 | Most tests create own state; 2 module-scope env mutations; temp dirs with timestamps |
 | OBS-MET-1 | Log Coverage | 4 | All error paths logged; external calls logged; some verbose-only paths |
 | OBS-MET-2 | Structured Logging | 3 | JSONL format with timestamp/level; no correlation IDs; consistent schema |
-| OBS-MET-3 | Diagnostics Completeness | 3 | Good subsystem coverage; active session count hardcoded to 0; no resource usage |
+| OBS-MET-3 | Diagnostics Completeness | 3 | Good subsystem coverage; active session count wired to real AgentStore; no resource usage |
 | SEC-MET-1 | Input Validation | 3 | Query params validated (limit, offset); FTS query sanitized; path validated; some body fields unchecked |
 | SEC-MET-2 | Auth Boundary | 3 | Auth middleware exists; optional by default; WS auth implemented; PUBLIC_PATHS hardcoded |
 | SEC-MET-3 | Dependency Hygiene | 3 | Lock file committed; moderate dependency count; audit status needs verification |
@@ -1049,8 +1049,8 @@ npm run scorecard:save      # Archive baseline + update with latest results
 
 | Status | Count | Invariants |
 |--------|-------|------------|
-| Passing (`it()`) | 15 | ARCH-INV-2/3, SEC-INV-1/2/3, PRIV-INV-3, PERF-INV-1/2, REL-INV-1/2/3, OPS-INV-1/2, CQ-INV-3, AE-INV-3 |
-| Known failures (`it.fails()`) | 12 | ARCH-INV-4/5/6/7, TEST-INV-2, OBS-INV-2/3, SEC-INV-4, PERF-INV-3, CQ-INV-2, AE-INV-1/2 |
+| Passing (`it()`) | 17 | ARCH-INV-2/3/4, SEC-INV-1/2/3, PRIV-INV-3, PERF-INV-1/2, REL-INV-1/2/3, OPS-INV-1/2, OBS-INV-3, CQ-INV-3, AE-INV-3 |
+| Known failures (`it.fails()`) | 10 | ARCH-INV-5/6/7, TEST-INV-2, OBS-INV-2, SEC-INV-4, PERF-INV-3, CQ-INV-2, AE-INV-1/2 |
 | ESLint only | 5 | ARCH-INV-1, CQ-INV-1, TEST-INV-1/3, OBS-INV-1 |
 | Metrics (judgment-based) | 5 | PRIV-MET-2/3, REL-MET-3, OPS-MET-3, AE-MET-5 |
 

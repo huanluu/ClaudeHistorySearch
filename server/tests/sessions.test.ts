@@ -178,7 +178,7 @@ describe('AgentStore', () => {
 
   describe('create()', () => {
     it('creates and tracks sessions by ID', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       const executor = store.create('session-1', 'client-A');
 
       expect(executor).toBeInstanceOf(AgentExecutor);
@@ -186,7 +186,7 @@ describe('AgentStore', () => {
     });
 
     it('associates sessions with client IDs', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       store.create('session-1', 'client-A');
       store.create('session-2', 'client-A');
       store.create('session-3', 'client-B');
@@ -200,7 +200,7 @@ describe('AgentStore', () => {
 
   describe('remove()', () => {
     it('removes session and returns the executor', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       const executor = store.create('session-1', 'client-A');
       const removed = store.remove('session-1');
 
@@ -209,7 +209,7 @@ describe('AgentStore', () => {
     });
 
     it('returns undefined for non-existent session', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       const removed = store.remove('non-existent');
 
       expect(removed).toBeUndefined();
@@ -218,7 +218,7 @@ describe('AgentStore', () => {
 
   describe('removeByClient()', () => {
     it('removes all sessions for a client', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       store.create('session-1', 'client-A');
       store.create('session-2', 'client-A');
       store.create('session-3', 'client-B');
@@ -232,7 +232,7 @@ describe('AgentStore', () => {
     });
 
     it('returns empty array for non-existent client', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       const removed = store.removeByClient('non-existent');
 
       expect(removed).toHaveLength(0);
@@ -241,14 +241,14 @@ describe('AgentStore', () => {
 
   describe('has()', () => {
     it('returns true for existing session', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       store.create('session-1', 'client-A');
 
       expect(store.has('session-1')).toBe(true);
     });
 
     it('returns false for non-existent session', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
 
       expect(store.has('session-1')).toBe(false);
     });
@@ -256,7 +256,7 @@ describe('AgentStore', () => {
 
   describe('getAll()', () => {
     it('returns all sessions', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       store.create('session-1', 'client-A');
       store.create('session-2', 'client-B');
 
@@ -265,7 +265,7 @@ describe('AgentStore', () => {
     });
 
     it('returns empty array when no sessions', () => {
-      const store = new AgentStore(noopLogger);
+      const store = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
       expect(store.getAll()).toHaveLength(0);
     });
   });

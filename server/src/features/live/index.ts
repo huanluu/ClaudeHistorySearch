@@ -1,4 +1,4 @@
-export { AgentStore } from './AgentStore';
+export { AgentStore, type ExecutorFactory } from './AgentStore';
 export {
   WebSocketTransport,
   type WebSocketTransportOptions,

@@ -7,6 +7,7 @@ import WebSocket from 'ws';
 import { WorkingDirValidator } from '../src/shared/provider/index';
 import { HttpTransport } from '../src/shared/transport/index';
 import { WebSocketTransport, AgentStore } from '../src/features/live/index';
+import { AgentExecutor } from '../src/shared/runtime/index';
 import type { Logger } from '../src/shared/provider/index';
 
 const noopLogger: Logger = {
@@ -85,7 +86,7 @@ describe('WebSocket Session Integration', () => {
     const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
     const resolvedTmp = realpathSync('/tmp');
     const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
-    const sessionStore = new AgentStore(noopLogger);
+    const sessionStore = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
     wsTransport = new WebSocketTransport({ server, path: '/ws', validator, logger: noopLogger, sessionStore });
     wsTransport.start();
   });

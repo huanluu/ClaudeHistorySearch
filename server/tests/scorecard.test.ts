@@ -173,9 +173,7 @@ describe('Scorecard: Architecture Invariants', () => {
     for (const file of allFiles) {
       const relFile = relative(SRC_DIR, file);
       // app.ts and index.ts are exempt (composition root / entry point)
-      // AgentStore.ts is exempt (factory for AgentExecutor — store pattern)
       if (relFile === 'app.ts' || relFile === 'index.ts') continue;
-      if (relFile === 'features/live/AgentStore.ts') continue;
 
       const content = readFileSync(file, 'utf-8');
       const lines = content.split('\n');
@@ -470,7 +468,7 @@ describe('Scorecard: Observability Invariants', () => {
   // ─── OBS-INV-3: Health Endpoint Reflects All Subsystems ──────────
   // Scorecard OBS-INV-3: Health Endpoint Reflects All Subsystems
   // See: scorecard/SCORECARD.md § Observability > Invariants > OBS-INV-3
-  it.fails('OBS-INV-3: Health reflects all subsystems wired in app.ts', () => {
+  it('OBS-INV-3: Health reflects all subsystems wired in app.ts', () => {
     const appContent = readFileSync(join(SRC_DIR, 'app.ts'), 'utf-8');
 
     // Services created in app.ts that should be monitored
