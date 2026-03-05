@@ -43,7 +43,7 @@ Use this skill to review staged changes before committing. Invoked via `/agent-c
 
 4. **Stamp the review** — After all fixes are staged, run:
    ```bash
-   git diff --cached | shasum | awk '{print $1}' > "$CLAUDE_PROJECT_DIR/.code-reviewed"
+   git diff --cached | shasum | awk '{print $1}' > "$(git rev-parse --show-toplevel)/.code-reviewed"
    ```
    This writes a content-addressed hash of the final staged diff. The pre-commit hook will verify this hash matches before allowing the commit.
 

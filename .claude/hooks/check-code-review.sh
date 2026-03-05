@@ -11,9 +11,10 @@ if ! echo "$COMMAND" | grep -q 'git commit'; then
   exit 0
 fi
 
-cd "$CLAUDE_PROJECT_DIR" || exit 0
+# Resolve git root from CWD (works in both main repo and worktrees)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 
-MARKER="$CLAUDE_PROJECT_DIR/.code-reviewed"
+MARKER="$REPO_ROOT/.code-reviewed"
 
 # Check marker exists
 if [ ! -f "$MARKER" ]; then

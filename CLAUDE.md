@@ -207,6 +207,14 @@ For server test conventions, see `server/CLAUDE.md`.
 - Feature branches: `feature/{description}`, fix branches: `fix/{description}`
 - `main` is always deployable — the launchd agent runs from it
 
+## Code Review Gate
+
+A PreToolUse hook (`.claude/hooks/check-code-review.sh`) blocks `git commit` unless staged changes have been reviewed. The hook checks for a `.code-reviewed` marker file containing a shasum of the reviewed diff.
+
+- **If the hook blocks your commit**: Run `/agent-code-review` to review the staged changes. The skill spawns a review subagent, fixes critical findings, and writes the `.code-reviewed` marker.
+- **If you re-stage files after review** (e.g., fixing a critical finding): Run `/agent-code-review` again — the marker hash must match the current staged diff.
+- **Do not bypass this gate.** Never manually create the `.code-reviewed` file or skip the hook with `--no-verify`.
+
 ## Worktree Discipline
 
 - Only edit files in the worktree branch, never in main directly — avoids merge conflicts
