@@ -12,6 +12,14 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR" || exit 0
 
+# In worktrees, symlink node_modules from the main repo to avoid reinstalling
+if [ ! -d server/node_modules ]; then
+  MAIN_REPO=$(dirname "$(git rev-parse --git-common-dir)")
+  if [ -d "$MAIN_REPO/server/node_modules" ]; then
+    ln -s "$MAIN_REPO/server/node_modules" server/node_modules
+  fi
+fi
+
 # --- ESLint ---
 LINT_OUTPUT=$(cd server && npm run lint 2>&1)
 if [ $? -ne 0 ]; then
