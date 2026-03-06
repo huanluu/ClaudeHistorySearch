@@ -1,5 +1,8 @@
 import { createApp, type App } from './app';
 import http from 'http';
+import { mkdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 /**
  * Helper: make a GET request and return { statusCode, body }.
@@ -16,15 +19,27 @@ function httpGet(url: string): Promise<{ statusCode: number; body: string }> {
 
 describe('createApp integration', () => {
   let app: App;
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = join(tmpdir(), `app-test-${Date.now()}`);
+    mkdirSync(tmpDir, { recursive: true });
+
+  });
 
   afterEach(async () => {
-    if (app) {
-      await app.stop();
-    }
+    if (app) await app.stop();
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('should start, respond to /health, and stop', async () => {
-    app = createApp({ port: 0 });
+    app = createApp({
+      port: 0,
+      dbPath: join(tmpDir, 'test.db'),
+      logPath: join(tmpDir, 'test.log'),
+
+      skipBonjour: true,
+    });
     await app.start();
 
     const port = app.getPort();
@@ -39,9 +54,14 @@ describe('createApp integration', () => {
   });
 
   it('should handle idempotent stop (calling stop twice)', async () => {
-    app = createApp({ port: 0 });
-    await app.start();
+    app = createApp({
+      port: 0,
+      dbPath: join(tmpDir, 'test.db'),
+      logPath: join(tmpDir, 'test.log'),
 
+      skipBonjour: true,
+    });
+    await app.start();
     await app.stop();
     // Second stop should not throw
     await app.stop();

@@ -1,17 +1,8 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
+import { createAuthMiddleware, type AuthDeps } from './middleware';
 
-// Mock the keyManager module BEFORE importing middleware
-vi.mock('./keyManager', () => ({
-  hasApiKey: vi.fn(),
-  validateApiKey: vi.fn(),
-}));
-
-import { authMiddleware } from './middleware';
-import { hasApiKey, validateApiKey } from './keyManager';
-
-const mockHasApiKey = vi.mocked(hasApiKey);
-const mockValidateApiKey = vi.mocked(validateApiKey);
+// No vi.mock needed — dependencies are injected via createAuthMiddleware
 
 function createMockReq(path: string, apiKey?: string): Partial<Request> {
   return {
@@ -29,9 +20,17 @@ function createMockRes(): Partial<Response> & { statusCode?: number; body?: unkn
 
 describe('authMiddleware', () => {
   let next: NextFunction;
+  let mockHasApiKey: ReturnType<typeof vi.fn>;
+  let mockValidateApiKey: ReturnType<typeof vi.fn>;
+  let middleware: ReturnType<typeof createAuthMiddleware>;
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    mockHasApiKey = vi.fn();
+    mockValidateApiKey = vi.fn();
+    middleware = createAuthMiddleware({
+      hasApiKey: mockHasApiKey,
+      validateApiKey: mockValidateApiKey,
+    });
     next = vi.fn();
   });
 
@@ -40,7 +39,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/health');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
@@ -51,7 +50,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/admin');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
@@ -62,7 +61,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/admin/config');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(401);
@@ -75,7 +74,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/sessions');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(mockHasApiKey).toHaveBeenCalledTimes(1);
       expect(mockValidateApiKey).not.toHaveBeenCalled();
@@ -93,7 +92,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/sessions');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(401);
@@ -107,7 +106,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/sessions', 'bad-key');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(mockValidateApiKey).toHaveBeenCalledWith('bad-key');
       expect(next).not.toHaveBeenCalled();
@@ -122,7 +121,7 @@ describe('authMiddleware', () => {
       const req = createMockReq('/sessions', 'valid-key');
       const res = createMockRes();
 
-      authMiddleware(req as Request, res as Response, next);
+      middleware(req as Request, res as Response, next);
 
       expect(mockValidateApiKey).toHaveBeenCalledWith('valid-key');
       expect(next).toHaveBeenCalledTimes(1);

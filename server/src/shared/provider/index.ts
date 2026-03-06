@@ -4,7 +4,8 @@ export type {
   IndexSessionParams, SessionRepository, DatabaseStats, HeartbeatRepository,
   ParsedMessage, ParsedSession, SessionSource,
 } from './types';
-export { authMiddleware } from './auth/index';
+export { authMiddleware, createAuthMiddleware } from './auth/index';
+export type { AuthDeps } from './auth/index';
 export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './auth/index';
 export { WorkingDirValidator } from './security/index';
 export type { ValidationResult } from './security/index';

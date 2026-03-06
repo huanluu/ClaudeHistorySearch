@@ -15,6 +15,9 @@ import { ConfigService, DiagnosticsService, registerAdminRoutes } from './featur
 export interface AppConfig {
   port: number;
   serviceType?: string;
+  dbPath?: string;
+  logPath?: string;
+  skipBonjour?: boolean;
 }
 
 export interface App {
@@ -45,13 +48,15 @@ function isStealthModeEnabled(): boolean {
  */
 export function createApp(config: AppConfig): App {
   const { port, serviceType = 'claudehistory' } = config;
+  const dbPath = config.dbPath ?? DB_PATH;
+  const logPath = config.logPath ?? LOG_PATH;
 
   // --- Logger with error ring buffer ---
   const errorBuffer = new ErrorRingBuffer(50);
-  const logger = createLogger(LOG_PATH, { errorBuffer });
+  const logger = createLogger(logPath, { errorBuffer });
 
   // --- Database ---
-  const db = createDatabase(DB_PATH, logger);
+  const db = createDatabase(dbPath, logger);
 
   // --- Repositories ---
   const sessionRepo = createSessionRepository(db);
@@ -80,7 +85,7 @@ export function createApp(config: AppConfig): App {
     getWsClientCount: () => wsGateway?.getClientCount() ?? 0,
     getActiveSessionCount: () => agentStore.getAll().length,
     startedAt,
-    dbPath: DB_PATH,
+    dbPath,
   });
 
   // --- Request logging ---
@@ -154,7 +159,7 @@ export function createApp(config: AppConfig): App {
 
     const boundPort = transport.getPort();
     logger.log({ msg: `Claude History Server running on http://0.0.0.0:${boundPort}`, op: 'server.start', context: { port: boundPort } });
-    logger.log({ msg: `Database: ${DB_PATH}`, op: 'server.start', context: { dbPath: DB_PATH } });
+    logger.log({ msg: `Database: ${dbPath}`, op: 'server.start', context: { dbPath } });
 
     // Initialize WebSocket gateway (attached to HTTP server AFTER it's listening)
     const httpServer = transport.getServer();
@@ -208,19 +213,23 @@ export function createApp(config: AppConfig): App {
     diagnosticsService.setLastIndexResult(result);
     logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
 
-    // Bonjour advertisement (auto-disabled if stealth mode is on)
-    const stealthMode = isStealthModeEnabled();
-    if (stealthMode) {
-      logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
+    // Bonjour advertisement (auto-disabled if stealth mode is on or skipBonjour is set)
+    if (config.skipBonjour) {
+      logger.log({ msg: 'Bonjour advertisement skipped (skipBonjour option)', op: 'server.start' });
     } else {
-      bonjour = new Bonjour();
-      service = bonjour.publish({
-        name: 'Claude History Server',
-        type: serviceType,
-        port: boundPort,
-        txt: { version: '1.0.0' }
-      });
-      logger.log({ msg: `Bonjour service advertised as _${serviceType}._tcp on port ${boundPort}`, op: 'server.start', context: { serviceType, port: boundPort } });
+      const stealthMode = isStealthModeEnabled();
+      if (stealthMode) {
+        logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
+      } else {
+        bonjour = new Bonjour();
+        service = bonjour.publish({
+          name: 'Claude History Server',
+          type: serviceType,
+          port: boundPort,
+          txt: { version: '1.0.0' }
+        });
+        logger.log({ msg: `Bonjour service advertised as _${serviceType}._tcp on port ${boundPort}`, op: 'server.start', context: { serviceType, port: boundPort } });
+      }
     }
 
     // File watcher

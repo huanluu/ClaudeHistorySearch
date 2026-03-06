@@ -1155,4 +1155,161 @@ More text.
       expect(service.getAllState()).toEqual([]);
     });
   });
+
+  // ===========================================================================
+  // Scheduler Lifecycle Tests
+  // ===========================================================================
+
+  describe('scheduler lifecycle', () => {
+    let service: HeartbeatService;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      service.stopScheduler();
+      vi.useRealTimers();
+    });
+
+    it('startScheduler with disabled config is a no-op', () => {
+      const configPath = join(TEST_CONFIG_DIR, 'config.json');
+      writeFileSync(configPath, JSON.stringify({
+        heartbeat: { enabled: false }
+      }));
+
+      service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+      service.startScheduler();
+
+      expect(service.isSchedulerActive()).toBe(false);
+
+      rmSync(configPath);
+    });
+
+    it('startScheduler sets isSchedulerActive to true', () => {
+      const configPath = join(TEST_CONFIG_DIR, 'config.json');
+      writeFileSync(configPath, JSON.stringify({
+        heartbeat: { enabled: true, intervalMs: 60000 }
+      }));
+
+      service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+      service.startScheduler();
+
+      expect(service.isSchedulerActive()).toBe(true);
+
+      rmSync(configPath);
+    });
+
+    it('stopScheduler sets isSchedulerActive to false', () => {
+      const configPath = join(TEST_CONFIG_DIR, 'config.json');
+      writeFileSync(configPath, JSON.stringify({
+        heartbeat: { enabled: true, intervalMs: 60000 }
+      }));
+
+      service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+      service.startScheduler();
+      expect(service.isSchedulerActive()).toBe(true);
+
+      service.stopScheduler();
+      expect(service.isSchedulerActive()).toBe(false);
+
+      rmSync(configPath);
+    });
+
+    it('stopScheduler on inactive scheduler is a no-op (no throw)', () => {
+      service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+
+      expect(() => service.stopScheduler()).not.toThrow();
+      expect(service.isSchedulerActive()).toBe(false);
+    });
+
+    it('double startScheduler is safe (idempotent restart)', () => {
+      const configPath = join(TEST_CONFIG_DIR, 'config.json');
+      writeFileSync(configPath, JSON.stringify({
+        heartbeat: { enabled: true, intervalMs: 60000 }
+      }));
+
+      service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+      service.startScheduler();
+      service.startScheduler();
+
+      expect(service.isSchedulerActive()).toBe(true);
+
+      rmSync(configPath);
+    });
+
+    it('initial heartbeat fires after 5-second delay', async () => {
+      const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
+      writeFileSync(heartbeatPath, `# HEARTBEAT.md
+## Work Items
+- [x] Fetch Azure DevOps work items assigned to me
+`);
+
+      let execSyncCallCount = 0;
+      const mockExecutor: CommandExecutor = {
+        execSync: () => {
+          execSyncCallCount++;
+          return '[]';
+        },
+        spawn: () => createMockChildProcess(0),
+      };
+
+      service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      service.startScheduler();
+
+      // At 4999ms the initial heartbeat should NOT have fired yet
+      await vi.advanceTimersByTimeAsync(4999);
+      expect(execSyncCallCount).toBe(0);
+
+      // At 5000ms the initial heartbeat fires, calling runHeartbeat which calls checkForChanges -> fetchWorkItems -> execSync
+      await vi.advanceTimersByTimeAsync(1);
+      expect(execSyncCallCount).toBe(1);
+
+      rmSync(heartbeatPath);
+    });
+
+    it('maxRuns stops scheduler after N runs', async () => {
+      const configPath = join(TEST_CONFIG_DIR, 'config.json');
+      writeFileSync(configPath, JSON.stringify({
+        heartbeat: { enabled: true, intervalMs: 10000, maxRuns: 2 }
+      }));
+
+      const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
+      writeFileSync(heartbeatPath, `# HEARTBEAT.md
+## Work Items
+- [x] Fetch Azure DevOps work items assigned to me
+`);
+
+      let execSyncCallCount = 0;
+      const mockExecutor: CommandExecutor = {
+        execSync: () => {
+          execSyncCallCount++;
+          return '[]';
+        },
+        spawn: () => createMockChildProcess(0),
+      };
+
+      service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      service.startScheduler();
+
+      // Run 1: initial delay fires at 5000ms
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(execSyncCallCount).toBe(1);
+
+      // Run 2: interval fires at 10000ms (total 15000ms from start, but timer started at 0)
+      // The interval timer fires at 10000ms from start
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(execSyncCallCount).toBe(2);
+
+      // After maxRuns=2, scheduler should have stopped
+      expect(service.isSchedulerActive()).toBe(false);
+
+      // Further interval ticks should not fire additional runs
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(execSyncCallCount).toBe(2);
+
+      rmSync(heartbeatPath);
+      rmSync(configPath);
+    });
+  });
 });

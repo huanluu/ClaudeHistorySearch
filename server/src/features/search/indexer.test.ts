@@ -1,6 +1,12 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { parseSessionFile, type ParsedSession, detectAutomaticSession } from './indexer';
+import { copyFileSync, mkdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { parseSessionFile, type ParsedSession, detectAutomaticSession, indexSessionFile } from './indexer';
+import { createDatabase, createSessionRepository } from '../../shared/infra/database/index';
+import type { SessionRepository } from '../../shared/provider/index';
+import { ClaudeSessionSource } from '../../shared/infra/parsers/index';
+import { noopLogger } from '../../../tests/__helpers/index';
 
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -254,5 +260,131 @@ describe('detectAutomaticSession', () => {
     };
     const isAutomatic = detectAutomaticSession(session);
     expect(isAutomatic).toBe(false);
+  });
+});
+
+// =============================================================================
+// indexSessionFile Tests
+// =============================================================================
+
+describe('indexSessionFile', () => {
+  let tmpDir: string;
+  let repo: SessionRepository;
+  const source = new ClaudeSessionSource();
+
+  beforeEach(() => {
+    tmpDir = join(tmpdir(), `indexer-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tmpDir, { recursive: true });
+    const db = createDatabase(':memory:', noopLogger);
+    repo = createSessionRepository(db);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('indexes a valid JSONL file and stores session in repo', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
+    const testFile = join(tmpDir, 'test-session.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    const result = await indexSessionFile(testFile, false, source, repo, noopLogger);
+
+    expect(result).not.toBeNull();
+    expect(result!.sessionId).toBe('test-session-001');
+    expect(result!.messageCount).toBe(4);
+
+    // Verify session is retrievable from the repo
+    const stored = repo.getSessionById('test-session-001');
+    expect(stored).toBeDefined();
+    expect(stored!.project).toBe('/Users/test/project');
+    expect(stored!.message_count).toBe(4);
+  });
+
+  it('returns null for agent-prefixed files', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
+    const testFile = join(tmpDir, 'agent-something.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    const result = await indexSessionFile(testFile, false, source, repo, noopLogger);
+
+    expect(result).toBeNull();
+  });
+
+  it('skips already-indexed files when forceReindex is false', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
+    // File must be named with the sessionId so getSessionLastIndexed(fileName) finds it
+    const testFile = join(tmpDir, 'test-session-001.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    // First index
+    const first = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    expect(first).not.toBeNull();
+
+    // Second index without force — should skip (last_indexed >= file mtime)
+    const second = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    expect(second).toBeNull();
+  });
+
+  it('re-indexes when forceReindex is true', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
+    const testFile = join(tmpDir, 'test-session-001.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    // First index
+    const first = await indexSessionFile(testFile, true, source, repo, noopLogger);
+    expect(first).not.toBeNull();
+
+    // Second index with force — should re-index
+    const second = await indexSessionFile(testFile, true, source, repo, noopLogger);
+    expect(second).not.toBeNull();
+    expect(second!.sessionId).toBe('test-session-001');
+  });
+
+  it('uses title from provided titleMap', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
+    const testFile = join(tmpDir, 'test-session.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    const titleMap = new Map([['test-session-001', 'My Custom Title']]);
+    await indexSessionFile(testFile, false, source, repo, noopLogger, titleMap);
+
+    const stored = repo.getSessionById('test-session-001');
+    expect(stored).toBeDefined();
+    expect(stored!.title).toBe('My Custom Title');
+  });
+
+  it('detects automatic/heartbeat sessions correctly', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session-heartbeat.jsonl');
+    const testFile = join(tmpDir, 'heartbeat-session.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    await indexSessionFile(testFile, false, source, repo, noopLogger);
+
+    const stored = repo.getSessionById('heartbeat-session-001');
+    expect(stored).toBeDefined();
+    expect(stored!.is_automatic).toBe(1);
+  });
+
+  it('returns null for empty session files', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session-empty.jsonl');
+    const testFile = join(tmpDir, 'empty-session.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    const result = await indexSessionFile(testFile, false, source, repo, noopLogger);
+
+    expect(result).toBeNull();
+  });
+
+  it('marks non-heartbeat sessions as not automatic', async () => {
+    const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
+    const testFile = join(tmpDir, 'test-session.jsonl');
+    copyFileSync(fixturePath, testFile);
+
+    await indexSessionFile(testFile, false, source, repo, noopLogger);
+
+    const stored = repo.getSessionById('test-session-001');
+    expect(stored).toBeDefined();
+    expect(stored!.is_automatic).toBe(0);
   });
 });
