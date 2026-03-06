@@ -156,11 +156,13 @@ export class WebSocketGateway implements WsGateway {
     const apiKey = url.searchParams.get('apiKey');
 
     if (!apiKey) {
+      this.logger.log({ msg: 'WebSocket rejected: no API key in query', op: 'ws.upgrade' });
       callback(false, 401, 'API key required');
       return;
     }
 
     if (!validateApiKey(apiKey)) {
+      this.logger.log({ msg: 'WebSocket rejected: invalid API key', op: 'ws.upgrade' });
       callback(false, 401, 'Invalid API key');
       return;
     }
