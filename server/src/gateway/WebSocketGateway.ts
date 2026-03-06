@@ -21,6 +21,8 @@ export interface WebSocketGatewayOptions {
   path?: string;
   pingInterval?: number;
   logger: Logger;
+  hasApiKey?: () => boolean;
+  validateApiKey?: (key: string) => boolean;
 }
 
 /**
@@ -45,6 +47,8 @@ export class WebSocketGateway implements WsGateway {
   private handlers: Map<string, WsHandler<unknown>> = new Map();
   private connectHandlers: WsConnectionHandler[] = [];
   private disconnectHandlers: WsConnectionHandler[] = [];
+  private _hasApiKey: () => boolean;
+  private _validateApiKey: (key: string) => boolean;
 
   public isRunning = false;
 
@@ -53,6 +57,8 @@ export class WebSocketGateway implements WsGateway {
     this.path = options.path ?? '/ws';
     this.pingInterval = options.pingInterval ?? 30000;
     this.logger = options.logger;
+    this._hasApiKey = options.hasApiKey ?? hasApiKey;
+    this._validateApiKey = options.validateApiKey ?? validateApiKey;
   }
 
   on<T = unknown>(type: string, handler: WsHandler<T>): void {
@@ -150,7 +156,7 @@ export class WebSocketGateway implements WsGateway {
     info: { origin: string; secure: boolean; req: IncomingMessage },
     callback: (result: boolean, code?: number, message?: string) => void,
   ): void {
-    if (!hasApiKey()) {
+    if (!this._hasApiKey()) {
       callback(true);
       return;
     }
@@ -164,7 +170,7 @@ export class WebSocketGateway implements WsGateway {
       return;
     }
 
-    if (!validateApiKey(apiKey)) {
+    if (!this._validateApiKey(apiKey)) {
       this.logger.log({ msg: 'WebSocket rejected: invalid API key', op: 'ws.upgrade' });
       callback(false, 401, 'Invalid API key');
       return;

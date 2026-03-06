@@ -3,12 +3,12 @@ import express, { type Application, type Request, type Response, type NextFuncti
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { randomBytes, createHash } from 'crypto';
+import { createHash } from 'crypto';
 import { Router } from 'express';
 import type { SessionRepository } from '../../shared/provider/index';
 import type { SessionRecord, MessageRecord, SearchResultRecord } from '../../shared/provider/index';
 import { registerSearchRoutes, type SearchRouteDeps } from './index';
-import type { Logger } from '../../shared/provider/index';
+import { noopLogger, createTestApiKey } from '../../../tests/__helpers/index';
 import { validateQuery } from '../../gateway/validation';
 import { SearchQuerySchema, SessionsQuerySchema } from '../../gateway/schemas';
 
@@ -16,35 +16,11 @@ import { SearchQuerySchema, SessionsQuerySchema } from '../../gateway/schemas';
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-search-${Date.now()}`);
 const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, 'config.json');
 
-interface Config {
-  apiKeyHash?: string;
-  apiKeyCreatedAt?: string;
-}
-
-const noopLogger: Logger = {
-  log: () => {},
-  error: () => {},
-  warn: () => {},
-  verbose: () => {},
-};
-
 // Setup test config directory before importing modules
 mkdirSync(TEST_CONFIG_DIR, { recursive: true });
 
 // Mock the config path in keyManager by setting an env var
 process.env.CLAUDE_HISTORY_CONFIG_DIR = TEST_CONFIG_DIR;
-
-// Helper to create test API key
-function createTestApiKey(): string {
-  const key = randomBytes(32).toString('hex');
-  const hash = createHash('sha256').update(key).digest('hex');
-  const config: Config = {
-    apiKeyHash: hash,
-    apiKeyCreatedAt: new Date().toISOString()
-  };
-  writeFileSync(TEST_CONFIG_FILE, JSON.stringify(config));
-  return key;
-}
 
 // Helper to remove API key
 function removeTestApiKey(): void {
@@ -171,7 +147,7 @@ describe('Search Routes', () => {
   let mockRepo: SessionRepository;
 
   beforeAll(() => {
-    testApiKey = createTestApiKey();
+    testApiKey = createTestApiKey(TEST_CONFIG_FILE);
     mockRepo = createMockRepository({
       getRecentSessions: () => [sampleSession, heartbeatSession],
       getManualSessions: () => [sampleSession],

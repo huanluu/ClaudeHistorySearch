@@ -11,14 +11,7 @@ import {
   type CommandExecutor
 } from './HeartbeatService';
 import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
-import type { Logger } from '../../shared/provider/index';
-
-const noopLogger: Logger = {
-  log: () => {},
-  error: () => {},
-  warn: () => {},
-  verbose: () => {},
-};
+import { noopLogger } from '../../../tests/__helpers/index';
 
 /**
  * Create a mock ChildProcess that emits a stream-json init message on stdout,

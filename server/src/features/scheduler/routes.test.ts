@@ -3,15 +3,8 @@ import express, { type Application } from 'express';
 import { Router } from 'express';
 import type { SessionRepository } from '../../shared/provider/index';
 import { registerSchedulerRoutes, type SchedulerRouteDeps } from './index';
-import type { Logger } from '../../shared/provider/index';
 import type { HeartbeatService } from './HeartbeatService';
-
-const noopLogger: Logger = {
-  log: () => {},
-  error: () => {},
-  warn: () => {},
-  verbose: () => {},
-};
+import { noopLogger } from '../../../tests/__helpers/index';
 
 function createMockRepository(overrides?: Partial<SessionRepository>): SessionRepository {
   return {

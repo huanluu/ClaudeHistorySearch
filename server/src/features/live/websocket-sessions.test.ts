@@ -1,21 +1,13 @@
 import { EventEmitter } from 'events';
-import { mkdirSync, writeFileSync, rmSync, realpathSync } from 'fs';
+import { mkdirSync, rmSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
 import { WorkingDirValidator } from '../../shared/provider/index';
 import { HttpTransport, WebSocketGateway } from '../../gateway/index';
 import { AgentStore, registerLiveHandlers } from './index';
 import { AgentExecutor } from '../../shared/infra/runtime/index';
-import type { Logger } from '../../shared/provider/index';
-
-const noopLogger: Logger = {
-  log: () => {},
-  error: () => {},
-  warn: () => {},
-  verbose: () => {},
-};
+import { noopLogger, createTestApiKey } from '../../../tests/__helpers/index';
 
 // Hoist the mock so it's available when vi.mock factory runs
 const mockSpawn = vi.hoisted(() => vi.fn());
@@ -28,22 +20,6 @@ vi.mock('child_process', () => ({
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-ws-session-test-${Date.now()}`);
 const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, 'config.json');
-
-interface Config {
-  apiKeyHash?: string;
-  apiKeyCreatedAt?: string;
-}
-
-function createTestApiKey(): string {
-  const key = randomBytes(32).toString('hex');
-  const hash = createHash('sha256').update(key).digest('hex');
-  const config: Config = {
-    apiKeyHash: hash,
-    apiKeyCreatedAt: new Date().toISOString()
-  };
-  writeFileSync(TEST_CONFIG_FILE, JSON.stringify(config));
-  return key;
-}
 
 function createMockProcess() {
   const mockProcess = Object.assign(new EventEmitter(), {
@@ -62,6 +38,42 @@ interface WSMessage {
   payload?: unknown;
 }
 
+/** Wait for a WebSocket message matching the given type. */
+function waitForMessage(ws: WebSocket, type: string, timeout = 2000): Promise<WSMessage> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timeout waiting for '${type}' message`)), timeout);
+    function handler(data: WebSocket.RawData) {
+      const msg = JSON.parse(data.toString()) as WSMessage;
+      if (msg.type === type) {
+        clearTimeout(timer);
+        ws.off('message', handler);
+        resolve(msg);
+      }
+    }
+    ws.on('message', handler);
+  });
+}
+
+/** Poll a predicate until it passes or times out. */
+function waitFor(fn: () => void, timeout = 2000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeout;
+    function check() {
+      try {
+        fn();
+        resolve();
+      } catch {
+        if (Date.now() >= deadline) {
+          reject(new Error(`waitFor timed out after ${timeout}ms`));
+        } else {
+          setTimeout(check, 10);
+        }
+      }
+    }
+    check();
+  });
+}
+
 describe('WebSocket Session Integration', () => {
   let httpTransport: InstanceType<typeof HttpTransport>;
   let wsGateway: WebSocketGateway;
@@ -71,7 +83,7 @@ describe('WebSocket Session Integration', () => {
   beforeAll(async () => {
     mkdirSync(TEST_CONFIG_DIR, { recursive: true });
     process.env.CLAUDE_HISTORY_CONFIG_DIR = TEST_CONFIG_DIR;
-    testApiKey = createTestApiKey();
+    testApiKey = createTestApiKey(TEST_CONFIG_FILE);
 
     // Start HTTP server
     httpTransport = new HttpTransport({ port: 0 });
@@ -122,16 +134,7 @@ describe('WebSocket Session Integration', () => {
       mockSpawn.mockReturnValue(mockProcess);
 
       const ws = await connectClient();
-      const messages: WSMessage[] = [];
 
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as WSMessage;
-        if (msg.type !== 'auth_result') {
-          messages.push(msg);
-        }
-      });
-
-      // Send session.start
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: {
@@ -141,18 +144,13 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      // Wait for spawn to be called
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
-      // Simulate output from claude
+      const msgPromise = waitForMessage(ws, 'session.output');
       mockProcess.stdout.emit('data', Buffer.from('{"type":"assistant","content":"Here are the files:"}\n'));
+      const outputMsg = await msgPromise;
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Check we received output
-      const outputMsg = messages.find(m => m.type === 'session.output');
-      expect(outputMsg).toBeDefined();
-      expect((outputMsg?.payload as { sessionId: string }).sessionId).toBe('test-session-1');
+      expect((outputMsg.payload as { sessionId: string }).sessionId).toBe('test-session-1');
 
       ws.close();
     });
@@ -162,16 +160,7 @@ describe('WebSocket Session Integration', () => {
       mockSpawn.mockReturnValue(mockProcess);
 
       const ws = await connectClient();
-      const messages: WSMessage[] = [];
 
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as WSMessage;
-        if (msg.type !== 'auth_result') {
-          messages.push(msg);
-        }
-      });
-
-      // Send session.start
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: {
@@ -181,18 +170,14 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
-      // Simulate process exit
+      const msgPromise = waitForMessage(ws, 'session.complete');
       mockProcess.emit('exit', 0);
+      const completeMsg = await msgPromise;
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Check we received complete message
-      const completeMsg = messages.find(m => m.type === 'session.complete');
-      expect(completeMsg).toBeDefined();
-      expect((completeMsg?.payload as { sessionId: string }).sessionId).toBe('test-session-2');
-      expect((completeMsg?.payload as { exitCode: number }).exitCode).toBe(0);
+      expect((completeMsg.payload as { sessionId: string }).sessionId).toBe('test-session-2');
+      expect((completeMsg.payload as { exitCode: number }).exitCode).toBe(0);
 
       ws.close();
     });
@@ -202,16 +187,7 @@ describe('WebSocket Session Integration', () => {
       mockSpawn.mockReturnValue(mockProcess);
 
       const ws = await connectClient();
-      const messages: WSMessage[] = [];
 
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as WSMessage;
-        if (msg.type !== 'auth_result') {
-          messages.push(msg);
-        }
-      });
-
-      // Send session.start
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: {
@@ -221,18 +197,14 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
-      // Simulate stderr
+      const msgPromise = waitForMessage(ws, 'session.error');
       mockProcess.stderr.emit('data', Buffer.from('Error: Something went wrong\n'));
+      const errorMsg = await msgPromise;
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Check we received error message
-      const errorMsg = messages.find(m => m.type === 'session.error');
-      expect(errorMsg).toBeDefined();
-      expect((errorMsg?.payload as { sessionId: string }).sessionId).toBe('test-session-3');
-      expect((errorMsg?.payload as { error: string }).error).toContain('Something went wrong');
+      expect((errorMsg.payload as { sessionId: string }).sessionId).toBe('test-session-3');
+      expect((errorMsg.payload as { error: string }).error).toContain('Something went wrong');
 
       ws.close();
     });
@@ -245,7 +217,6 @@ describe('WebSocket Session Integration', () => {
 
       const ws = await connectClient();
 
-      // Start session
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: {
@@ -255,9 +226,8 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
-      // Send cancel
       ws.send(JSON.stringify({
         type: 'session.cancel',
         payload: {
@@ -265,10 +235,7 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Verify kill was called
-      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      await waitFor(() => expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM'));
 
       ws.close();
     });
@@ -281,7 +248,6 @@ describe('WebSocket Session Integration', () => {
 
       const ws = await connectClient();
 
-      // Send session.resume
       ws.send(JSON.stringify({
         type: 'session.resume',
         payload: {
@@ -292,16 +258,13 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Verify spawn was called with --resume flag
-      expect(mockSpawn).toHaveBeenCalledWith(
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalledWith(
         'claude',
         expect.arrayContaining([
           '--resume', '0924732e-36d8-4c79-9408-2fac17974c28'
         ]),
         expect.any(Object)
-      );
+      ));
 
       ws.close();
     });
@@ -315,46 +278,37 @@ describe('WebSocket Session Integration', () => {
 
       const ws = await connectClient();
 
-      // Start two sessions
+      // Start first session
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: { sessionId: 'session-a', prompt: 'task 1', workingDir: '/tmp' }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(1));
 
+      // Start second session
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: { sessionId: 'session-b', prompt: 'task 2', workingDir: '/tmp' }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
 
       // Disconnect client
       ws.close();
 
-      // Wait for cleanup
-      await new Promise(resolve => setTimeout(resolve, 200));
-
       // Both processes should be killed
-      expect(mockProcess1.kill).toHaveBeenCalledWith('SIGTERM');
-      expect(mockProcess2.kill).toHaveBeenCalledWith('SIGTERM');
+      await waitFor(() => {
+        expect(mockProcess1.kill).toHaveBeenCalledWith('SIGTERM');
+        expect(mockProcess2.kill).toHaveBeenCalledWith('SIGTERM');
+      });
     });
   });
 
   describe('Working directory validation', () => {
     it('rejects session.start with disallowed directory', async () => {
       const ws = await connectClient();
-      const messages: WSMessage[] = [];
 
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as WSMessage;
-        if (msg.type !== 'auth_result') {
-          messages.push(msg);
-        }
-      });
-
-      // Attempt to start session in a forbidden directory
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: {
@@ -364,14 +318,8 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Should receive session.error
-      const errorMsg = messages.find(m => m.type === 'session.error');
-      expect(errorMsg).toBeDefined();
-      expect((errorMsg?.payload as { error: string }).error).toMatch(/not within any allowed directory/i);
-
-      // spawn should NOT have been called
+      const errorMsg = await waitForMessage(ws, 'session.error');
+      expect((errorMsg.payload as { error: string }).error).toMatch(/not within any allowed directory/i);
       expect(mockSpawn).not.toHaveBeenCalled();
 
       ws.close();
@@ -379,16 +327,7 @@ describe('WebSocket Session Integration', () => {
 
     it('rejects path traversal attempt', async () => {
       const ws = await connectClient();
-      const messages: WSMessage[] = [];
 
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as WSMessage;
-        if (msg.type !== 'auth_result') {
-          messages.push(msg);
-        }
-      });
-
-      // Path traversal: start in allowed dir but escape via ..
       ws.send(JSON.stringify({
         type: 'session.start',
         payload: {
@@ -398,9 +337,7 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const errorMsg = messages.find(m => m.type === 'session.error');
+      const errorMsg = await waitForMessage(ws, 'session.error');
       expect(errorMsg).toBeDefined();
       expect(mockSpawn).not.toHaveBeenCalled();
 
@@ -409,14 +346,6 @@ describe('WebSocket Session Integration', () => {
 
     it('rejects session.resume with disallowed directory', async () => {
       const ws = await connectClient();
-      const messages: WSMessage[] = [];
-
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as WSMessage;
-        if (msg.type !== 'auth_result') {
-          messages.push(msg);
-        }
-      });
 
       ws.send(JSON.stringify({
         type: 'session.resume',
@@ -428,9 +357,7 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const errorMsg = messages.find(m => m.type === 'session.error');
+      const errorMsg = await waitForMessage(ws, 'session.error');
       expect(errorMsg).toBeDefined();
       expect(mockSpawn).not.toHaveBeenCalled();
 
@@ -452,10 +379,7 @@ describe('WebSocket Session Integration', () => {
         }
       }));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // spawn SHOULD have been called
-      expect(mockSpawn).toHaveBeenCalled();
+      await waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
       ws.close();
     });

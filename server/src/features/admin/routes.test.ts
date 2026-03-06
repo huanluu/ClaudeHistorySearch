@@ -2,16 +2,9 @@ import request from 'supertest';
 import express, { type Application } from 'express';
 import { Router } from 'express';
 import { registerAdminRoutes, type AdminRouteDeps } from './index';
-import type { Logger } from '../../shared/provider/index';
 import type { ConfigService } from './ConfigService';
 import type { DiagnosticsService } from './DiagnosticsService';
-
-const noopLogger: Logger = {
-  log: () => {},
-  error: () => {},
-  warn: () => {},
-  verbose: () => {},
-};
+import { noopLogger } from '../../../tests/__helpers/index';
 
 function createAdminApp(deps: {
   diagnosticsService?: AdminRouteDeps['diagnosticsService'];

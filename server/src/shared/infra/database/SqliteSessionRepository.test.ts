@@ -1,13 +1,6 @@
 import { createDatabase, createSessionRepository } from './index';
 import type { SessionRepository, IndexSessionParams } from './index';
-import type { Logger } from '../../provider/index';
-
-const noopLogger: Logger = {
-  log: () => {},
-  error: () => {},
-  warn: () => {},
-  verbose: () => {},
-};
+import { noopLogger } from '../../../../tests/__helpers/index';
 
 function makeSession(overrides: Partial<IndexSessionParams> = {}): IndexSessionParams {
   const now = Date.now();
