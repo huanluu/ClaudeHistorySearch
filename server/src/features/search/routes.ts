@@ -20,6 +20,7 @@ interface SessionResponse {
   title: string | null;
   isAutomatic: boolean;
   isUnread: boolean;
+  source: string;
 }
 
 interface MessageResponse {
@@ -80,7 +81,8 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
           preview: s.preview,
           title: s.title,
           isAutomatic: s.is_automatic === 1,
-          isUnread: s.is_unread === 1
+          isUnread: s.is_unread === 1,
+          source: s.source ?? 'claude'
         })),
         pagination: {
           limit,
@@ -119,7 +121,8 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
           preview: session.preview,
           title: session.title,
           isAutomatic: session.is_automatic === 1,
-          isUnread: session.is_unread === 1
+          isUnread: session.is_unread === 1,
+          source: session.source ?? 'claude'
         } as SessionResponse,
         messages: messages.map((m): MessageResponse => ({
           uuid: m.uuid,

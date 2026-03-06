@@ -14,6 +14,13 @@ public struct SessionRowContent: View {
     private var isAutomatic: Bool { session.isAutomatic == true }
     private var isUnread: Bool { session.isUnread == true }
 
+    private var sourceDisplayName: String {
+        switch session.source {
+        case "copilot": return "Copilot"
+        default: return "Claude"
+        }
+    }
+
     public var body: some View {
         HStack(alignment: .top, spacing: 10) {
             // Blue unread dot
@@ -24,10 +31,10 @@ public struct SessionRowContent: View {
                     .padding(.top, 6)
             }
 
-            // Icon: sparkle for automatic sessions, chat bubble for regular
+            // Icon: sparkle for automatic, code brackets for copilot, chat bubble for claude
             if style.showIcon {
-                Image(systemName: isAutomatic ? "sparkles" : "bubble.left.and.bubble.right")
-                    .foregroundColor(isAutomatic ? .orange : .blue)
+                Image(systemName: isAutomatic ? "sparkles" : session.source == "copilot" ? "chevron.left.forwardslash.chevron.right" : "bubble.left.and.bubble.right")
+                    .foregroundColor(isAutomatic ? .orange : session.source == "copilot" ? .green : .blue)
                     .font(.system(size: 14))
                     .frame(width: 20)
             }
@@ -63,7 +70,7 @@ public struct SessionRowContent: View {
                 HStack(spacing: 4) {
                     Image(systemName: "message")
                         .font(.caption2)
-                    Text("\(session.messageCount) messages")
+                    Text("\(sourceDisplayName) · \(session.messageCount) messages")
                         .font(.caption2)
                 }
                 .foregroundColor(.secondary)

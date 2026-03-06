@@ -1,4 +1,4 @@
-export { indexAllSessions, indexSessionFile, PROJECTS_DIR, CLAUDE_DIR } from './indexer';
+export { indexAllSessions, indexSessionFile, PROJECTS_DIR, CLAUDE_DIR, detectAutomaticSession } from './indexer';
 export type { ParsedSession, IndexAllResult, IndexResult, ParsedMessage } from './indexer';
 export { FileWatcher } from './FileWatcher';
 export type { IndexFn, WatchFn } from './FileWatcher';

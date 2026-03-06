@@ -267,6 +267,14 @@ public struct SessionView: View {
 
     // MARK: - Shared Components
 
+    private var agentDisplayName: String {
+        switch sessionDetail?.session.source {
+        case "copilot": return "Copilot"
+        case "claude": return "Claude"
+        default: return "Agent"
+        }
+    }
+
     private var displayTitle: String {
         if let session = session {
             return session.displayName
@@ -331,7 +339,7 @@ public struct SessionView: View {
             HStack {
                 ProgressView()
                     .controlSize(.small)
-                Text("Claude is working...")
+                Text("\(agentDisplayName) is working...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -426,8 +434,14 @@ public struct SessionView: View {
     // MARK: - Actions
 
     private func copyConversation(_ detail: SessionDetailResponse) {
+        let assistantName: String
+        switch detail.session.source {
+        case "copilot": assistantName = "Copilot"
+        case nil, "claude": assistantName = "Claude"
+        default: assistantName = detail.session.source!.prefix(1).uppercased() + detail.session.source!.dropFirst()
+        }
         let text = detail.messages.map { message in
-            let role = message.isUser ? "User" : "Claude"
+            let role = message.isUser ? "User" : assistantName
             return "[\(role)]\n\(message.content)"
         }.joined(separator: "\n\n---\n\n")
 

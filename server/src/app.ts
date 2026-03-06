@@ -7,7 +7,8 @@ import { HttpTransport, WebSocketGateway } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AgentExecutor } from './shared/infra/runtime/index';
-import { indexAllSessions, PROJECTS_DIR, FileWatcher, registerSearchRoutes } from './features/search/index';
+import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
+import { ClaudeSessionSource, CopilotSessionSource } from './shared/infra/parsers/index';
 import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
 import { ConfigService, DiagnosticsService, registerAdminRoutes } from './features/admin/index';
 
@@ -62,7 +63,10 @@ export function createApp(config: AppConfig): App {
   const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
   const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
-  const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
+
+  // --- Session sources (multi-agent) ---
+  const sessionSources = [new ClaudeSessionSource(), new CopilotSessionSource()];
+  const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger);
   const agentStore = new AgentStore(logger, (id, log) => new AgentExecutor(id, log));
 
   // --- Diagnostics ---
@@ -119,7 +123,11 @@ export function createApp(config: AppConfig): App {
 
   // --- HTTP Routes ---
   const router = Router();
-  registerSearchRoutes(router, { repo: sessionRepo, logger, indexFn: indexAllSessions });
+  registerSearchRoutes(router, {
+    repo: sessionRepo,
+    logger,
+    indexFn: (force, repo, logger) => indexAllSessions(force, repo, logger, sessionSources),
+  });
   registerSchedulerRoutes(router, { heartbeatService, logger });
   registerAdminRoutes(router, { diagnosticsService, configService, onConfigChanged, logger });
   transport.use('/', router);
@@ -189,7 +197,7 @@ export function createApp(config: AppConfig): App {
 
     // Initial indexing
     logger.log({ msg: 'Starting initial index...', op: 'server.start' });
-    const result = await indexAllSessions(false, sessionRepo, logger);
+    const result = await indexAllSessions(false, sessionRepo, logger, sessionSources);
     diagnosticsService.setLastIndexResult(result);
     logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
 
@@ -215,7 +223,7 @@ export function createApp(config: AppConfig): App {
     const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
     reindexTimer = setInterval(async () => {
       logger.log({ msg: 'Running periodic reindex...', op: 'server.reindex' });
-      const reindexResult = await indexAllSessions(false, sessionRepo, logger);
+      const reindexResult = await indexAllSessions(false, sessionRepo, logger, sessionSources);
       diagnosticsService.setLastIndexResult(reindexResult);
       if (reindexResult.indexed > 0) {
         logger.log({ msg: `Periodic reindex: ${reindexResult.indexed} new sessions indexed`, op: 'server.reindex', context: { indexed: reindexResult.indexed } });
