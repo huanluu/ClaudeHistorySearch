@@ -1,5 +1,4 @@
 import { createLogger } from '../index';
-import type { LogEntry } from '../index';
 import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

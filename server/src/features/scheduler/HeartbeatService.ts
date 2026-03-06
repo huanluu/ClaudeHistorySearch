@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { execSync, spawn, type ChildProcess } from 'child_process';
+import { execSync } from 'child_process';
 import { getConfigDir } from '../../shared/provider/index';
-import type { Logger } from '../../shared/provider/index';
+import type { Logger, CliRuntime } from '../../shared/provider/index';
 import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
 
 /**
@@ -62,11 +62,12 @@ export interface ChangeSet {
 }
 
 /**
- * Interface for external command execution (allows mocking in tests)
+ * Interface for external command execution (allows mocking in tests).
+ * Only covers execSync for az CLI queries — CLI runtime spawning is
+ * handled by the CliRuntime abstraction.
  */
 export interface CommandExecutor {
   execSync: (command: string, options?: object) => string;
-  spawn: (command: string, args: string[], options: object) => ChildProcess;
 }
 
 /**
@@ -76,9 +77,6 @@ const defaultExecutor: CommandExecutor = {
   execSync: (command: string, options?: object) => {
     return execSync(command, { encoding: 'utf-8', ...options }) as string;
   },
-  spawn: (command: string, args: string[], options: object) => {
-    return spawn(command, args, options);
-  }
 };
 
 /**
@@ -105,6 +103,7 @@ export class HeartbeatService {
   private config: HeartbeatConfig;
   private configDir: string;
   private executor: CommandExecutor;
+  private runtime: CliRuntime | null;
   private repo: HeartbeatRepository | null;
   private logger: Logger;
   // In-memory fallback for tracking processed items (used when no repo is provided)
@@ -116,9 +115,10 @@ export class HeartbeatService {
   private schedulerRunCount = 0;
   private initialDelayTimer: NodeJS.Timeout | null = null;
 
-  constructor(configDir: string | undefined, executor: CommandExecutor | undefined, repo: HeartbeatRepository | undefined, logger: Logger) {
+  constructor(configDir: string | undefined, executor: CommandExecutor | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime) {
     this.configDir = configDir || getConfigDir();
     this.executor = executor || defaultExecutor;
+    this.runtime = runtime ?? null;
     this.repo = repo ?? null;
     this.logger = logger;
     this.config = this.loadConfig();
@@ -452,73 +452,21 @@ Please analyze this work item in the context of the codebase:
   }
 
   /**
-   * Spawn Claude to analyze a work item (fire-and-forget).
-   * Returns the session ID extracted from Claude's stream-json init message.
-   * The Claude process continues running in the background.
+   * Spawn a CLI runtime to analyze a work item (fire-and-forget).
+   * Returns the session ID from the runtime's headless output.
+   * The spawned process continues running in the background.
    */
   async runClaudeAnalysis(workItem: WorkItem): Promise<string | null> {
+    if (!this.runtime) {
+      throw new Error('No CLI runtime configured for HeartbeatService');
+    }
+
     const prompt = this.buildPrompt(workItem);
-
-    return new Promise((resolve, reject) => {
-      const child = this.executor.spawn(
-        'claude',
-        ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
-        {
-          cwd: this.config.workingDirectory,
-          env: {
-            ...process.env,
-            CI: '1',
-            TERM: 'dumb',
-            NO_COLOR: '1'
-          },
-          stdio: ['ignore', 'pipe', 'pipe']
-        }
-      );
-
-      let sessionId: string | null = null;
-      let buffer = '';
-      let resolved = false;
-
-      // Read stdout to extract session_id from the first init message
-      child.stdout?.on('data', (data: Buffer) => {
-        if (resolved) return;
-        buffer += data.toString();
-
-        // Look for complete JSON lines
-        const lines = buffer.split('\n');
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const msg = JSON.parse(line);
-            if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
-              sessionId = msg.session_id;
-              resolved = true;
-              // Unref the child so it doesn't keep the parent alive
-              child.unref();
-              resolve(sessionId);
-              return;
-            }
-          } catch {
-            // Not a complete JSON line yet, keep buffering
-          }
-        }
-      });
-
-      child.on('error', (error) => {
-        if (!resolved) {
-          resolved = true;
-          reject(error);
-        }
-      });
-
-      // If Claude exits before we get a session_id, resolve with null
-      child.on('close', () => {
-        if (!resolved) {
-          resolved = true;
-          resolve(null);
-        }
-      });
-    });
+    const result = await this.runtime.runHeadless(
+      { prompt, workingDir: this.config.workingDirectory },
+      this.logger,
+    );
+    return result.sessionId;
   }
 
   /**

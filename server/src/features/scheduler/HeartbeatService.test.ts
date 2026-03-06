@@ -1,8 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { tmpdir, homedir } from 'os';
-import { EventEmitter } from 'events';
+import { tmpdir } from 'os';
 import {
   HeartbeatService,
   type HeartbeatConfig,
@@ -10,40 +9,18 @@ import {
   type WorkItem,
   type CommandExecutor
 } from './HeartbeatService';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { HeartbeatRepository, HeartbeatStateRecord, CliRuntime } from '../../shared/provider/index';
 import { noopLogger } from '../../../tests/__helpers/index';
 
 /**
- * Create a mock ChildProcess that emits a stream-json init message on stdout,
- * then fires 'close' with the given exit code. This simulates the fire-and-forget
- * pattern where runClaudeAnalysis reads the session_id from the first JSON line.
+ * Create a mock CliRuntime whose runHeadless resolves with the given sessionId.
  */
-function createMockChildProcess(exitCode = 0, sessionId = 'mock-session-id') {
-  const stdout = new EventEmitter();
-  const stderr = new EventEmitter();
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter;
-    stderr: EventEmitter;
-    unref: () => void;
-  };
-  child.stdout = stdout;
-  child.stderr = stderr;
-  child.unref = () => {};
-
-  // Emit init message on next tick so the listener is attached first
-  setTimeout(() => {
-    const initMsg = JSON.stringify({
-      type: 'system',
-      subtype: 'init',
-      cwd: '/test',
-      session_id: sessionId
-    });
-    stdout.emit('data', Buffer.from(initMsg + '\n'));
-    // Then close after a bit
-    setTimeout(() => child.emit('close', exitCode), 10);
-  }, 5);
-
-  return child as unknown as ReturnType<CommandExecutor['spawn']>;
+function createMockRuntime(sessionId = 'mock-session-id'): CliRuntime {
+  return {
+    name: 'mock',
+    startSession: vi.fn(),
+    runHeadless: vi.fn().mockResolvedValue({ sessionId }),
+  } as unknown as CliRuntime;
 }
 
 // Test database setup
@@ -612,7 +589,6 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0)
       };
 
       const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
@@ -646,7 +622,6 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0)
       };
 
       const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
@@ -684,7 +659,6 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0)
       };
 
       const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
@@ -709,7 +683,7 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => { throw new Error('az: command not found'); },
-        spawn: () => createMockChildProcess(0)
+
       };
 
       const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
@@ -723,27 +697,10 @@ More text.
     });
   });
 
-  describe('Claude spawning', () => {
-    it('should spawn claude with correct arguments', async () => {
-      const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
-      writeFileSync(heartbeatPath, `# HEARTBEAT.md
-## Work Items
-- [x] Fetch Azure DevOps work items assigned to me
-`);
-
-      let capturedArgs: string[] = [];
-      let capturedOptions: { cwd?: string; env?: Record<string, string>; stdio?: string[] } = {};
-
-      const mockExecutor: CommandExecutor = {
-        execSync: () => '[]',
-        spawn: (cmd: string, args: string[], options: unknown) => {
-          capturedArgs = args;
-          capturedOptions = options as typeof capturedOptions;
-          return createMockChildProcess(0);
-        }
-      };
-
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+  describe('Runtime delegation', () => {
+    it('delegates to CliRuntime.runHeadless with prompt and workingDir', async () => {
+      const mockRuntime = createMockRuntime('result-session');
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger, mockRuntime);
       const workItem: WorkItem = {
         id: 99999,
         fields: {
@@ -754,42 +711,21 @@ More text.
         }
       };
 
-      await service.runClaudeAnalysis(workItem);
+      const sessionId = await service.runClaudeAnalysis(workItem);
 
-      expect(capturedArgs).toContain('-p');
-      expect(capturedArgs).toContain('--output-format');
-      expect(capturedArgs).toContain('stream-json');
-      expect(capturedArgs).toContain('--verbose');
-      expect(capturedArgs).toContain('--dangerously-skip-permissions');
-      expect(capturedOptions.env?.CI).toBe('1');
-      expect(capturedOptions.env?.TERM).toBe('dumb');
-      expect(capturedOptions.env?.NO_COLOR).toBe('1');
-      expect(capturedOptions.stdio).toEqual(['ignore', 'pipe', 'pipe']);
-
-      rmSync(heartbeatPath);
+      expect(sessionId).toBe('result-session');
+      expect(mockRuntime.runHeadless).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining('99999'),
+          workingDir: expect.any(String),
+        }),
+        noopLogger,
+      );
     });
 
-    it('should include HEARTBEAT_SESSION marker in prompt', async () => {
-      const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
-      writeFileSync(heartbeatPath, `# HEARTBEAT.md
-## Work Items
-- [x] Fetch Azure DevOps work items assigned to me
-`);
-
-      let capturedPrompt = '';
-
-      const mockExecutor: CommandExecutor = {
-        execSync: () => '[]',
-        spawn: (_cmd: string, args: string[]) => {
-          const promptIndex = args.indexOf('-p');
-          if (promptIndex !== -1) {
-            capturedPrompt = args[promptIndex + 1];
-          }
-          return createMockChildProcess(0);
-        }
-      };
-
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+    it('includes HEARTBEAT_SESSION marker in prompt', async () => {
+      const mockRuntime = createMockRuntime();
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger, mockRuntime);
       const workItem: WorkItem = {
         id: 88888,
         fields: {
@@ -802,36 +738,21 @@ More text.
 
       await service.runClaudeAnalysis(workItem);
 
-      expect(capturedPrompt).toContain('HEARTBEAT_SESSION');
-      expect(capturedPrompt).toContain('[Heartbeat]');
-      expect(capturedPrompt).toContain('88888');
-
-      rmSync(heartbeatPath);
+      const call = (mockRuntime.runHeadless as ReturnType<typeof vi.fn>).mock.calls[0];
+      const prompt = call[0].prompt as string;
+      expect(prompt).toContain('HEARTBEAT_SESSION');
+      expect(prompt).toContain('[Heartbeat]');
+      expect(prompt).toContain('88888');
     });
 
-    it('should use configured working directory', async () => {
+    it('uses configured working directory', async () => {
       const configPath = join(TEST_CONFIG_DIR, 'config.json');
       writeFileSync(configPath, JSON.stringify({
         heartbeat: { workingDirectory: '/custom/work/dir' }
       }));
 
-      const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
-      writeFileSync(heartbeatPath, `# HEARTBEAT.md
-## Work Items
-- [x] Fetch Azure DevOps work items assigned to me
-`);
-
-      let capturedCwd = '';
-
-      const mockExecutor: CommandExecutor = {
-        execSync: () => '[]',
-        spawn: (_cmd: string, _args: string[], options: unknown) => {
-          capturedCwd = (options as { cwd: string }).cwd;
-          return createMockChildProcess(0);
-        }
-      };
-
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      const mockRuntime = createMockRuntime();
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger, mockRuntime);
       const workItem: WorkItem = {
         id: 77777,
         fields: {
@@ -844,10 +765,24 @@ More text.
 
       await service.runClaudeAnalysis(workItem);
 
-      expect(capturedCwd).toBe('/custom/work/dir');
+      const call = (mockRuntime.runHeadless as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[0].workingDir).toBe('/custom/work/dir');
 
-      rmSync(heartbeatPath);
       rmSync(configPath);
+    });
+
+    it('throws when no runtime is configured', async () => {
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+      const workItem: WorkItem = {
+        id: 11111,
+        fields: {
+          'System.Title': 'No Runtime',
+          'System.State': 'Active',
+          'System.ChangedDate': '2024-01-15T10:00:00Z',
+        }
+      };
+
+      await expect(service.runClaudeAnalysis(workItem)).rejects.toThrow('No CLI runtime configured');
     });
   });
 
@@ -902,10 +837,9 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger, createMockRuntime());
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(1);
@@ -936,10 +870,9 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger, createMockRuntime());
 
       // Pre-record the item as already processed
       service.recordProcessedItem('workitem:33333', '2024-01-15T10:00:00Z');
@@ -978,10 +911,9 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0)
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger, createMockRuntime());
       const result = await service.runHeartbeat(true);
 
       expect(result.tasksProcessed).toBe(1);
@@ -1008,7 +940,7 @@ More text.
       rmSync(configPath);
     });
 
-    it('should record errors when Claude spawn fails', async () => {
+    it('should record errors when runtime rejects', async () => {
       const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
       writeFileSync(heartbeatPath, `# HEARTBEAT.md
 ## Work Items
@@ -1027,26 +959,17 @@ More text.
         }
       ];
 
-      // Simulate spawn error (e.g., claude binary not found)
+      const failingRuntime: CliRuntime = {
+        name: 'failing',
+        startSession: vi.fn(),
+        runHeadless: vi.fn().mockRejectedValue(new Error('spawn claude ENOENT')),
+      } as unknown as CliRuntime;
+
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => {
-          const stdout = new EventEmitter();
-          const stderr = new EventEmitter();
-          const child = new EventEmitter() as EventEmitter & {
-            stdout: EventEmitter;
-            stderr: EventEmitter;
-            unref: () => void;
-          };
-          child.stdout = stdout;
-          child.stderr = stderr;
-          child.unref = () => {};
-          setTimeout(() => child.emit('error', new Error('spawn claude ENOENT')), 5);
-          return child as unknown as ReturnType<CommandExecutor['spawn']>;
-        }
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger, failingRuntime);
       const result = await service.runHeartbeat();
 
       expect(result.sessionsCreated).toBe(0);
@@ -1056,7 +979,7 @@ More text.
       rmSync(heartbeatPath);
     });
 
-    it('should return session IDs from spawned Claude sessions', async () => {
+    it('should return session IDs from runtime', async () => {
       const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
       writeFileSync(heartbeatPath, `# HEARTBEAT.md
 ## Work Items
@@ -1077,10 +1000,9 @@ More text.
 
       const mockExecutor: CommandExecutor = {
         execSync: () => JSON.stringify(mockWorkItems),
-        spawn: () => createMockChildProcess(0, 'test-session-abc123')
       };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger, createMockRuntime('test-session-abc123'));
       const result = await service.runHeartbeat();
 
       expect(result.sessionsCreated).toBe(1);
@@ -1251,7 +1173,6 @@ More text.
           execSyncCallCount++;
           return '[]';
         },
-        spawn: () => createMockChildProcess(0),
       };
 
       service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);
@@ -1286,7 +1207,6 @@ More text.
           execSyncCallCount++;
           return '[]';
         },
-        spawn: () => createMockChildProcess(0),
       };
 
       service = new HeartbeatService(TEST_CONFIG_DIR, mockExecutor, undefined, noopLogger);

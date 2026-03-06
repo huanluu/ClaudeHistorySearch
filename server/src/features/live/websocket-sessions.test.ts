@@ -6,7 +6,7 @@ import WebSocket from 'ws';
 import { WorkingDirValidator } from '../../shared/provider/index';
 import { HttpTransport, WebSocketGateway } from '../../gateway/index';
 import { AgentStore, registerLiveHandlers } from './index';
-import { AgentExecutor } from '../../shared/infra/runtime/index';
+import { ClaudeAgentSession } from '../../shared/infra/runtime/index';
 import { noopLogger, createTestApiKey } from '../../../tests/__helpers/index';
 
 // Hoist the mock so it's available when vi.mock factory runs
@@ -97,7 +97,7 @@ describe('WebSocket Session Integration', () => {
     const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
     const resolvedTmp = realpathSync('/tmp');
     const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
-    const agentStore = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
+    const agentStore = new AgentStore(noopLogger, (id, log) => new ClaudeAgentSession(id, log));
     wsGateway = new WebSocketGateway({ server, path: '/ws', logger: noopLogger });
     registerLiveHandlers(wsGateway, { agentStore, validator, logger: noopLogger });
     wsGateway.start();

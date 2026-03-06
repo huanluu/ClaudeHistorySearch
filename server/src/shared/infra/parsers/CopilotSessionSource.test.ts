@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { CopilotSessionSource } from './CopilotSessionSource';
 

@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { createAuthMiddleware, type AuthDeps } from './middleware';
 
@@ -20,13 +20,13 @@ function createMockRes(): Partial<Response> & { statusCode?: number; body?: unkn
 
 describe('authMiddleware', () => {
   let next: NextFunction;
-  let mockHasApiKey: ReturnType<typeof vi.fn>;
-  let mockValidateApiKey: ReturnType<typeof vi.fn>;
+  let mockHasApiKey: AuthDeps['hasApiKey'] & Mock;
+  let mockValidateApiKey: AuthDeps['validateApiKey'] & Mock;
   let middleware: ReturnType<typeof createAuthMiddleware>;
 
   beforeEach(() => {
-    mockHasApiKey = vi.fn();
-    mockValidateApiKey = vi.fn();
+    mockHasApiKey = vi.fn(() => false);
+    mockValidateApiKey = vi.fn(() => false);
     middleware = createAuthMiddleware({
       hasApiKey: mockHasApiKey,
       validateApiKey: mockValidateApiKey,

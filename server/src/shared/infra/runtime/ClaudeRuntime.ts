@@ -116,7 +116,7 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
 export class ClaudeRuntime implements CliRuntime {
   readonly name = 'claude';
 
-  startSession(sessionId: string, _options: SessionStartOptions, logger: Logger): AgentSession {
+  startSession(sessionId: string, logger: Logger): AgentSession {
     return new ClaudeAgentSession(sessionId, logger);
   }
 

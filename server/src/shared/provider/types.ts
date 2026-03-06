@@ -7,6 +7,8 @@
  * Composition root (app.ts) wires implementations to features.
  */
 
+import type { Logger } from './logger/logger';
+
 // ── Record types (database row shapes) ─────────────────────────────
 
 export interface SessionRecord {
@@ -161,6 +163,6 @@ export interface AgentSession {
  */
 export interface CliRuntime {
   readonly name: string;
-  startSession(sessionId: string, options: SessionStartOptions, logger: Logger): AgentSession;
+  startSession(sessionId: string, logger: Logger): AgentSession;
   runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }>;
 }

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { Mock } from 'vitest';
+
 import { ClaudeAgentSession, ClaudeRuntime } from './ClaudeRuntime';
 import { noopLogger } from '../../../../tests/__helpers/index';
 
@@ -125,7 +125,7 @@ describe('ClaudeRuntime', () => {
   });
 
   it('startSession returns a ClaudeAgentSession', () => {
-    const session = runtime.startSession('s1', { prompt: 'hi', workingDir: '/tmp' }, noopLogger);
+    const session = runtime.startSession('s1', noopLogger);
     expect(session.getSessionId()).toBe('s1');
     expect(typeof session.start).toBe('function');
     expect(typeof session.cancel).toBe('function');

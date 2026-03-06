@@ -6,7 +6,7 @@ import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH,
 import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQuerySchema, SessionsQuerySchema, ConfigUpdateBodySchema } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
-import { AgentExecutor } from './shared/infra/runtime/index';
+import { ClaudeRuntime } from './shared/infra/runtime/index';
 import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { ClaudeSessionSource, CopilotSessionSource } from './shared/infra/parsers/index';
 import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
@@ -68,12 +68,15 @@ export function createApp(config: AppConfig): App {
   const securityConfig = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
   const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
-  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
+  // --- CLI runtime ---
+  const claudeRuntime = new ClaudeRuntime();
+
+  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger, claudeRuntime);
 
   // --- Session sources (multi-agent) ---
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
   const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger);
-  const agentStore = new AgentStore(logger, (id, log) => new AgentExecutor(id, log));
+  const agentStore = new AgentStore(logger, (id, log) => claudeRuntime.startSession(id, log));
 
   // --- Diagnostics ---
   const startedAt = new Date();

@@ -1,7 +1,7 @@
 import express, { type Application } from 'express';
 import request from 'supertest';
 import { createRequestLogger, type RequestLoggerOptions } from '../index';
-import type { Logger, LogEntry } from '../index';
+import type { LogEntry } from '../index';
 
 function createMockLogger() {
   return {

@@ -1,7 +1,7 @@
 import { readdirSync, statSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import type { SessionRepository, Logger, ParsedMessage, ParsedSession, SessionSource } from '../../shared/provider/index';
+import type { SessionRepository, Logger, ParsedSession, SessionSource } from '../../shared/provider/index';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');

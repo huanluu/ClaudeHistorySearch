@@ -5,7 +5,7 @@ import { registerLiveHandlers, type LiveHandlerDeps } from './handlers';
 import type { WsGateway, WsHandler, WsConnectionHandler } from '../../gateway/types';
 import type { AuthenticatedClient, WSMessage } from '../../gateway/protocol';
 import type { AgentStore } from './AgentStore';
-import type { AgentExecutorPort } from './AgentStore';
+import type { AgentSession } from '../../shared/provider/index';
 import { WorkingDirValidator } from '../../shared/provider/index';
 import { noopLogger } from '../../../tests/__helpers/index';
 
@@ -56,7 +56,7 @@ function createMockClient(clientId = 'test-client'): AuthenticatedClient & { sen
   };
 }
 
-function createMockExecutor(): AgentExecutorPort & EventEmitter {
+function createMockExecutor(): AgentSession & EventEmitter {
   const emitter = new EventEmitter();
   return Object.assign(emitter, {
     start: vi.fn(),
@@ -66,7 +66,7 @@ function createMockExecutor(): AgentExecutorPort & EventEmitter {
 }
 
 function createMockAgentStore() {
-  const executors = new Map<string, AgentExecutorPort & EventEmitter>();
+  const executors = new Map<string, AgentSession & EventEmitter>();
 
   return {
     create: vi.fn((sessionId: string, _clientId: string) => {
@@ -81,9 +81,9 @@ function createMockAgentStore() {
       executors.delete(sessionId);
       return e;
     }),
-    removeByClient: vi.fn((_clientId: string): (AgentExecutorPort & EventEmitter)[] => []),
-    getByClient: vi.fn((_clientId: string): AgentExecutorPort[] => []),
-    getAll: vi.fn((): AgentExecutorPort[] => []),
+    removeByClient: vi.fn((_clientId: string): (AgentSession & EventEmitter)[] => []),
+    getByClient: vi.fn((_clientId: string): AgentSession[] => []),
+    getAll: vi.fn((): AgentSession[] => []),
     // Internal helper for tests
     _executors: executors,
   };

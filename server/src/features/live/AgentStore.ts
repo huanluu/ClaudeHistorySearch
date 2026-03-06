@@ -1,13 +1,6 @@
 import type { Logger, AgentSession } from '../../shared/provider/index';
 
-// Re-export for backward compatibility
-export type { AgentSession } from '../../shared/provider/index';
-/** @deprecated Use AgentSession instead */
-export type AgentExecutorPort = AgentSession;
-
 export type SessionFactory = (sessionId: string, logger: Logger) => AgentSession;
-/** @deprecated Use SessionFactory instead */
-export type ExecutorFactory = SessionFactory;
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.

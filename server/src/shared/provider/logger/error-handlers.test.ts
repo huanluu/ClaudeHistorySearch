@@ -132,7 +132,7 @@ describe('Global error handlers', () => {
       fileWatcher.start();
 
       // Emit an error on the internal chokidar watcher
-      const internalWatchers = (fileWatcher as Record<string, unknown>).watchers as Array<{ emit: (event: string, error: Error) => void }>;
+      const internalWatchers = (fileWatcher as unknown as Record<string, unknown>).watchers as Array<{ emit: (event: string, error: Error) => void }>;
       internalWatchers[0].emit('error', new Error('EMFILE: too many open files'));
 
       const lines = readLogLines(logPath);
