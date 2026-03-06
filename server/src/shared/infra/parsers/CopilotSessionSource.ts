@@ -1,183 +1,137 @@
-import { join, basename } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
 import type { SessionSource, ParsedSession, ParsedMessage } from '../../provider/index';
 
-// ── Copilot session file types (external format — untrusted) ────────
+// ── Copilot events.jsonl types (external format — untrusted) ────────
 
-interface CopilotChatMessage {
-  role: string;
-  content: string;
-  tool_calls?: unknown[];
-}
-
-interface CopilotTimelineEntry {
+interface CopilotEvent {
+  type: string;
   id: string;
   timestamp: string;
-  type: string;
-  text?: string;
+  data?: Record<string, unknown>;
 }
 
-interface CopilotSessionFile {
-  sessionId?: string;
-  startTime?: string;
-  chatMessages?: CopilotChatMessage[];
-  timeline?: CopilotTimelineEntry[];
-  selectedModel?: string;
+interface CopilotSessionStartData {
+  sessionId: string;
+  context?: {
+    cwd?: string;
+    gitRoot?: string;
+    branch?: string;
+    repository?: string;
+  };
 }
 
-interface CopilotWorkspace {
-  id?: string;
-  cwd?: string;
-  git_root?: string;
-  branch?: string;
+interface CopilotUserMessageData {
+  content: string;
+  transformedContent?: string;
+}
+
+interface CopilotAssistantMessageData {
+  content?: string;
+  messageId?: string;
+  toolRequests?: unknown[];
 }
 
 // ── Content sanitization ────────────────────────────────────────────
 
 const REMINDER_TAG_REGEX = /<reminder>[\s\S]*?<\/reminder>/gi;
+const DATETIME_TAG_REGEX = /<current_datetime>[\s\S]*?<\/current_datetime>/gi;
+const SQL_TABLES_TAG_REGEX = /<sql_tables>[\s\S]*?<\/sql_tables>/gi;
 
 /**
- * Strip injected `<reminder>` system tags from Copilot message content.
- * These are injected by the Copilot CLI into user messages and are not
- * part of the actual user input.
+ * Strip injected system tags from Copilot message content.
+ * Copilot injects <reminder>, <current_datetime>, and <sql_tables> tags
+ * into user messages — these are not part of the actual user input.
  */
-function stripReminderTags(content: string): string {
-  return content.replace(REMINDER_TAG_REGEX, '').trim();
+function stripSystemTags(content: string): string {
+  return content
+    .replace(REMINDER_TAG_REGEX, '')
+    .replace(DATETIME_TAG_REGEX, '')
+    .replace(SQL_TABLES_TAG_REGEX, '')
+    .trim();
 }
 
-// ── Workspace resolution ────────────────────────────────────────────
+// ── JSONL parser (new format: session-state/<uuid>/events.jsonl) ────
 
-const COPILOT_DIR = join(homedir(), '.copilot');
-const SESSION_STATE_DIR = join(COPILOT_DIR, 'session-state');
-
-/**
- * Look up the working directory from workspace.yaml in session-state.
- * Returns null if not found — the adapter will use 'Unknown'.
- */
-function resolveWorkingDir(sessionId: string, sessionStateDir: string): string | null {
-  const workspacePath = join(sessionStateDir, sessionId, 'workspace.yaml');
-  if (!existsSync(workspacePath)) {
-    return null;
-  }
-
+function parseCopilotEventsFile(filePath: string): ParsedSession {
+  let content: string;
   try {
-    const content = readFileSync(workspacePath, 'utf-8');
-    // Simple YAML parsing — workspace.yaml is flat key-value
-    for (const line of content.split('\n')) {
-      const match = line.match(/^cwd:\s*(.+)$/);
-      if (match) {
-        let value = match[1].trim();
-        // Strip surrounding quotes (YAML allows both single and double)
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.slice(1, -1);
-        }
-        return value;
-      }
-    }
+    content = readFileSync(filePath, 'utf-8');
   } catch {
-    // Malformed workspace.yaml — skip
-  }
-
-  return null;
-}
-
-// ── Timestamp extraction ────────────────────────────────────────────
-
-/**
- * Build a timestamp map from timeline entries.
- * Maps user/copilot timeline entries to timestamps by position.
- */
-function extractTimestamps(timeline: CopilotTimelineEntry[]): {
-  userTimestamps: number[];
-  assistantTimestamps: number[];
-  earliest: number | null;
-  latest: number | null;
-} {
-  const userTimestamps: number[] = [];
-  const assistantTimestamps: number[] = [];
-  let earliest: number | null = null;
-  let latest: number | null = null;
-
-  for (const entry of timeline) {
-    if (entry.type !== 'user' && entry.type !== 'copilot') continue;
-
-    const ts = new Date(entry.timestamp).getTime();
-    if (isNaN(ts)) continue;
-
-    if (entry.type === 'user') {
-      userTimestamps.push(ts);
-    } else {
-      assistantTimestamps.push(ts);
-    }
-
-    if (earliest === null || ts < earliest) earliest = ts;
-    if (latest === null || ts > latest) latest = ts;
-  }
-
-  return { userTimestamps, assistantTimestamps, earliest, latest };
-}
-
-// ── Main parser ─────────────────────────────────────────────────────
-
-function parseCopilotSessionFile(filePath: string, sessionStateDir: string): ParsedSession {
-  let raw: CopilotSessionFile;
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    raw = JSON.parse(content) as CopilotSessionFile;
-  } catch {
-    // Malformed file — return empty session
     return {
       sessionId: null, project: null, startedAt: null,
       lastActivityAt: null, preview: null, source: 'copilot', messages: [],
     };
   }
 
-  const sessionId = raw.sessionId ?? null;
-  const chatMessages = raw.chatMessages ?? [];
-  const timeline = raw.timeline ?? [];
-
-  // Resolve working directory from workspace.yaml
-  const project = sessionId ? resolveWorkingDir(sessionId, sessionStateDir) : null;
-
-  // Extract timestamps from timeline
-  const { userTimestamps, assistantTimestamps, earliest, latest } = extractTimestamps(timeline);
-
-  // Parse chat messages — skip tool role entries
   const messages: ParsedMessage[] = [];
-  let userIdx = 0;
-  let assistantIdx = 0;
+  let sessionId: string | null = null;
+  let project: string | null = null;
+  let earliest: number | null = null;
+  let latest: number | null = null;
   let firstUserMessage: string | null = null;
 
-  for (const msg of chatMessages) {
-    if (msg.role !== 'user' && msg.role !== 'assistant') continue;
-    if (!msg.content) continue;
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
 
-    const cleanContent = msg.role === 'user' ? stripReminderTags(msg.content) : msg.content;
-    if (!cleanContent) continue;
-
-    // Assign timestamps by matching message order to timeline order.
-    // Assumption: timeline user/copilot entries appear in the same order as chatMessages.
-    // If Copilot ever emits mismatched counts, timestamps may shift silently.
-    let timestamp: number | null = null;
-    if (msg.role === 'user' && userIdx < userTimestamps.length) {
-      timestamp = userTimestamps[userIdx];
-      userIdx++;
-    } else if (msg.role === 'assistant' && assistantIdx < assistantTimestamps.length) {
-      timestamp = assistantTimestamps[assistantIdx];
-      assistantIdx++;
+    let event: CopilotEvent;
+    try {
+      event = JSON.parse(line) as CopilotEvent;
+    } catch {
+      continue;
     }
 
-    if (msg.role === 'user' && !firstUserMessage && cleanContent.length > 0) {
-      firstUserMessage = cleanContent.slice(0, 200);
+    const ts = event.timestamp ? new Date(event.timestamp).getTime() : null;
+    if (ts && !isNaN(ts)) {
+      if (earliest === null || ts < earliest) earliest = ts;
+      if (latest === null || ts > latest) latest = ts;
     }
 
-    messages.push({
-      uuid: '',  // Copilot doesn't put UUIDs on chat messages
-      role: msg.role,
-      content: cleanContent,
-      timestamp,
-    });
+    switch (event.type) {
+      case 'session.start': {
+        const data = event.data as unknown as CopilotSessionStartData | undefined;
+        if (data?.sessionId) sessionId = data.sessionId;
+        if (data?.context?.cwd) project = data.context.cwd;
+        break;
+      }
+
+      case 'user.message': {
+        const data = event.data as unknown as CopilotUserMessageData | undefined;
+        if (!data?.content) break;
+
+        const cleanContent = stripSystemTags(data.content);
+        if (!cleanContent) break;
+
+        if (!firstUserMessage && cleanContent.length > 0) {
+          firstUserMessage = cleanContent.slice(0, 200);
+        }
+
+        messages.push({
+          uuid: event.id || '',
+          role: 'user',
+          content: cleanContent,
+          timestamp: ts,
+        });
+        break;
+      }
+
+      case 'assistant.message': {
+        const data = event.data as unknown as CopilotAssistantMessageData | undefined;
+        if (!data?.content) break;
+
+        const content = data.content.trim();
+        if (!content) break;
+
+        messages.push({
+          uuid: event.id || '',
+          role: 'assistant',
+          content,
+          timestamp: ts,
+        });
+        break;
+      }
+    }
   }
 
   return {
@@ -193,30 +147,19 @@ function parseCopilotSessionFile(filePath: string, sessionStateDir: string): Par
 
 // ── Session source ──────────────────────────────────────────────────
 
-const HISTORY_DIR = join(COPILOT_DIR, 'history-session-state');
+const COPILOT_DIR = join(homedir(), '.copilot');
+const SESSION_STATE_DIR = join(COPILOT_DIR, 'session-state');
 
 export class CopilotSessionSource implements SessionSource {
   readonly name = 'copilot';
   readonly sessionDir: string;
-  readonly filePattern = '*.json';
-  private readonly sessionStateDir: string;
+  readonly filePattern = '*/events.jsonl';
 
-  constructor(sessionDir?: string, sessionStateDir?: string) {
-    this.sessionDir = sessionDir ?? HISTORY_DIR;
-    this.sessionStateDir = sessionStateDir ?? SESSION_STATE_DIR;
+  constructor(sessionDir?: string) {
+    this.sessionDir = sessionDir ?? SESSION_STATE_DIR;
   }
 
   async parse(filePath: string): Promise<ParsedSession> {
-    return parseCopilotSessionFile(filePath, this.sessionStateDir);
-  }
-
-  /**
-   * Extract the session ID from a Copilot history filename.
-   * Format: session_<uuid>_<timestamp>.json
-   */
-  static extractSessionId(filename: string): string | null {
-    const base = basename(filename, '.json');
-    const match = base.match(/^session_([0-9a-f-]{36})_\d+$/);
-    return match ? match[1] : null;
+    return parseCopilotEventsFile(filePath);
   }
 }

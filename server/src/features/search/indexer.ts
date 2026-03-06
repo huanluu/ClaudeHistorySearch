@@ -71,25 +71,27 @@ export async function indexSessionFile(
     return null;
   }
 
-  // Check if we need to reindex
-  const fileStat = statSync(filePath);
-  const fileModTime = fileStat.mtimeMs;
-
-  if (!forceReindex) {
-    const existing = repo.getSessionLastIndexed(fileName);
-    if (existing && existing.last_indexed && existing.last_indexed >= fileModTime) {
-      return null; // Already up to date
-    }
-  }
-
-  logger.log({ msg: `Indexing: ${filePath}`, op: 'indexer.file', context: { filePath, source: source.name } });
-
+  // Parse first — we need the sessionId for the reindex check since
+  // filenames differ across sources (Claude: <uuid>.jsonl, Copilot: <uuid>/events.jsonl)
   const parsedSession = await source.parse(filePath);
   const { sessionId, project, startedAt, lastActivityAt, preview, messages } = parsedSession;
 
   if (!sessionId || messages.length === 0) {
     return null;
   }
+
+  // Check if we need to reindex (using parsed sessionId, not filename)
+  const fileStat = statSync(filePath);
+  const fileModTime = fileStat.mtimeMs;
+
+  if (!forceReindex) {
+    const existing = repo.getSessionLastIndexed(sessionId);
+    if (existing && existing.last_indexed && existing.last_indexed >= fileModTime) {
+      return null; // Already up to date
+    }
+  }
+
+  logger.log({ msg: `Indexing: ${filePath}`, op: 'indexer.file', context: { filePath, source: source.name } });
 
   // Look up title (Claude has sessions-index.json, others may not)
   const title = titleMap.get(sessionId) || null;
@@ -167,7 +169,11 @@ async function indexAllFromSources(
 
 /**
  * Index all files from a single source directory.
- * Handles both flat directories (Copilot) and nested directories (Claude).
+ *
+ * Supported filePattern formats:
+ * - `** /*.jsonl` → deeply nested (Claude: projects/<path>/*.jsonl, with title maps)
+ * - `*.json` → flat directory
+ * - `* /events.jsonl` → one level deep (Copilot: <uuid>/events.jsonl)
  */
 async function indexSourceDirectory(
   forceReindex: boolean,
@@ -178,13 +184,12 @@ async function indexSourceDirectory(
   let indexed = 0;
   let skipped = 0;
 
-  // Claude uses nested dirs (projects/<path>/*.jsonl), Copilot uses flat dir (*.json)
-  const isNested = source.filePattern.startsWith('**');
-  const extension = source.filePattern.includes('.jsonl') ? '.jsonl' : '.json';
+  const pattern = source.filePattern;
 
-  if (isNested) {
-    // Walk subdirectories (Claude pattern)
+  if (pattern.startsWith('**')) {
+    // Deeply nested (Claude: projects/<path>/*.jsonl)
     const { loadSessionsIndex } = await import('../../shared/infra/parsers/index');
+    const extension = pattern.includes('.jsonl') ? '.jsonl' : '.json';
     const projectDirs = readdirSync(source.sessionDir);
 
     for (const projectDir of projectDirs) {
@@ -209,8 +214,36 @@ async function indexSourceDirectory(
         }
       }
     }
+  } else if (pattern.includes('/')) {
+    // One level deep (Copilot: <uuid>/events.jsonl)
+    const targetFile = pattern.split('/').pop() || '';
+    const subdirs = readdirSync(source.sessionDir);
+
+    for (const subdir of subdirs) {
+      const subdirPath = join(source.sessionDir, subdir);
+      try {
+        const stat = statSync(subdirPath);
+        if (!stat.isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      const filePath = join(subdirPath, targetFile);
+      if (!existsSync(filePath)) continue;
+
+      try {
+        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger);
+        if (result) indexed++;
+        else skipped++;
+      } catch (e) {
+        const error = e as Error;
+        logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
+        skipped++;
+      }
+    }
   } else {
-    // Flat directory (Copilot pattern)
+    // Flat directory (e.g., *.json)
+    const extension = pattern.replace('*', '');
     const files = readdirSync(source.sessionDir);
 
     for (const file of files) {

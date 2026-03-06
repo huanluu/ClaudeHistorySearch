@@ -37,14 +37,14 @@ Claude Code stores every session transcript as a JSONL file:
 
 ### Planned: GitHub Copilot CLI
 
-Copilot CLI stores session history in a parallel structure:
+Copilot CLI stores session history as JSONL event logs:
 
 ```
-~/.copilot/history-session-state/session_<uuid>_<timestamp>.json
+~/.copilot/session-state/<session-uuid>/events.jsonl
 ```
 
-- **Format**: Single JSON file with `{sessionId, startTime, chatMessages: [{role, content, tool_calls?}], timeline: [...], selectedModel}`
-- **Working directory**: Not in the history file — lives in `~/.copilot/session-state/<uuid>/workspace.yaml` (`cwd`, `git_root`, `branch`)
+- **Format**: JSONL (one event per line), events have `type` (`session.start`, `user.message`, `assistant.message`, `tool.execution_start`, etc.), `id`, `timestamp`, `data`
+- **Working directory**: In the `session.start` event's `data.context.cwd` field
 - **Headless mode**: `copilot -p "prompt" --output-format json --allow-all-tools --no-color` (no special env vars needed)
 - **Resume**: `copilot --resume <sessionId>` (same flag pattern as Claude)
 - **Session ID**: Appears in the **last** stdout event (`{type:"result", sessionId:"..."}`)
@@ -53,11 +53,11 @@ Copilot CLI stores session history in a parallel structure:
 
 | Concern | Claude | Copilot |
 |---------|--------|---------|
-| File format | JSONL (streaming-friendly) | Single JSON |
-| Session discovery | Walk `projects/` dirs, glob `*.jsonl` | Glob `history-session-state/*.json` |
-| Project/cwd | `cwd` field on each JSONL entry | Separate `workspace.yaml` file |
-| Message timestamps | Per-message `timestamp` field | Cross-reference `timeline[]` array |
-| Content cleanup | Handle `string \| ContentBlock[]` | Strip injected `<reminder>` system tags |
+| File format | JSONL (streaming-friendly) | JSONL (event log) |
+| Session discovery | Walk `projects/` dirs, glob `**/*.jsonl` | Walk `session-state/` dirs, glob `*/events.jsonl` |
+| Project/cwd | `cwd` field on each JSONL entry | `session.start` event's `data.context.cwd` |
+| Message timestamps | Per-message `timestamp` field | Per-event `timestamp` field |
+| Content cleanup | Handle `string \| ContentBlock[]` | Strip injected `<reminder>`, `<current_datetime>`, `<sql_tables>` tags |
 | Headless session ID | First event (init) | Last event (result) |
 
 ### Architectural Implications
