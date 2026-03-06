@@ -128,3 +128,39 @@ export interface SessionSource {
   readonly filePattern: string;
   parse(filePath: string): Promise<ParsedSession>;
 }
+
+// ── CLI runtime interfaces (write-side abstraction) ─────────────────
+
+export interface SessionStartOptions {
+  prompt: string;
+  workingDir: string;
+  resumeSessionId?: string;
+}
+
+export interface HeadlessRunOptions {
+  prompt: string;
+  workingDir: string;
+}
+
+/**
+ * A running agent session that produces output over time.
+ * Consumers listen for messages, errors, and completion.
+ */
+export interface AgentSession {
+  start(options: SessionStartOptions): void;
+  cancel(): void;
+  getSessionId(): string;
+  on(event: 'message', handler: (message: unknown) => void): unknown;
+  on(event: 'error', handler: (error: string) => void): unknown;
+  on(event: 'complete', handler: (exitCode: number) => void): unknown;
+}
+
+/**
+ * A CLI runtime that can spawn agent sessions.
+ * Implementations exist per CLI tool (Claude, Copilot, etc.).
+ */
+export interface CliRuntime {
+  readonly name: string;
+  startSession(sessionId: string, options: SessionStartOptions, logger: Logger): AgentSession;
+  runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }>;
+}

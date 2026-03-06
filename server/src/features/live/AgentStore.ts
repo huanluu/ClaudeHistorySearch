@@ -1,49 +1,42 @@
-import type { Logger } from '../../shared/provider/index';
+import type { Logger, AgentSession } from '../../shared/provider/index';
 
-/**
- * Port interface for agent executors.
- * Defined by the feature (domain owns the contract).
- * Implemented by shared/infra/runtime/AgentExecutor (structurally).
- */
-export interface AgentExecutorPort {
-  start(options: { prompt: string; workingDir: string; resumeSessionId?: string }): void;
-  cancel(): void;
-  getSessionId(): string;
-  on(event: 'message', handler: (message: unknown) => void): unknown;
-  on(event: 'error', handler: (error: string) => void): unknown;
-  on(event: 'complete', handler: (exitCode: number) => void): unknown;
-}
+// Re-export for backward compatibility
+export type { AgentSession } from '../../shared/provider/index';
+/** @deprecated Use AgentSession instead */
+export type AgentExecutorPort = AgentSession;
 
-export type ExecutorFactory = (sessionId: string, logger: Logger) => AgentExecutorPort;
+export type SessionFactory = (sessionId: string, logger: Logger) => AgentSession;
+/** @deprecated Use SessionFactory instead */
+export type ExecutorFactory = SessionFactory;
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.
  */
 export class AgentStore {
-  private sessions: Map<string, AgentExecutorPort> = new Map();
+  private sessions: Map<string, AgentSession> = new Map();
   private clientSessions: Map<string, Set<string>> = new Map();
   private logger: Logger;
-  private createExecutor: ExecutorFactory;
+  private createSession: SessionFactory;
 
-  constructor(logger: Logger, createExecutor: ExecutorFactory) {
+  constructor(logger: Logger, createSession: SessionFactory) {
     this.logger = logger;
-    this.createExecutor = createExecutor;
+    this.createSession = createSession;
   }
 
-  create(sessionId: string, clientId: string): AgentExecutorPort {
-    const executor = this.createExecutor(sessionId, this.logger);
+  create(sessionId: string, clientId: string): AgentSession {
+    const session = this.createSession(sessionId, this.logger);
 
-    this.sessions.set(sessionId, executor);
+    this.sessions.set(sessionId, session);
 
     if (!this.clientSessions.has(clientId)) {
       this.clientSessions.set(clientId, new Set());
     }
     this.clientSessions.get(clientId)!.add(sessionId);
 
-    return executor;
+    return session;
   }
 
-  get(sessionId: string): AgentExecutorPort | undefined {
+  get(sessionId: string): AgentSession | undefined {
     return this.sessions.get(sessionId);
   }
 
@@ -51,9 +44,9 @@ export class AgentStore {
     return this.sessions.has(sessionId);
   }
 
-  remove(sessionId: string): AgentExecutorPort | undefined {
-    const executor = this.sessions.get(sessionId);
-    if (executor) {
+  remove(sessionId: string): AgentSession | undefined {
+    const session = this.sessions.get(sessionId);
+    if (session) {
       this.sessions.delete(sessionId);
 
       for (const [, sessionIds] of this.clientSessions) {
@@ -63,10 +56,10 @@ export class AgentStore {
         }
       }
     }
-    return executor;
+    return session;
   }
 
-  getByClient(clientId: string): AgentExecutorPort[] {
+  getByClient(clientId: string): AgentSession[] {
     const sessionIds = this.clientSessions.get(clientId);
     if (!sessionIds) {
       return [];
@@ -74,21 +67,21 @@ export class AgentStore {
 
     return Array.from(sessionIds)
       .map(id => this.sessions.get(id))
-      .filter((e): e is AgentExecutorPort => e !== undefined);
+      .filter((e): e is AgentSession => e !== undefined);
   }
 
-  removeByClient(clientId: string): AgentExecutorPort[] {
+  removeByClient(clientId: string): AgentSession[] {
     const sessionIds = this.clientSessions.get(clientId);
     if (!sessionIds) {
       return [];
     }
 
-    const removed: AgentExecutorPort[] = [];
+    const removed: AgentSession[] = [];
     for (const sessionId of sessionIds) {
-      const executor = this.sessions.get(sessionId);
-      if (executor) {
+      const session = this.sessions.get(sessionId);
+      if (session) {
         this.sessions.delete(sessionId);
-        removed.push(executor);
+        removed.push(session);
       }
     }
 
@@ -96,7 +89,7 @@ export class AgentStore {
     return removed;
   }
 
-  getAll(): AgentExecutorPort[] {
+  getAll(): AgentSession[] {
     return Array.from(this.sessions.values());
   }
 }

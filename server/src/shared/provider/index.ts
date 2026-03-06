@@ -3,6 +3,7 @@ export type {
   SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord,
   IndexSessionParams, SessionRepository, DatabaseStats, HeartbeatRepository,
   ParsedMessage, ParsedSession, SessionSource,
+  SessionStartOptions, HeadlessRunOptions, AgentSession, CliRuntime,
 } from './types';
 export { authMiddleware, createAuthMiddleware } from './auth/index';
 export type { AuthDeps } from './auth/index';
