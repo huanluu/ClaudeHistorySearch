@@ -54,6 +54,8 @@ Personal AI work assistant with local search, live sessions, and autonomous work
 5. **Delete code** — Less code = fewer bugs. Question every addition
 6. **Verify, don't assume** — Run `npm test`, `swift test`, `npm run lint`. Prove it works
 
+For detailed design invariants (boundary validation, side effect containment, error modeling, etc.), see `docs/invariants.md`. The server enforces 15 structural invariants via `server/scorecard/` — see `server/scorecard/SCORECARD.md`.
+
 ## Quick Reference
 
 ```bash

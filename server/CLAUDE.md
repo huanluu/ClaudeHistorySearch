@@ -119,7 +119,7 @@ Features receive narrow interfaces — never the full gateway or infra internals
 - No circular dependencies
 - `shared/provider/types.ts` must only contain types/interfaces (enforced by scorecard test)
 
-Violations cause ESLint errors. The scorecard test (`tests/scorecard.test.ts`) also validates at test time.
+Violations cause ESLint errors. Scorecard tests (`scorecard/tests/*.test.ts`) also validate at test time.
 
 ## Barrel Export Pattern
 
@@ -179,17 +179,16 @@ src/features/search/indexer.ts
 src/features/search/indexer.test.ts          ← co-located test
 ```
 
-**Exceptions** (remain in `tests/`):
-- `tests/scorecard.test.ts` — meta-test that validates structural invariants across the whole codebase
+**Exceptions**:
 - `tests/__fixtures__/` — shared test data (JSONL samples) used by multiple test files
+- `scorecard/tests/*.test.ts` — structural invariant tests, split by domain (see Scorecard System below)
 
 Key patterns:
 
 - **Isolation**: Each test creates its own temporary database via `tmpdir()` — no shared state between tests
 - **Fixtures**: Sample JSONL files in `tests/__fixtures__/` (standard, array-content, edge-cases, empty, heartbeat) — realistic data, not mocked JSON
 - **HTTP tests**: Use `supertest` against the Express app directly (no server binding needed)
-- **Scorecard tests**: `tests/scorecard.test.ts` enforces structural invariants (see `scorecard/SCORECARD.md`)
-- **ESLint exemption**: Co-located test files (`src/**/*.test.ts`) are exempt from architecture rules — they may import freely across modules
+- **ESLint exemption**: Co-located test files (`src/**/*.test.ts`) and scorecard tests are exempt from architecture rules
 
 ```typescript
 // Test naming: descriptive strings in describe/it blocks
@@ -204,11 +203,18 @@ describe('SessionRepository', () => {
 
 ### Scorecard System
 
-The quality scorecard (`scorecard/SCORECARD.md`) tracks:
-- **Invariants** (Pass/Fail): Automated structural checks — architecture, security, observability
-- **Metrics** (Scored 1-5): Subjective quality measures evaluated by reading the code
+15 pass/fail invariants enforced by ESLint and structural tests. No subjective metrics.
 
-When adding features, check that scorecard tests still pass. Known failing invariants are tracked with `it.fails()` — when you fix one, promote it to a regular `it()`.
+| File | Purpose |
+|------|---------|
+| `scorecard/SCORECARD.md` | Invariant definitions and rationale |
+| `scorecard/CLAUDE.md` | Agent procedures (adding/fixing invariants) |
+| `scorecard/baseline.json` | Current pass/fail state |
+| `scorecard/tests/*.test.ts` | Structural tests split by domain |
+
+For design principles behind the invariants, see `docs/invariants.md`.
+
+Known failing invariants use `it.fails()` — when fixed, promote to `it()` and update baseline.
 
 ## API Endpoints
 
@@ -297,6 +303,8 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | `src/features/scheduler/HeartbeatService.ts` | Autonomous agent runs on a schedule |
 | `eslint.config.js` | Module boundary + quality rules (flat config format) |
 | `tests/__fixtures__/` | Shared test fixtures (sample JSONL files) |
-| `tests/scorecard.test.ts` | Structural invariant enforcement (38 invariants) |
 | `src/**/*.test.ts` | Co-located unit tests (next to source files) |
-| `scorecard/SCORECARD.md` | Quality criteria, invariants, metrics, baseline |
+| `scorecard/SCORECARD.md` | 15 invariant definitions (pass/fail, no metrics) |
+| `scorecard/tests/*.test.ts` | Structural invariant tests, split by domain |
+| `scorecard/baseline.json` | Current invariant pass/fail state |
+| `docs/invariants.md` | Design principles for AI-assisted development |

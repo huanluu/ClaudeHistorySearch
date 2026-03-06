@@ -81,7 +81,7 @@ describe('ConfigService', () => {
     });
 
     it('should reject wrong type', () => {
-      const err = service.updateSection('heartbeat', { enabled: 'yes' as any });
+      const err = service.updateSection('heartbeat', { enabled: 'yes' as unknown as boolean });
       expect(err).toBe('Field "enabled" must be of type boolean, got string');
     });
 

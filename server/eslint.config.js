@@ -48,7 +48,7 @@ export default tseslint.config(
   // ── Block 1: Global barrel enforcement ──────────────────────────────
   // Every file must go through the barrel; no reaching into module internals.
   {
-    files: ['src/**/*.ts', 'tests/**/*.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts', 'scorecard/tests/**/*.ts'],
     extends: [tseslint.configs.base],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
@@ -161,11 +161,10 @@ export default tseslint.config(
     },
   },
 
-  // ── Block 7b: Co-located test files — relaxed architecture rules ────
-  // Test files inside src/ may import freely across modules and bypass barrels
-  // to directly import the unit under test.
+  // ── Block 7b: Test files — relaxed architecture rules ────────────────
+  // Test files (co-located and scorecard) may import freely across modules.
   {
-    files: ['src/**/*.test.ts'],
+    files: ['src/**/*.test.ts', 'scorecard/tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': 'off',
     },
@@ -173,7 +172,7 @@ export default tseslint.config(
 
   // ── Block 8: No .js extensions in imports ───────────────────────────
   {
-    files: ['src/**/*.ts', 'tests/**/*.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts', 'scorecard/tests/**/*.ts'],
     rules: {
       'no-restricted-syntax': ['error', {
         selector: 'ImportDeclaration[source.value=/\\.js$/]',
@@ -193,11 +192,11 @@ export default tseslint.config(
     },
   },
 
-  // ── Block 9b: No explicit `any` in tests (warn) ────────────────────
+  // ── Block 9b: CQ-INV-1 — no explicit `any` in tests (error) ────────
   {
-    files: ['tests/**/*.ts', 'src/**/*.test.ts'],
+    files: ['tests/**/*.ts', 'src/**/*.test.ts', 'scorecard/tests/**/*.ts'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
 

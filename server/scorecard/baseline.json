@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-06T00:00:00Z",
+  "invariants": {
+    "ARCH-INV-1": { "status": "pass", "enforcedBy": "eslint.config.js Blocks 3-7" },
+    "ARCH-INV-2": { "status": "pass", "enforcedBy": "eslint + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-3": { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-4": { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-7": { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-8": { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "CQ-INV-1":   { "status": "pass", "enforcedBy": "eslint.config.js Block 9/9b" },
+    "CQ-INV-3":   { "status": "pass", "enforcedBy": "eslint + scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-4":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "note": "HeartbeatService.ts exceeds 400 lines" },
+    "CQ-INV-5":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "note": "Multiple functions exceed 80 lines" },
+    "OBS-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Block 10" },
+    "SEC-INV-1":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-5":  { "status": "fail", "enforcedBy": "scorecard/tests/security.test.ts", "note": "HeartbeatService reads process.env directly" },
+    "REL-INV-2":  { "status": "fail", "enforcedBy": "scorecard/tests/reliability.test.ts" }
+  },
+  "summary": {
+    "passing": 11,
+    "total": 15,
+    "passRate": "73%"
+  }
+}

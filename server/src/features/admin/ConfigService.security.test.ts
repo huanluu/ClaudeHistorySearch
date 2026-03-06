@@ -36,14 +36,14 @@ describe('ConfigService security section', () => {
 
   it('should reject non-array value for allowedWorkingDirs', () => {
     const err = service.updateSection('security', {
-      allowedWorkingDirs: '/not/an/array' as any,
+      allowedWorkingDirs: '/not/an/array' as unknown as string[],
     });
     expect(err).toMatch(/must be an array/i);
   });
 
   it('should reject array with non-string items', () => {
     const err = service.updateSection('security', {
-      allowedWorkingDirs: ['/valid', 123, true] as any,
+      allowedWorkingDirs: ['/valid', 123, true] as unknown as string[],
     });
     expect(err).toMatch(/must contain only string/i);
   });
