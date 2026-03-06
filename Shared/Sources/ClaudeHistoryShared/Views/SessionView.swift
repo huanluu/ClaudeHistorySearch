@@ -23,7 +23,7 @@ public struct SessionView: View {
     // macOS-specific: callbacks for custom navigation and terminal opening
     #if os(macOS)
     private let onBack: (() -> Void)?
-    private let onOpenInTerminal: ((String, String) -> Void)?
+    private let onOpenInTerminal: ((String, String, String?) -> Void)?
     #endif
 
     @State private var sessionDetail: SessionDetailResponse?
@@ -73,7 +73,7 @@ public struct SessionView: View {
         scrollToMessageId: String? = nil,
         webSocketClient: WebSocketClient? = nil,
         onBack: @escaping () -> Void,
-        onOpenInTerminal: ((String, String) -> Void)? = nil
+        onOpenInTerminal: ((String, String, String?) -> Void)? = nil
     ) {
         self.session = nil
         self.sessionId = sessionId
@@ -210,7 +210,7 @@ public struct SessionView: View {
                 if mode == .historical && onOpenInTerminal != nil {
                     Button {
                         if let detail = sessionDetail {
-                            onOpenInTerminal?(sessionId, detail.session.project)
+                            onOpenInTerminal?(sessionId, detail.session.project, detail.session.source)
                         }
                     } label: {
                         Image(systemName: "terminal")
@@ -461,7 +461,7 @@ public struct SessionView: View {
         let workingDir = detail.session.project
 
         // Prepare viewModel for resume (sets resumeSessionId so sendMessage routes to sendFollowUp)
-        liveViewModel.prepareForResumeSession(resumeSessionId: sessionId, workingDir: workingDir)
+        liveViewModel.prepareForResumeSession(resumeSessionId: sessionId, workingDir: workingDir, source: detail.session.source)
 
         // Switch to live mode - this will show the input field
         mode = .live

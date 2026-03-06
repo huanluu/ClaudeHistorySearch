@@ -31,28 +31,28 @@ export function registerLiveHandlers(gateway: WsGateway, deps: LiveHandlerDeps):
     const workingDir = validateWorkingDir(client, p.sessionId, p.workingDir, validator, logger);
     if (!workingDir) return;
 
-    const executor = agentStore.create(p.sessionId, client.clientId);
+    const executor = agentStore.create(p.sessionId, client.clientId, p.source);
     wireSessionEvents(client, executor, p.sessionId, agentStore, logger);
 
     executor.start({ prompt: p.prompt, workingDir });
-    logger.log({ msg: `session.start: executor started`, op: 'ws.message', context: { sessionId: p.sessionId } });
+    logger.log({ msg: `session.start: executor started`, op: 'ws.message', context: { sessionId: p.sessionId, source: p.source } });
   });
 
   gateway.on<ValidatedSessionResumePayload>('session.resume', (client, p) => {
     logger.log({
-      msg: `session.resume received: sessionId=${p.sessionId}, resumeSessionId=${p.resumeSessionId}`,
+      msg: `session.resume received: sessionId=${p.sessionId}, resumeSessionId=${p.resumeSessionId}, source=${p.source}`,
       op: 'ws.message',
-      context: { sessionId: p.sessionId, resumeSessionId: p.resumeSessionId },
+      context: { sessionId: p.sessionId, resumeSessionId: p.resumeSessionId, source: p.source },
     });
 
     const workingDir = validateWorkingDir(client, p.sessionId, p.workingDir, validator, logger);
     if (!workingDir) return;
 
-    const executor = agentStore.create(p.sessionId, client.clientId);
+    const executor = agentStore.create(p.sessionId, client.clientId, p.source);
     wireSessionEvents(client, executor, p.sessionId, agentStore, logger);
 
     executor.start({ prompt: p.prompt, workingDir, resumeSessionId: p.resumeSessionId });
-    logger.log({ msg: `session.resume: executor started`, op: 'ws.message', context: { sessionId: p.sessionId } });
+    logger.log({ msg: `session.resume: executor started`, op: 'ws.message', context: { sessionId: p.sessionId, source: p.source } });
   });
 
   gateway.on<ValidatedSessionCancelPayload>('session.cancel', (_client, p) => {

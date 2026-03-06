@@ -69,7 +69,7 @@ function createMockAgentStore() {
   const executors = new Map<string, AgentSession & EventEmitter>();
 
   return {
-    create: vi.fn((sessionId: string, _clientId: string) => {
+    create: vi.fn((sessionId: string, _clientId: string, _source?: string) => {
       const executor = createMockExecutor();
       executors.set(sessionId, executor);
       return executor;
@@ -130,9 +130,10 @@ describe('registerLiveHandlers', () => {
         sessionId: 'test-1',
         prompt: 'hello',
         workingDir: '/tmp',
+        source: 'claude',
       });
 
-      expect(agentStore.create).toHaveBeenCalledWith('test-1', 'test-client');
+      expect(agentStore.create).toHaveBeenCalledWith('test-1', 'test-client', 'claude');
       const executor = agentStore._executors.get('test-1');
       expect(executor).toBeDefined();
       expect(executor!.start).toHaveBeenCalledWith({
@@ -167,9 +168,10 @@ describe('registerLiveHandlers', () => {
         resumeSessionId: 'original-session-id',
         prompt: 'continue',
         workingDir: '/tmp',
+        source: 'claude',
       });
 
-      expect(agentStore.create).toHaveBeenCalledWith('test-3', 'test-client');
+      expect(agentStore.create).toHaveBeenCalledWith('test-3', 'test-client', 'claude');
       const executor = agentStore._executors.get('test-3');
       expect(executor).toBeDefined();
       expect(executor!.start).toHaveBeenCalledWith({

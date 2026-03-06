@@ -1,6 +1,6 @@
 import type { Logger, AgentSession } from '../../shared/provider/index';
 
-export type SessionFactory = (sessionId: string, logger: Logger) => AgentSession;
+export type SessionFactory = (sessionId: string, source: string, logger: Logger) => AgentSession;
 
 /**
  * Tracks active sessions and their associations with WebSocket clients.
@@ -16,8 +16,8 @@ export class AgentStore {
     this.createSession = createSession;
   }
 
-  create(sessionId: string, clientId: string): AgentSession {
-    const session = this.createSession(sessionId, this.logger);
+  create(sessionId: string, clientId: string, source: string = 'claude'): AgentSession {
+    const session = this.createSession(sessionId, source, this.logger);
 
     this.sessions.set(sessionId, session);
 

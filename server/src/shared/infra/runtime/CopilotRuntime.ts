@@ -3,32 +3,34 @@ import { spawn, type ChildProcess } from 'child_process';
 import type { Logger, AgentSession, SessionStartOptions, HeadlessRunOptions, CliRuntime } from '../../provider/index';
 import { createLineBuffer } from './lineBuffer';
 
-// ── Claude-specific spawn configuration ─────────────────────────────
+// ── Copilot-specific spawn configuration ────────────────────────────
 
 function buildSpawnEnv(): Record<string, string> {
-  return {
-    ...process.env as Record<string, string>,
-    CI: '1',
-    TERM: 'dumb',
-    NO_COLOR: '1'
-  };
+  const env: Record<string, string> = {};
+  // Only pass safe env vars — don't leak secrets to child process
+  for (const key of ['PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'TERM_PROGRAM']) {
+    if (process.env[key]) {
+      env[key] = process.env[key]!;
+    }
+  }
+  return env;
 }
 
-function buildClaudeArgs(options: SessionStartOptions): string[] {
+function buildCopilotArgs(options: SessionStartOptions): string[] {
   const args: string[] = [];
   if (options.resumeSessionId) {
     args.push('--resume', options.resumeSessionId);
   }
   args.push('-p', options.prompt);
-  args.push('--output-format', 'stream-json');
-  args.push('--verbose');
-  args.push('--dangerously-skip-permissions');
+  args.push('--output-format', 'json');
+  args.push('--allow-all-tools');
+  args.push('--no-color');
   return args;
 }
 
-// ── ClaudeAgentSession (streaming, for live sessions) ───────────────
+// ── CopilotAgentSession (streaming, for live sessions) ──────────────
 
-export class ClaudeAgentSession extends EventEmitter implements AgentSession {
+export class CopilotAgentSession extends EventEmitter implements AgentSession {
   private process: ChildProcess | null = null;
 
   constructor(
@@ -39,11 +41,11 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
   }
 
   start(options: SessionStartOptions): void {
-    const args = buildClaudeArgs(options);
+    const args = buildCopilotArgs(options);
 
-    this.logger.log({ msg: 'Starting claude session', op: 'session.spawn', context: { sessionId: this.sessionId, workingDir: options.workingDir, args } });
+    this.logger.log({ msg: 'Starting copilot session', op: 'session.spawn', context: { sessionId: this.sessionId, workingDir: options.workingDir, args } });
 
-    this.process = spawn('claude', args, {
+    this.process = spawn('copilot', args, {
       cwd: options.workingDir,
       env: buildSpawnEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
@@ -76,7 +78,7 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
 
     this.process.on('error', (err) => {
       this.logger.error({ msg: `Spawn error: ${err.message}`, op: 'session.error', err, context: { sessionId: this.sessionId } });
-      this.emit('error', `Failed to start claude: ${err.message}`);
+      this.emit('error', `Failed to start copilot: ${err.message}`);
     });
   }
 
@@ -91,39 +93,39 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
   }
 }
 
-// ── ClaudeRuntime ───────────────────────────────────────────────────
+// ── CopilotRuntime ──────────────────────────────────────────────────
 
-export class ClaudeRuntime implements CliRuntime {
-  readonly name = 'claude';
+export class CopilotRuntime implements CliRuntime {
+  readonly name = 'copilot';
 
   startSession(sessionId: string, logger: Logger): AgentSession {
-    return new ClaudeAgentSession(sessionId, logger);
+    return new CopilotAgentSession(sessionId, logger);
   }
 
   runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }> {
-    const args = buildClaudeArgs({ prompt: options.prompt, workingDir: options.workingDir });
+    const args = buildCopilotArgs({ prompt: options.prompt, workingDir: options.workingDir });
 
     return new Promise((resolve, reject) => {
-      const child = spawn('claude', args, {
+      const child = spawn('copilot', args, {
         cwd: options.workingDir,
         env: buildSpawnEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
       let resolved = false;
+      let lastSessionId: string | null = null;
 
+      // Copilot emits session ID in the LAST event ({type:"result", sessionId:"..."})
+      // so we collect it and resolve on close.
       const handleLine = createLineBuffer((msg) => {
-        if (resolved) return;
         const m = msg as Record<string, unknown>;
-        if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
-          resolved = true;
-          child.unref();
-          resolve({ sessionId: m.session_id as string });
+        if (m.type === 'result' && m.sessionId) {
+          lastSessionId = m.sessionId as string;
         }
       });
 
       child.stdout?.on('data', (data: Buffer) => {
-        if (!resolved) handleLine(data);
+        handleLine(data);
       });
 
       child.on('error', (error) => {
@@ -133,11 +135,19 @@ export class ClaudeRuntime implements CliRuntime {
         }
       });
 
-      child.on('close', () => {
+      child.on('close', (code) => {
         if (!resolved) {
           resolved = true;
-          logger.log({ msg: 'Claude process exited before returning session ID', op: 'runtime.headless', context: { runtime: this.name } });
-          resolve({ sessionId: null });
+          if (code && code !== 0) {
+            reject(new Error(`copilot exited with code ${code}`));
+            return;
+          }
+          if (lastSessionId) {
+            logger.log({ msg: `Copilot session ID extracted: ${lastSessionId}`, op: 'runtime.headless', context: { runtime: this.name } });
+          } else {
+            logger.log({ msg: 'Copilot process exited before returning session ID', op: 'runtime.headless', context: { runtime: this.name } });
+          }
+          resolve({ sessionId: lastSessionId });
         }
       });
     });

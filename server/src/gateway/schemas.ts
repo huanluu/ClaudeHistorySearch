@@ -15,10 +15,13 @@ export const AuthPayloadSchema = z.object({
   apiKey: z.string(),
 });
 
+export const RuntimeSourceSchema = z.enum(['claude', 'copilot']);
+
 export const SessionStartPayloadSchema = z.object({
   sessionId: z.string(),
   prompt: z.string(),
   workingDir: z.string(),
+  source: RuntimeSourceSchema.optional().default('claude'),
 });
 
 export const SessionResumePayloadSchema = z.object({
@@ -26,6 +29,7 @@ export const SessionResumePayloadSchema = z.object({
   prompt: z.string(),
   workingDir: z.string(),
   resumeSessionId: z.string(),
+  source: RuntimeSourceSchema.optional().default('claude'),
 });
 
 export const SessionCancelPayloadSchema = z.object({

@@ -78,10 +78,11 @@ struct SearchPopoverView: View {
                         scrollToMessageId: scrollToMessageId,
                         webSocketClient: webSocketClient,
                         onBack: { navigationPath.removeLast() },
-                        onOpenInTerminal: { sessionId, workingDir in
+                        onOpenInTerminal: { sessionId, workingDir, source in
                             try? TerminalService.shared.openSession(
                                 sessionId: sessionId,
-                                workingDirectory: workingDir
+                                workingDirectory: workingDir,
+                                source: source
                             )
                         }
                     )

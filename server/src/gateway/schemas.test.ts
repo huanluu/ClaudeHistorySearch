@@ -39,7 +39,7 @@ describe('WebSocket payload schemas', () => {
 
     it('accepts valid payload', () => {
       const result = SessionStartPayloadSchema.parse(validPayload);
-      expect(result).toEqual(validPayload);
+      expect(result).toEqual({ ...validPayload, source: 'claude' });
     });
 
     it('rejects missing sessionId', () => {
@@ -63,7 +63,7 @@ describe('WebSocket payload schemas', () => {
 
     it('strips extra fields', () => {
       const result = SessionStartPayloadSchema.parse({ ...validPayload, extra: true });
-      expect(result).toEqual(validPayload);
+      expect(result).toEqual({ ...validPayload, source: 'claude' });
     });
 
     it('rejects null payload', () => {
@@ -85,7 +85,7 @@ describe('WebSocket payload schemas', () => {
 
     it('accepts valid payload', () => {
       const result = SessionResumePayloadSchema.parse(validPayload);
-      expect(result).toEqual(validPayload);
+      expect(result).toEqual({ ...validPayload, source: 'claude' });
     });
 
     it('rejects missing resumeSessionId', () => {

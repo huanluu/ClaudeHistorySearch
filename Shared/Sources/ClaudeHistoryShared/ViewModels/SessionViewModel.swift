@@ -32,11 +32,14 @@ public class SessionViewModel: ObservableObject {
     /// Current session ID (for live sessions)
     public internal(set) var sessionId: String?
 
-    /// The original Claude session ID being resumed (persists across follow-ups)
+    /// The original session ID being resumed (persists across follow-ups)
     public internal(set) var resumeSessionId: String?
 
     /// Working directory for the session
     public internal(set) var workingDir: String?
+
+    /// Runtime source for the session (e.g., "claude", "copilot")
+    public internal(set) var source: String?
 
     // MARK: - Initialization
 
@@ -124,7 +127,8 @@ public class SessionViewModel: ObservableObject {
             payload: AnyCodable([
                 "sessionId": newSessionId,
                 "prompt": prompt,
-                "workingDir": workingDir
+                "workingDir": workingDir,
+                "source": source ?? "claude"
             ])
         )
 
@@ -174,7 +178,8 @@ public class SessionViewModel: ObservableObject {
                 "sessionId": newSessionId,
                 "resumeSessionId": resumeSessionId,
                 "prompt": prompt,
-                "workingDir": workingDir
+                "workingDir": workingDir,
+                "source": source ?? "claude"
             ])
         )
 
@@ -217,9 +222,10 @@ public class SessionViewModel: ObservableObject {
     /// - Parameters:
     ///   - resumeSessionId: The ID of the historical session to resume
     ///   - workingDir: The working directory for the session
-    public func prepareForResumeSession(resumeSessionId: String, workingDir: String) {
+    public func prepareForResumeSession(resumeSessionId: String, workingDir: String, source: String? = nil) {
         self.resumeSessionId = resumeSessionId
         self.workingDir = workingDir
+        self.source = source
         self.mode = .live
         self.state = .idle
         self.messages = []
@@ -289,7 +295,8 @@ public class SessionViewModel: ObservableObject {
                 "sessionId": newSessionId,
                 "resumeSessionId": resumeSessionId,
                 "prompt": prompt,
-                "workingDir": workingDir
+                "workingDir": workingDir,
+                "source": source ?? "claude"
             ])
         )
 
