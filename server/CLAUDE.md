@@ -170,12 +170,26 @@ const fileWatcher = new FileWatcher(PROJECTS_DIR, sessionRepo, logger);
 
 ## Testing
 
-Tests live in `tests/` (not `src/`). Key patterns:
+Tests are **co-located** next to their source files as `*.test.ts` siblings:
+
+```
+src/features/admin/ConfigService.ts
+src/features/admin/ConfigService.test.ts     ← co-located test
+src/features/search/indexer.ts
+src/features/search/indexer.test.ts          ← co-located test
+```
+
+**Exceptions** (remain in `tests/`):
+- `tests/scorecard.test.ts` — meta-test that validates structural invariants across the whole codebase
+- `tests/__fixtures__/` — shared test data (JSONL samples) used by multiple test files
+
+Key patterns:
 
 - **Isolation**: Each test creates its own temporary database via `tmpdir()` — no shared state between tests
 - **Fixtures**: Sample JSONL files in `tests/__fixtures__/` (standard, array-content, edge-cases, empty, heartbeat) — realistic data, not mocked JSON
 - **HTTP tests**: Use `supertest` against the Express app directly (no server binding needed)
-- **Scorecard tests**: `tests/scorecard.test.ts` enforces 31 structural invariants (see `scorecard/SCORECARD.md`)
+- **Scorecard tests**: `tests/scorecard.test.ts` enforces structural invariants (see `scorecard/SCORECARD.md`)
+- **ESLint exemption**: Co-located test files (`src/**/*.test.ts`) are exempt from architecture rules — they may import freely across modules
 
 ```typescript
 // Test naming: descriptive strings in describe/it blocks
@@ -282,6 +296,7 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | `src/features/live/AgentStore.ts` | Session tracking + `AgentExecutorPort` interface |
 | `src/features/scheduler/HeartbeatService.ts` | Autonomous agent runs on a schedule |
 | `eslint.config.js` | Module boundary + quality rules (flat config format) |
-| `tests/__fixtures__/` | Sample JSONL files for testing |
+| `tests/__fixtures__/` | Shared test fixtures (sample JSONL files) |
 | `tests/scorecard.test.ts` | Structural invariant enforcement (38 invariants) |
+| `src/**/*.test.ts` | Co-located unit tests (next to source files) |
 | `scorecard/SCORECARD.md` | Quality criteria, invariants, metrics, baseline |

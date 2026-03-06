@@ -1,4 +1,4 @@
-import { HttpTransport } from '../src/gateway/index';
+import { HttpTransport } from './index';
 import http from 'http';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 

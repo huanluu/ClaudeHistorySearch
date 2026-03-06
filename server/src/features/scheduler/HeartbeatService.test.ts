@@ -9,9 +9,9 @@ import {
   type HeartbeatTask,
   type WorkItem,
   type CommandExecutor
-} from '../src/features/scheduler/HeartbeatService';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../src/shared/provider/index';
-import type { Logger } from '../src/shared/provider/index';
+} from './HeartbeatService';
+import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { Logger } from '../../shared/provider/index';
 
 const noopLogger: Logger = {
   log: () => {},
@@ -319,8 +319,8 @@ describe('Production Database Module (Heartbeat Schema)', () => {
   // These tests verify the createDatabase factory creates the schema correctly
 
   it('should construct SqliteHeartbeatRepository from createDatabase result', async () => {
-    const { createDatabase } = await import('../src/shared/infra/database/connection');
-    const { SqliteHeartbeatRepository } = await import('../src/shared/infra/database/SqliteHeartbeatRepository');
+    const { createDatabase } = await import('../../shared/infra/database/connection');
+    const { SqliteHeartbeatRepository } = await import('../../shared/infra/database/SqliteHeartbeatRepository');
 
     const db = createDatabase(':memory:', noopLogger);
     expect(typeof db).toBe('object');
@@ -340,7 +340,7 @@ describe('Production Database Module (Heartbeat Schema)', () => {
   });
 
   it('should have heartbeat_state table in created database', async () => {
-    const { createDatabase } = await import('../src/shared/infra/database/connection');
+    const { createDatabase } = await import('../../shared/infra/database/connection');
 
     const db = createDatabase(':memory:', noopLogger);
 

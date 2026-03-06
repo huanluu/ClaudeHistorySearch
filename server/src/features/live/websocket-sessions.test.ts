@@ -4,11 +4,11 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
-import { WorkingDirValidator } from '../src/shared/provider/index';
-import { HttpTransport, WebSocketGateway } from '../src/gateway/index';
-import { AgentStore, registerLiveHandlers } from '../src/features/live/index';
-import { AgentExecutor } from '../src/shared/infra/runtime/index';
-import type { Logger } from '../src/shared/provider/index';
+import { WorkingDirValidator } from '../../shared/provider/index';
+import { HttpTransport, WebSocketGateway } from '../../gateway/index';
+import { AgentStore, registerLiveHandlers } from './index';
+import { AgentExecutor } from '../../shared/infra/runtime/index';
+import type { Logger } from '../../shared/provider/index';
 
 const noopLogger: Logger = {
   log: () => {},

@@ -1,10 +1,10 @@
 import type { Mock } from 'vitest';
-import { ErrorRingBuffer } from '../src/shared/provider/index';
-import { DiagnosticsService } from '../src/features/admin/DiagnosticsService';
-import type { DiagnosticsSources } from '../src/features/admin/DiagnosticsService';
-import type { SessionRepository, DatabaseStats } from '../src/shared/provider/index';
-import type { FileWatcher } from '../src/features/search/index';
-import type { HeartbeatService } from '../src/features/scheduler/index';
+import { ErrorRingBuffer } from '../../shared/provider/index';
+import { DiagnosticsService } from './DiagnosticsService';
+import type { DiagnosticsSources } from './DiagnosticsService';
+import type { SessionRepository, DatabaseStats } from '../../shared/provider/index';
+import type { FileWatcher } from '../search/index';
+import type { HeartbeatService } from '../scheduler/index';
 
 function createMockSources(overrides?: Partial<DiagnosticsSources>): DiagnosticsSources {
   const mockRepo = {

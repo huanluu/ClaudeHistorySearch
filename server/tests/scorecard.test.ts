@@ -53,6 +53,19 @@ function collectTsFiles(dir: string): string[] {
   return results;
 }
 
+/** Collect only source (non-test) .ts files from a directory. */
+function collectSrcFiles(dir: string): string[] {
+  return collectTsFiles(dir).filter(f => !f.endsWith('.test.ts'));
+}
+
+/** Collect all test files from both src/ (co-located) and tests/. */
+function collectAllTestFiles(): string[] {
+  return [
+    ...collectTsFiles(SRC_DIR).filter(f => f.endsWith('.test.ts')),
+    ...collectTsFiles(TESTS_DIR).filter(f => f.endsWith('.test.ts')),
+  ];
+}
+
 /**
  * Extract import paths from a TypeScript source file.
  * Matches both `import ... from '...'` and `import ... from "..."`.
@@ -95,7 +108,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-3
   it('ARCH-INV-3: No Circular Dependencies', () => {
     // Build import graph from all source files
-    const allFiles = collectTsFiles(SRC_DIR);
+    const allFiles = collectSrcFiles(SRC_DIR);
     const graph = new Map<string, string[]>();
 
     for (const file of allFiles) {
@@ -155,7 +168,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // Scorecard ARCH-INV-4: Composition Root Monopoly
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-4
   it('ARCH-INV-4: Composition Root Monopoly — no cross-module `new` outside app.ts', () => {
-    const allFiles = collectTsFiles(SRC_DIR);
+    const allFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; match: string }> = [];
 
     // Modules whose classes are cross-module (exported from barrels)
@@ -225,7 +238,7 @@ describe('Scorecard: Architecture Invariants', () => {
     // Check: classes exported from barrels for cross-module use should have
     // a corresponding interface. If a module exports `class Foo`, there should
     // be an `interface Foo` or a corresponding interface type elsewhere in the module.
-    const allFiles = collectTsFiles(SRC_DIR);
+    const allFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ module: string; className: string }> = [];
     const moduleNames = ['shared/provider', 'shared/infra/database', 'shared/infra/runtime', 'gateway', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
 
@@ -289,8 +302,9 @@ describe('Scorecard: Architecture Invariants', () => {
   // Scorecard ARCH-INV-6: Test Existence Floor
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-6
   it.fails('ARCH-INV-6: Test Existence Floor — every source module has a test', () => {
-    const srcFiles = collectTsFiles(SRC_DIR);
-    const testFiles = collectTsFiles(TESTS_DIR).map(f => basename(f));
+    const srcFiles = collectSrcFiles(SRC_DIR);
+    const allTestFiles = collectAllTestFiles();
+    const testFileNames = allTestFiles.map(f => basename(f));
     const missingTests: string[] = [];
 
     for (const file of srcFiles) {
@@ -305,7 +319,7 @@ describe('Scorecard: Architecture Invariants', () => {
       const hasExportedLogic = /export\s+(function|class|const\s+\w+\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^;]*=>))/m.test(content);
       if (!hasExportedLogic) continue;
 
-      // Check for a corresponding test file
+      // Check for a corresponding test file (co-located or in tests/)
       const expectedTestNames = [
         `${base}.test.ts`,
         `${base.charAt(0).toLowerCase()}${base.slice(1)}.test.ts`,
@@ -315,7 +329,7 @@ describe('Scorecard: Architecture Invariants', () => {
       const camelBase = base.charAt(0).toLowerCase() + base.slice(1);
       expectedTestNames.push(`${camelBase}.test.ts`);
 
-      const hasTest = expectedTestNames.some(name => testFiles.includes(name));
+      const hasTest = expectedTestNames.some(name => testFileNames.includes(name));
       if (!hasTest) {
         missingTests.push(relFile);
       }
@@ -330,7 +344,7 @@ describe('Scorecard: Architecture Invariants', () => {
   //   export const logger = createLogger(...)
   // These bypass the composition root and create hidden, shared mutable state.
   it('ARCH-INV-7: No Exported Singleton Instances', () => {
-    const allFiles = collectTsFiles(SRC_DIR);
+    const allFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; match: string }> = [];
 
     // Pattern: `export const <name> = new <Class>(`
@@ -381,7 +395,7 @@ describe('Scorecard: Testability Invariants', () => {
   // Scorecard TEST-INV-2: No Global State Leaks Between Tests
   // See: scorecard/SCORECARD.md § Testability > Invariants > TEST-INV-2
   it.fails('TEST-INV-2: No module-scope process.env mutations in tests', () => {
-    const testFiles = collectTsFiles(TESTS_DIR);
+    const testFiles = collectAllTestFiles();
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
     for (const file of testFiles) {
@@ -436,7 +450,7 @@ describe('Scorecard: Observability Invariants', () => {
   // Scorecard OBS-INV-2: All Error Paths Log Context
   // See: scorecard/SCORECARD.md § Observability > Invariants > OBS-INV-2
   it.fails('OBS-INV-2: Every catch block logs or rethrows', () => {
-    const srcFiles = collectTsFiles(SRC_DIR);
+    const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
     for (const file of srcFiles) {
@@ -530,7 +544,7 @@ describe('Scorecard: Security Invariants', () => {
   // Scorecard SEC-INV-1: No Hardcoded Secrets
   // See: scorecard/SCORECARD.md § Security > Invariants > SEC-INV-1
   it('SEC-INV-1: No hardcoded secrets in source code', () => {
-    const srcFiles = collectTsFiles(SRC_DIR);
+    const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
     // Patterns that indicate hardcoded secrets
@@ -577,7 +591,7 @@ describe('Scorecard: Security Invariants', () => {
   // Scorecard SEC-INV-2: Array-Based Subprocess Arguments
   // See: scorecard/SCORECARD.md § Security > Invariants > SEC-INV-2
   it('SEC-INV-2: All spawn() calls use array arguments', () => {
-    const srcFiles = collectTsFiles(SRC_DIR);
+    const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; issue: string }> = [];
 
     for (const file of srcFiles) {
@@ -889,7 +903,7 @@ describe('Scorecard: Performance Invariants', () => {
   // See: scorecard/SCORECARD.md § Performance > Invariants > PERF-INV-3
   it.fails('PERF-INV-3: No unbounded in-memory collections', () => {
     // Check long-lived Map/Set fields in classes for capacity limits
-    const srcFiles = collectTsFiles(SRC_DIR);
+    const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; className: string; field: string }> = [];
 
     // Known bounded collections (already have capacity limits)
@@ -964,7 +978,7 @@ describe('Scorecard: Reliability Invariants', () => {
   // Scorecard REL-INV-2: Spawned Processes Tracked and Cleaned
   // See: scorecard/SCORECARD.md § Reliability > Invariants > REL-INV-2
   it.fails('REL-INV-2: All spawn() calls are tracked and cleaned on shutdown', () => {
-    const srcFiles = collectTsFiles(SRC_DIR);
+    const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; issue: string }> = [];
 
     for (const file of srcFiles) {
@@ -1080,8 +1094,8 @@ describe('Scorecard: Code Quality Invariants', () => {
     const deadExports: Array<{ module: string; exportName: string }> = [];
 
     // Collect all consumer files grouped by module
-    const allSrcFiles = collectTsFiles(SRC_DIR);
-    const allTestFiles = collectTsFiles(TESTS_DIR);
+    const allSrcFiles = collectSrcFiles(SRC_DIR);
+    const allTestFiles = collectAllTestFiles();
 
     for (const mod of modules) {
       const barrelPath = join(SRC_DIR, mod, 'index.ts');
@@ -1146,7 +1160,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   // Scorecard CQ-INV-3: No .js Extensions in Imports
   // See: scorecard/SCORECARD.md § Code Quality > Invariants > CQ-INV-3
   it('CQ-INV-3: No .js extensions in TypeScript imports', () => {
-    const allFiles = [...collectTsFiles(SRC_DIR), ...collectTsFiles(TESTS_DIR)];
+    const allFiles = [...collectSrcFiles(SRC_DIR), ...collectAllTestFiles()];
     const violations: Array<{ file: string; line: number; text: string }> = [];
 
     for (const file of allFiles) {

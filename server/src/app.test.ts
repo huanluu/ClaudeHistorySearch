@@ -1,4 +1,4 @@
-import { createApp, type App } from '../src/app';
+import { createApp, type App } from './app';
 import http from 'http';
 
 /**

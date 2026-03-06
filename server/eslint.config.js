@@ -161,6 +161,16 @@ export default tseslint.config(
     },
   },
 
+  // ── Block 7b: Co-located test files — relaxed architecture rules ────
+  // Test files inside src/ may import freely across modules and bypass barrels
+  // to directly import the unit under test.
+  {
+    files: ['src/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': 'off',
+    },
+  },
+
   // ── Block 8: No .js extensions in imports ───────────────────────────
   {
     files: ['src/**/*.ts', 'tests/**/*.ts'],
@@ -185,7 +195,7 @@ export default tseslint.config(
 
   // ── Block 9b: No explicit `any` in tests (warn) ────────────────────
   {
-    files: ['tests/**/*.ts'],
+    files: ['tests/**/*.ts', 'src/**/*.test.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
     },
@@ -195,6 +205,7 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts'],
     ignores: [
+      'src/**/*.test.ts',
       'src/shared/provider/logger/logger.ts',
       'src/shared/provider/auth/keyManager.ts',
     ],

@@ -2,10 +2,10 @@ import type { MockInstance } from 'vitest';
 import { mkdirSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createLogger } from '../src/shared/provider/index';
-import type { Logger } from '../src/shared/provider/index';
-import { FileWatcher } from '../src/features/search/index';
-import type { SessionRepository } from '../src/shared/provider/index';
+import { createLogger } from '../index';
+import type { Logger } from '../index';
+import { FileWatcher } from '../../../features/search/index';
+import type { SessionRepository } from '../index';
 
 let testDir: string;
 let logPath: string;

@@ -1,11 +1,11 @@
-import { WebSocketGateway, HttpTransport } from '../src/gateway/index';
-import type { WSMessage } from '../src/gateway/index';
+import { WebSocketGateway, HttpTransport } from './index';
+import type { WSMessage } from './index';
 import WebSocket from 'ws';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
-import type { Logger } from '../src/shared/provider/index';
+import type { Logger } from '../shared/provider/index';
 
 const noopLogger: Logger = {
   log: () => {},

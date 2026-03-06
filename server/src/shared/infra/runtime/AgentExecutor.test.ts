@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 import type { Mock } from 'vitest';
-import type { Logger } from '../src/shared/provider/index';
-import { AgentExecutor } from '../src/shared/infra/runtime/index';
-import { AgentStore } from '../src/features/live/index';
+import type { Logger } from '../../provider/index';
+import { AgentExecutor } from './index';
+import { AgentStore } from '../../../features/live/index';
 
 const noopLogger: Logger = {
   log: () => {},

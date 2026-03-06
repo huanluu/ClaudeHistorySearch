@@ -1,10 +1,10 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { parseSessionFile, type ParsedSession, detectAutomaticSession } from '../src/features/search/indexer';
+import { parseSessionFile, type ParsedSession, detectAutomaticSession } from './indexer';
 
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURES_DIR = join(__dirname, '__fixtures__');
+const FIXTURES_DIR = join(__dirname, '../../../tests/__fixtures__');
 
 describe('parseSessionFile', () => {
   describe('basic parsing with string content', () => {
