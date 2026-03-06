@@ -1,3 +1,4 @@
+export { getConfigDir } from './config';
 export { authMiddleware } from './auth/index';
 export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './auth/index';
 export { WorkingDirValidator } from './security/index';

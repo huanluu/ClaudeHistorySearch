@@ -1,4 +1,4 @@
-export { HeartbeatService, getConfigDir } from './HeartbeatService';
+export { HeartbeatService } from './HeartbeatService';
 export type {
   HeartbeatConfig,
   HeartbeatTask,

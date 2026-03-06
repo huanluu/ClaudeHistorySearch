@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { getConfigDir } from '../scheduler/index';
+import { getConfigDir } from '../../shared/provider/index';
 
 /**
  * Field schema for validation
