@@ -158,6 +158,127 @@ final class SessionViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.state, .cancelled)
     }
+
+    // MARK: - Mock WebSocket Client Tests
+
+    func testLiveSession_startSendsCorrectMessage() async throws {
+        let mockWS = MockWebSocketClient()
+        // Simulate already authenticated so startSession doesn't try real connection
+        mockWS.state = .authenticated
+        let viewModel = SessionViewModel(webSocketClient: mockWS)
+
+        try await viewModel.startSession(prompt: "Hello Claude", workingDir: "/tmp/test")
+
+        // Should have sent exactly one message
+        XCTAssertEqual(mockWS.sentMessages.count, 1)
+
+        let sent = mockWS.sentMessages[0]
+        XCTAssertEqual(sent.type, .sessionStart)
+
+        // Verify payload contains correct fields
+        let payload = sent.payload?.value as? [String: Any]
+        XCTAssertNotNil(payload)
+        XCTAssertEqual(payload?["prompt"] as? String, "Hello Claude")
+        XCTAssertEqual(payload?["workingDir"] as? String, "/tmp/test")
+        XCTAssertNotNil(payload?["sessionId"] as? String)
+    }
+
+    func testLiveSession_outputMessageAppended() {
+        let mockWS = MockWebSocketClient()
+        let viewModel = SessionViewModel(webSocketClient: mockWS)
+
+        viewModel.setSessionIdForTesting("test-session-456")
+
+        let outputPayload: [String: Any] = [
+            "sessionId": "test-session-456",
+            "message": [
+                "type": "assistant",
+                "message": ["content": [["type": "text", "text": "Hello from Claude!"]]]
+            ]
+        ]
+        let message = WSMessage(type: .sessionOutput, payload: AnyCodable(outputPayload))
+
+        viewModel.handleWebSocketMessage(message)
+
+        // The assistant message should be appended
+        let assistantMessages = viewModel.messages.filter { $0.role == "assistant" }
+        XCTAssertEqual(assistantMessages.count, 1)
+        XCTAssertEqual(assistantMessages.first?.content, "Hello from Claude!")
+    }
+
+    func testLiveSession_errorUpdatesState() {
+        let mockWS = MockWebSocketClient()
+        let viewModel = SessionViewModel(webSocketClient: mockWS)
+
+        viewModel.setSessionIdForTesting("test-session-789")
+        viewModel.setStateForTesting(.running)
+
+        let errorPayload: [String: Any] = [
+            "sessionId": "test-session-789",
+            "error": "Process crashed"
+        ]
+        let message = WSMessage(type: .sessionError, payload: AnyCodable(errorPayload))
+
+        viewModel.handleWebSocketMessage(message)
+
+        XCTAssertEqual(viewModel.error, "Process crashed")
+    }
+
+    func testLiveSession_completeUpdatesState() {
+        let mockWS = MockWebSocketClient()
+        let viewModel = SessionViewModel(webSocketClient: mockWS)
+
+        viewModel.setSessionIdForTesting("test-session-complete")
+        viewModel.setStateForTesting(.running)
+
+        let completePayload: [String: Any] = [
+            "sessionId": "test-session-complete",
+            "exitCode": 0
+        ]
+        let message = WSMessage(type: .sessionComplete, payload: AnyCodable(completePayload))
+
+        viewModel.handleWebSocketMessage(message)
+
+        XCTAssertEqual(viewModel.state, .ready, "Successful completion should transition to .ready state")
+    }
+}
+
+// MARK: - Mock WebSocket Client
+
+@MainActor
+class MockWebSocketClient: WebSocketClientProtocol {
+    var state: WebSocketState = .disconnected
+    var onMessage: ((WSMessage) -> Void)?
+    var onStateChange: ((WebSocketState) -> Void)?
+
+    var connectCalled = false
+    var disconnectCalled = false
+    var sentMessages: [WSMessage] = []
+
+    func connect() async throws {
+        connectCalled = true
+        state = .authenticated
+    }
+
+    func disconnect() {
+        disconnectCalled = true
+        state = .disconnected
+    }
+
+    func send(_ message: WSMessage) async throws {
+        sentMessages.append(message)
+    }
+
+    // Helper to simulate receiving a message
+    func simulateMessage(_ message: WSMessage) {
+        onMessage?(message)
+    }
+
+    // Helper to simulate state change
+    func simulateStateChange(_ newState: WebSocketState) {
+        state = newState
+        onStateChange?(newState)
+    }
 }
 
 // MARK: - Mock API Client

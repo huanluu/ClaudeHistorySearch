@@ -179,6 +179,19 @@ public enum WebSocketError: LocalizedError {
     }
 }
 
+// MARK: - WebSocketClientProtocol
+
+/// Protocol abstracting WebSocket client for testability
+@MainActor
+public protocol WebSocketClientProtocol: AnyObject {
+    var state: WebSocketState { get }
+    var onMessage: ((WSMessage) -> Void)? { get set }
+    var onStateChange: ((WebSocketState) -> Void)? { get set }
+    func connect() async throws
+    func disconnect()
+    func send(_ message: WSMessage) async throws
+}
+
 /// WebSocket client for real-time communication with the server
 @MainActor
 public class WebSocketClient: ObservableObject {
@@ -377,3 +390,7 @@ public class WebSocketClient: ObservableObject {
         pingTimer = nil
     }
 }
+
+// MARK: - WebSocketClientProtocol Conformance
+
+extension WebSocketClient: WebSocketClientProtocol {}
