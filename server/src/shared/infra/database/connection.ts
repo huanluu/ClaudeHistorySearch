@@ -89,6 +89,14 @@ export function createDatabase(dbPath: string, logger: Logger): DatabaseType {
     // Column already exists, ignore
   }
 
+  // Migration: add source column for multi-agent support
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'claude'`);
+    logger.log({ msg: 'Added source column to sessions table', op: 'db.migrate' });
+  } catch {
+    // Column already exists, ignore
+  }
+
   // Create heartbeat_state table for tracking processed items
   db.exec(`
     CREATE TABLE IF NOT EXISTS heartbeat_state (

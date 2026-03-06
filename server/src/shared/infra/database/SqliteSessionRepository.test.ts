@@ -21,6 +21,7 @@ function makeSession(overrides: Partial<IndexSessionParams> = {}): IndexSessionP
     title: 'Test session summary',
     lastIndexed: now,
     isAutomatic: false,
+    source: 'claude',
     messages: [
       { role: 'human', content: 'Hello world', timestamp: now - 10000, uuid: 'msg-1' },
       { role: 'assistant', content: 'Hi there, how can I help?', timestamp: now - 5000, uuid: 'msg-2' },

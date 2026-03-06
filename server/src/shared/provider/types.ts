@@ -21,6 +21,7 @@ export interface SessionRecord {
   is_automatic: number;
   is_unread: number;
   is_hidden: number;
+  source: string;
 }
 
 export interface HeartbeatStateRecord {
@@ -63,6 +64,7 @@ export interface IndexSessionParams {
   title: string | null;
   lastIndexed: number;
   isAutomatic: boolean;
+  source: string;
   messages: Array<{ role: string; content: string; timestamp: number | null; uuid: string }>;
 }
 
@@ -97,4 +99,32 @@ export interface HeartbeatRepository {
   getState(key: string): HeartbeatStateRecord | undefined;
   upsertState(key: string, lastChanged: string, lastProcessed: number): void;
   getAllState(): HeartbeatStateRecord[];
+}
+
+// ── Parsed types (anti-corruption layer output) ─────────────────────
+
+export interface ParsedMessage {
+  uuid: string;
+  role: string;
+  content: string;
+  timestamp: number | null;
+}
+
+export interface ParsedSession {
+  sessionId: string | null;
+  project: string | null;
+  startedAt: number | null;
+  lastActivityAt: number | null;
+  preview: string | null;
+  source: string;
+  messages: ParsedMessage[];
+}
+
+// ── Session source interface (anti-corruption boundary) ─────────────
+
+export interface SessionSource {
+  readonly name: string;
+  readonly sessionDir: string;
+  readonly filePattern: string;
+  parse(filePath: string): Promise<ParsedSession>;
 }

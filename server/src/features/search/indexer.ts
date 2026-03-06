@@ -2,8 +2,7 @@ import { createReadStream, readdirSync, statSync, existsSync, readFileSync } fro
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import type { SessionRepository } from '../../shared/provider/index';
-import type { Logger } from '../../shared/provider/index';
+import type { SessionRepository, Logger, ParsedMessage, ParsedSession } from '../../shared/provider/index';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
@@ -35,22 +34,8 @@ interface SessionIndexData {
   entries?: SessionIndexEntry[];
 }
 
-// Types for parsed data
-export interface ParsedMessage {
-  uuid: string;
-  role: string;
-  content: string;
-  timestamp: number | null;
-}
-
-export interface ParsedSession {
-  sessionId: string | null;
-  project: string | null;
-  startedAt: number | null;
-  lastActivityAt: number | null;
-  preview: string | null;
-  messages: ParsedMessage[];
-}
+// Re-export domain types for backward compatibility
+export type { ParsedMessage, ParsedSession } from '../../shared/provider/index';
 
 export interface IndexResult {
   sessionId: string;
@@ -219,6 +204,7 @@ export async function parseSessionFile(filePath: string): Promise<ParsedSession>
     startedAt: earliestTimestamp,
     lastActivityAt: latestTimestamp,
     preview: firstUserMessage,
+    source: 'claude',
     messages
   };
 }
@@ -276,6 +262,7 @@ export async function indexSessionFile(
     title,
     lastIndexed: Date.now(),
     isAutomatic,
+    source: parsedSession.source,
     messages,
   });
 
