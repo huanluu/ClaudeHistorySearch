@@ -99,8 +99,8 @@ export class SqliteSessionRepository implements SessionRepository {
       getSessionLastIndexed: db.prepare(`SELECT last_indexed FROM sessions WHERE id = ?`),
 
       insertSession: db.prepare(`
-        INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
 
       insertMessage: db.prepare(`
@@ -123,7 +123,8 @@ export class SqliteSessionRepository implements SessionRepository {
         params.title,
         params.lastIndexed,
         params.isAutomatic ? 1 : 0,
-        params.isAutomatic ? 1 : 0  // is_unread: new automatic sessions are unread
+        params.isAutomatic ? 1 : 0,  // is_unread: new automatic sessions are unread
+        params.source
       );
       for (const msg of params.messages) {
         this.stmts.insertMessage.run(

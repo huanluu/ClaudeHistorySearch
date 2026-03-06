@@ -1,12 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 import { FileWatcher } from './FileWatcher';
-import type { Logger, SessionRepository } from '../../shared/provider/index';
+import type { Logger, SessionRepository, SessionSource } from '../../shared/provider/index';
 
 function createMockWatcher() {
   const emitter = new EventEmitter();
   (emitter as Record<string, unknown>).close = vi.fn(() => Promise.resolve());
   return emitter;
+}
+
+function createMockSource(name: string, dir: string, pattern: string): SessionSource {
+  return {
+    name,
+    sessionDir: dir,
+    filePattern: pattern,
+    parse: vi.fn().mockResolvedValue({
+      sessionId: 'test', project: null, startedAt: null,
+      lastActivityAt: null, preview: null, source: name, messages: [],
+    }),
+  };
 }
 
 describe('FileWatcher', () => {
@@ -15,6 +27,8 @@ describe('FileWatcher', () => {
   let mockIndexFn: ReturnType<typeof vi.fn>;
   let mockRepo: SessionRepository;
   let mockLogger: Logger;
+  let claudeSource: SessionSource;
+  let copilotSource: SessionSource;
 
   beforeEach(() => {
     mockWatcher = createMockWatcher();
@@ -25,76 +39,92 @@ describe('FileWatcher', () => {
       log: vi.fn(),
       error: vi.fn(),
     } as unknown as Logger;
+    claudeSource = createMockSource('claude', '/projects', '**/*.jsonl');
+    copilotSource = createMockSource('copilot', '/copilot-history', '*.json');
   });
 
   it('isActive() returns false before start()', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     expect(fw.isActive()).toBe(false);
   });
 
   it('start() sets isActive() to true', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
     expect(fw.isActive()).toBe(true);
   });
 
-  it('start() calls watchFn with correct glob pattern', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+  it('start() creates a watcher per source with correct glob', () => {
+    const fw = new FileWatcher([claudeSource, copilotSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
+    expect(mockWatchFn).toHaveBeenCalledTimes(2);
     expect(mockWatchFn).toHaveBeenCalledWith(
       '/projects/**/*.jsonl',
+      expect.objectContaining({ persistent: true, ignoreInitial: true }),
+    );
+    expect(mockWatchFn).toHaveBeenCalledWith(
+      '/copilot-history/*.json',
       expect.objectContaining({ persistent: true, ignoreInitial: true }),
     );
   });
 
   it('calling start() twice is idempotent', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
     fw.start();
     expect(mockWatchFn).toHaveBeenCalledTimes(1);
   });
 
   it('stop() sets isActive() to false', async () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
     await fw.stop();
     expect(fw.isActive()).toBe(false);
   });
 
-  it('stop() calls watcher.close()', async () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+  it('stop() calls close() on all watchers', async () => {
+    const watcher1 = createMockWatcher();
+    const watcher2 = createMockWatcher();
+    let callCount = 0;
+    const watchFn = vi.fn(() => {
+      callCount++;
+      return callCount === 1 ? watcher1 : watcher2;
+    });
+
+    const fw = new FileWatcher([claudeSource, copilotSource], mockRepo, mockLogger, mockIndexFn, watchFn as ReturnType<typeof vi.fn>);
     fw.start();
     await fw.stop();
-    expect(mockWatcher.close).toHaveBeenCalled();
+    expect(watcher1.close).toHaveBeenCalled();
+    expect(watcher2.close).toHaveBeenCalled();
   });
 
   it('stop() on unstarted watcher is a no-op', async () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     await expect(fw.stop()).resolves.toBeUndefined();
   });
 
-  it('file change event triggers indexFn with correct args', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+  it('file change event triggers indexFn with correct source', () => {
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
     mockWatcher.emit('change', '/path/to/file.jsonl');
-    expect(mockIndexFn).toHaveBeenCalledWith('/path/to/file.jsonl', true, mockRepo, mockLogger);
+    expect(mockIndexFn).toHaveBeenCalledWith('/path/to/file.jsonl', true, claudeSource, mockRepo, mockLogger);
   });
 
   it('file add event triggers indexFn with forceReindex=false', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
     mockWatcher.emit('add', '/path/to/file.jsonl');
-    expect(mockIndexFn).toHaveBeenCalledWith('/path/to/file.jsonl', false, mockRepo, mockLogger);
+    expect(mockIndexFn).toHaveBeenCalledWith('/path/to/file.jsonl', false, claudeSource, mockRepo, mockLogger);
   });
 
-  it('watcher error event is logged', () => {
-    const fw = new FileWatcher('/projects', mockRepo, mockLogger, mockIndexFn, mockWatchFn);
+  it('watcher error event is logged with source name', () => {
+    const fw = new FileWatcher([claudeSource], mockRepo, mockLogger, mockIndexFn, mockWatchFn);
     fw.start();
     const testError = new Error('EMFILE: too many open files');
     mockWatcher.emit('error', testError);
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
-        msg: 'File watcher error',
+        msg: 'File watcher error (claude)',
         op: 'filewatcher.error',
         err: testError,
       }),

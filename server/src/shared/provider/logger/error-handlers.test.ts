@@ -127,20 +127,21 @@ describe('Global error handlers', () => {
     });
 
     it('logs chokidar errors instead of crashing', async () => {
-      const fileWatcher = new FileWatcher(watchDir, repo, logger);
+      const mockSource = { name: 'claude', sessionDir: watchDir, filePattern: '**/*.jsonl', parse: vi.fn() };
+      const fileWatcher = new FileWatcher([mockSource], repo, logger);
       fileWatcher.start();
 
       // Emit an error on the internal chokidar watcher
-      const internalWatcher = (fileWatcher as Record<string, unknown>).watcher as { emit: (event: string, error: Error) => void };
-      internalWatcher.emit('error', new Error('EMFILE: too many open files'));
+      const internalWatchers = (fileWatcher as Record<string, unknown>).watchers as Array<{ emit: (event: string, error: Error) => void }>;
+      internalWatchers[0].emit('error', new Error('EMFILE: too many open files'));
 
       const lines = readLogLines(logPath);
-      // Find the error line (start() also logs a 'Watching for file changes...' line)
-      const errorLine = lines.find(l => l.msg === 'File watcher error');
+      // Find the error line (start() also logs a 'Watching...' line)
+      const errorLine = lines.find(l => l.msg === 'File watcher error (claude)');
       expect(errorLine).toBeDefined();
       expect(errorLine).toMatchObject({
         level: 'ERROR',
-        msg: 'File watcher error',
+        msg: 'File watcher error (claude)',
         op: 'filewatcher.error',
         err: 'EMFILE: too many open files',
       });

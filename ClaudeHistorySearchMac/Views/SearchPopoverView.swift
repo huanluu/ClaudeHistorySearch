@@ -197,7 +197,7 @@ struct SearchPopoverView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
 
-            TextField("Search Claude sessions...", text: $searchText)
+            TextField("Search sessions...", text: $searchText)
                 .textFieldStyle(.plain)
                 .focused($isSearchFieldFocused)
                 .onSubmit {

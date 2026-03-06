@@ -74,7 +74,8 @@ function setupDatabase(): void {
       title TEXT,
       last_indexed INTEGER,
       is_automatic INTEGER DEFAULT 0,
-      is_unread INTEGER DEFAULT 0
+      is_unread INTEGER DEFAULT 0,
+      source TEXT DEFAULT 'claude'
     );
 
     CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project);
@@ -96,8 +97,8 @@ function setupDatabase(): void {
 
   // Prepare statements
   insertSession = db.prepare(`
-    INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO sessions (id, project, started_at, last_activity_at, message_count, preview, title, last_indexed, is_automatic, is_unread, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insertMessage = db.prepare(`
@@ -182,7 +183,8 @@ function seedTestData(): void {
     'React Component Tutorial',
     now,
     0,  // is_automatic
-    0   // is_unread
+    0,  // is_unread
+    'claude'
   );
 
   insertMessage.run('session-react-001', 'user', 'How do I create a React component?', now - 86400000, 'msg-001');
@@ -201,7 +203,8 @@ function seedTestData(): void {
     'Python Debugging Session',
     now,
     0,  // is_automatic
-    0   // is_unread
+    0,  // is_unread
+    'claude'
   );
 
   insertMessage.run('session-python-002', 'user', 'Why is my Python code throwing an error? I get TypeError: cannot unpack non-iterable NoneType object', now - 172800000, 'msg-005');
@@ -218,7 +221,8 @@ function seedTestData(): void {
     'JavaScript Async Tutorial',
     now,
     0,  // is_automatic
-    0   // is_unread
+    0,  // is_unread
+    'claude'
   );
 
   insertMessage.run('session-js-003', 'user', 'How do async/await work in JavaScript?', now - 3600000, 'msg-007');
@@ -226,15 +230,15 @@ function seedTestData(): void {
   insertMessage.run('session-js-003', 'user', 'What about error handling?', now - 3500000, 'msg-009');
 
   // Session 4: PPT-only content (for FTS false-positive regression test)
-  insertSession.run('session-ppt-only', '/test/ppt-project', now - 7200000, now - 7100000, 1, 'PPT session', 'PPT Session', now, 0, 0);
+  insertSession.run('session-ppt-only', '/test/ppt-project', now - 7200000, now - 7100000, 1, 'PPT session', 'PPT Session', now, 0, 0, 'claude');
   insertMessage.run('session-ppt-only', 'assistant', 'Edit PPTAppDelegate.mm to fix the PowerPoint issue', now - 7200000, 'msg-010');
 
   // Session 5: PPS content (for FTS false-positive regression test)
-  insertSession.run('session-pps-real', '/test/pps-project', now - 7200000, now - 7100000, 1, 'PPS session', 'PPS Session', now, 0, 0);
+  insertSession.run('session-pps-real', '/test/pps-project', now - 7200000, now - 7100000, 1, 'PPS session', 'PPS Session', now, 0, 0, 'claude');
   insertMessage.run('session-pps-real', 'assistant', 'The pps file format is used for slideshows', now - 7200000, 'msg-011');
 
   // Session 6: Word matching test data — contains "actionable", "interaction", "act"
-  insertSession.run('session-words', '/test/words', now - 5000000, now - 4900000, 3, 'Word tests', 'Word Match Tests', now, 0, 0);
+  insertSession.run('session-words', '/test/words', now - 5000000, now - 4900000, 3, 'Word tests', 'Word Match Tests', now, 0, 0, 'claude');
   insertMessage.run('session-words', 'assistant', 'Create actionable items from the review', now - 5000000, 'msg-012');
   insertMessage.run('session-words', 'user', 'How do I act on the interaction feedback?', now - 4950000, 'msg-013');
   insertMessage.run('session-words', 'assistant', 'Use the transaction log to track reactive changes', now - 4900000, 'msg-014');
@@ -261,6 +265,7 @@ describe('Database Schema', () => {
     expect(columnNames).toContain('preview');
     expect(columnNames).toContain('title');
     expect(columnNames).toContain('last_indexed');
+    expect(columnNames).toContain('source');
   });
 
   it('should create FTS5 virtual table for messages', () => {
@@ -438,13 +443,13 @@ describe('Session Message Management', () => {
     const now = Date.now();
 
     // Insert a session
-    insertSession.run('session-upsert', '/test', now, now, 1, 'preview', 'Original Title', now, 0, 0);
+    insertSession.run('session-upsert', '/test', now, now, 1, 'preview', 'Original Title', now, 0, 0, 'claude');
 
     let session = getSessionById.get('session-upsert');
     expect(session!.title).toBe('Original Title');
 
     // Update the same session
-    insertSession.run('session-upsert', '/test', now, now, 2, 'updated preview', 'Updated Title', now, 0, 0);
+    insertSession.run('session-upsert', '/test', now, now, 2, 'updated preview', 'Updated Title', now, 0, 0, 'claude');
 
     session = getSessionById.get('session-upsert');
     expect(session!.title).toBe('Updated Title');

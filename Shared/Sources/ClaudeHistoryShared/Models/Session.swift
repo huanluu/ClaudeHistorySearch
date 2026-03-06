@@ -9,8 +9,9 @@ public struct Session: Identifiable, Codable, Hashable, Sendable {
     public let title: String?
     public let isAutomatic: Bool?
     public let isUnread: Bool?
+    public let source: String?
 
-    public init(id: String, project: String, startedAt: Int64, messageCount: Int, preview: String, title: String? = nil, isAutomatic: Bool? = nil, isUnread: Bool? = nil) {
+    public init(id: String, project: String, startedAt: Int64, messageCount: Int, preview: String, title: String? = nil, isAutomatic: Bool? = nil, isUnread: Bool? = nil, source: String? = nil) {
         self.id = id
         self.project = project
         self.startedAt = startedAt
@@ -19,6 +20,7 @@ public struct Session: Identifiable, Codable, Hashable, Sendable {
         self.title = title
         self.isAutomatic = isAutomatic
         self.isUnread = isUnread
+        self.source = source
     }
 
     public var startedAtDate: Date {
