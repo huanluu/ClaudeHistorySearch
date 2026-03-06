@@ -39,6 +39,7 @@ describe('createApp integration', () => {
       logPath: join(tmpDir, 'test.log'),
 
       skipBonjour: true,
+      sessionSources: [],
     });
     await app.start();
 
@@ -60,6 +61,7 @@ describe('createApp integration', () => {
       logPath: join(tmpDir, 'test.log'),
 
       skipBonjour: true,
+      sessionSources: [],
     });
     await app.start();
     await app.stop();

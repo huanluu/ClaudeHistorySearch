@@ -2,7 +2,7 @@ import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
 import { Router } from 'express';
 import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/infra/database/index';
-import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './shared/provider/index';
+import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions, type SessionSource } from './shared/provider/index';
 import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQuerySchema, SessionsQuerySchema, ConfigUpdateBodySchema } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
@@ -18,6 +18,7 @@ export interface AppConfig {
   dbPath?: string;
   logPath?: string;
   skipBonjour?: boolean;
+  sessionSources?: SessionSource[];
 }
 
 export interface App {
@@ -70,7 +71,7 @@ export function createApp(config: AppConfig): App {
   const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger);
 
   // --- Session sources (multi-agent) ---
-  const sessionSources = [new ClaudeSessionSource(), new CopilotSessionSource()];
+  const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
   const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger);
   const agentStore = new AgentStore(logger, (id, log) => new AgentExecutor(id, log));
 

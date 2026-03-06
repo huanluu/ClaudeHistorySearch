@@ -1,6 +1,6 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { copyFileSync, mkdirSync, rmSync } from 'fs';
+import { copyFileSync, mkdirSync, rmSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { parseSessionFile, type ParsedSession, detectAutomaticSession, indexSessionFile } from './indexer';
 import { createDatabase, createSessionRepository } from '../../shared/infra/database/index';
@@ -313,11 +313,14 @@ describe('indexSessionFile', () => {
 
   it('skips already-indexed files when forceReindex is false', async () => {
     const fixturePath = join(FIXTURES_DIR, 'sample-session.jsonl');
-    // File must be named with the sessionId so getSessionLastIndexed(fileName) finds it
     const testFile = join(tmpDir, 'test-session-001.jsonl');
     copyFileSync(fixturePath, testFile);
 
-    // First index
+    // Set file mtime to 1 second in the past so last_indexed (Date.now()) is always greater
+    const pastTime = new Date(Date.now() - 1000);
+    utimesSync(testFile, pastTime, pastTime);
+
+    // First index — stores session with last_indexed = Date.now()
     const first = await indexSessionFile(testFile, false, source, repo, noopLogger);
     expect(first).not.toBeNull();
 
