@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { indexSessionFile } from './indexer';
-import type { SessionRepository } from '../../shared/database/index';
+import type { SessionRepository } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
 
 /**

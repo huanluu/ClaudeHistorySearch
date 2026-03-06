@@ -1,6 +1,5 @@
-import { WebSocketTransport, type AuthenticatedWebSocket, type WSMessage, AgentStore } from '../src/features/live/index';
-import { AgentExecutor } from '../src/shared/runtime/index';
-import { HttpTransport } from '../src/shared/transport/index';
+import { WebSocketGateway, HttpTransport } from '../src/gateway/index';
+import type { WSMessage } from '../src/gateway/index';
 import WebSocket from 'ws';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -45,9 +44,9 @@ function removeTestApiKey(): void {
   }
 }
 
-describe('WebSocketTransport', () => {
+describe('WebSocketGateway', () => {
   let httpTransport: HttpTransport;
-  let wsTransport: WebSocketTransport;
+  let wsGateway: WebSocketGateway;
   let testApiKey: string;
   let serverPort: number;
 
@@ -64,7 +63,7 @@ describe('WebSocketTransport', () => {
   });
 
   afterAll(async () => {
-    await wsTransport?.stop();
+    await wsGateway?.stop();
     await httpTransport?.stop();
     rmSync(TEST_CONFIG_DIR, { recursive: true, force: true });
   });
@@ -72,19 +71,19 @@ describe('WebSocketTransport', () => {
   describe('constructor and start', () => {
     it('should initialize with isRunning false', () => {
       const server = httpTransport.getServer()!;
-      const transport = new WebSocketTransport({ server, logger: noopLogger, sessionStore: new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log)) });
-      expect(transport.isRunning).toBe(false);
+      const gateway = new WebSocketGateway({ server, logger: noopLogger });
+      expect(gateway.isRunning).toBe(false);
     });
 
     it('should start and set isRunning to true', () => {
       const server = httpTransport.getServer()!;
-      wsTransport = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log)) });
-      wsTransport.start();
-      expect(wsTransport.isRunning).toBe(true);
+      wsGateway = new WebSocketGateway({ server, path: '/ws', logger: noopLogger });
+      wsGateway.start();
+      expect(wsGateway.isRunning).toBe(true);
     });
 
     it('should throw if started twice', () => {
-      expect(() => wsTransport.start()).toThrow('WebSocket transport is already running');
+      expect(() => wsGateway.start()).toThrow('WebSocket gateway is already running');
     });
   });
 
@@ -94,7 +93,6 @@ describe('WebSocketTransport', () => {
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`);
 
         ws.on('error', () => {
-          // Expected - connection rejected
           resolve();
         });
 
@@ -103,7 +101,6 @@ describe('WebSocketTransport', () => {
           reject(new Error('Should not connect without API key'));
         });
 
-        // Timeout for connection attempt
         setTimeout(() => {
           ws.close();
           resolve();
@@ -116,7 +113,6 @@ describe('WebSocketTransport', () => {
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=invalid-key`);
 
         ws.on('error', () => {
-          // Expected - connection rejected
           resolve();
         });
 
@@ -178,7 +174,6 @@ describe('WebSocketTransport', () => {
 
           if (message.type === 'auth_result') {
             authReceived = true;
-            // Send ping
             ws.send(JSON.stringify({ type: 'ping', id: 'test-ping-1' }));
           } else if (message.type === 'pong') {
             expect(authReceived).toBe(true);
@@ -198,8 +193,6 @@ describe('WebSocketTransport', () => {
   describe('message handling', () => {
     it('should handle custom message types via ping/pong', () => {
       return new Promise<void>((resolve, reject) => {
-        // Test using the existing wsTransport's ping/pong (which is already covered)
-        // This test verifies the message parsing and response mechanism
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${testApiKey}`);
         let authReceived = false;
 
@@ -208,10 +201,8 @@ describe('WebSocketTransport', () => {
 
           if (message.type === 'auth_result') {
             authReceived = true;
-            // Send a custom ping with ID
             ws.send(JSON.stringify({ type: 'ping', id: 'custom-ping-123' }));
           } else if (message.type === 'pong' && authReceived) {
-            // Verify the pong contains our custom ID
             expect(message.id).toBe('custom-ping-123');
             ws.close();
             resolve();
@@ -234,16 +225,13 @@ describe('WebSocketTransport', () => {
           const message = JSON.parse(data.toString()) as WSMessage;
 
           if (message.type === 'auth_result') {
-            // Client is now fully registered - check that count is at least 1
-            expect(wsTransport.getClientCount()).toBeGreaterThanOrEqual(1);
+            expect(wsGateway.getClientCount()).toBeGreaterThanOrEqual(1);
 
-            // Save current count before closing
-            const countBeforeClose = wsTransport.getClientCount();
+            const countBeforeClose = wsGateway.getClientCount();
             ws.close();
 
-            // After close, count should decrease (with small delay for cleanup)
             setTimeout(() => {
-              expect(wsTransport.getClientCount()).toBeLessThan(countBeforeClose);
+              expect(wsGateway.getClientCount()).toBeLessThan(countBeforeClose);
               resolve();
             }, 100);
           }
@@ -280,8 +268,7 @@ describe('WebSocketTransport', () => {
           if (message.type === 'auth_result') {
             client1Auth = true;
             if (client1Auth && client2Auth) {
-              // Both connected, broadcast
-              wsTransport.broadcast({ type: 'message', payload: { broadcast: true } });
+              wsGateway.broadcast({ type: 'message', payload: { broadcast: true } });
             }
           } else if (message.type === 'message') {
             expect((message.payload as { broadcast: boolean }).broadcast).toBe(true);
@@ -295,7 +282,7 @@ describe('WebSocketTransport', () => {
           if (message.type === 'auth_result') {
             client2Auth = true;
             if (client1Auth && client2Auth) {
-              wsTransport.broadcast({ type: 'message', payload: { broadcast: true } });
+              wsGateway.broadcast({ type: 'message', payload: { broadcast: true } });
             }
           } else if (message.type === 'message') {
             expect((message.payload as { broadcast: boolean }).broadcast).toBe(true);
@@ -314,9 +301,8 @@ describe('WebSocketTransport', () => {
     it('should allow connections when no API key is configured', async () => {
       removeTestApiKey();
 
-      // Create new transports without auth
       const noAuthHttp = new HttpTransport({ port: 0 });
-      let noAuthWs: WebSocketTransport | undefined;
+      let noAuthWs: WebSocketGateway | undefined;
 
       try {
         await noAuthHttp.start();
@@ -324,7 +310,7 @@ describe('WebSocketTransport', () => {
         const server = noAuthHttp.getServer()!;
         const address = server.address() as { port: number };
 
-        noAuthWs = new WebSocketTransport({ server, path: '/ws', logger: noopLogger, sessionStore: new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log)) });
+        noAuthWs = new WebSocketGateway({ server, path: '/ws', logger: noopLogger });
         noAuthWs.start();
 
         await new Promise<void>((resolve, reject) => {
@@ -343,7 +329,6 @@ describe('WebSocketTransport', () => {
       } finally {
         await noAuthWs?.stop();
         await noAuthHttp.stop();
-        // Restore API key for other tests
         testApiKey = createTestApiKey();
       }
     });

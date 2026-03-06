@@ -2,7 +2,7 @@ import { createReadStream, readdirSync, statSync, existsSync, readFileSync } fro
 import { createInterface } from 'readline';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import type { SessionRepository } from '../../shared/database/index';
+import type { SessionRepository } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');

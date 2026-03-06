@@ -1,4 +1,4 @@
-import type { SessionRepository, DatabaseStats } from '../../shared/database/index';
+import type { SessionRepository, DatabaseStats } from '../../shared/provider/index';
 import type { ErrorRingBuffer } from '../../shared/provider/index';
 import type { FileWatcher } from '../search/index';
 import type { HeartbeatService } from '../scheduler/index';

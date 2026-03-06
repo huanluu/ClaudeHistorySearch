@@ -1,3 +1,8 @@
+export { getConfigDir } from './config';
+export type {
+  SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord,
+  IndexSessionParams, SessionRepository, DatabaseStats, HeartbeatRepository,
+} from './types';
 export { authMiddleware } from './auth/index';
 export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './auth/index';
 export { WorkingDirValidator } from './security/index';

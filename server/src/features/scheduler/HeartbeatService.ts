@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { execSync, spawn, type ChildProcess } from 'child_process';
+import { getConfigDir } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/database/index';
+import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
 
 /**
  * Configuration for the heartbeat service
@@ -80,13 +80,6 @@ const defaultExecutor: CommandExecutor = {
     return spawn(command, args, options);
   }
 };
-
-/**
- * Default configuration directory
- */
-export function getConfigDir(): string {
-  return join(homedir(), '.claude-history-server');
-}
 
 /**
  * HeartbeatService reads HEARTBEAT.md and executes enabled tasks periodically.

@@ -80,7 +80,7 @@ describe('Scorecard: Architecture Invariants', () => {
   // Scorecard ARCH-INV-2: Barrel Encapsulation
   // See: scorecard/SCORECARD.md § Architecture > Invariants > ARCH-INV-2
   describe('ARCH-INV-2: Barrel Encapsulation', () => {
-    const modules = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
+    const modules = ['shared/provider', 'shared/infra/database', 'shared/infra/runtime', 'gateway', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
 
     for (const mod of modules) {
       it(`${mod}/ has an index.ts barrel file`, () => {
@@ -159,7 +159,7 @@ describe('Scorecard: Architecture Invariants', () => {
     const violations: Array<{ file: string; line: number; match: string }> = [];
 
     // Modules whose classes are cross-module (exported from barrels)
-    const moduleNames = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
+    const moduleNames = ['shared/provider', 'shared/infra/database', 'shared/infra/runtime', 'gateway', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
 
     // Helper to determine which module a file belongs to (2-level paths)
     function getFileModule(relFile: string): string {
@@ -227,7 +227,7 @@ describe('Scorecard: Architecture Invariants', () => {
     // be an `interface Foo` or a corresponding interface type elsewhere in the module.
     const allFiles = collectTsFiles(SRC_DIR);
     const violations: Array<{ module: string; className: string }> = [];
-    const moduleNames = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
+    const moduleNames = ['shared/provider', 'shared/infra/database', 'shared/infra/runtime', 'gateway', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
 
     for (const mod of moduleNames) {
       const barrelPath = join(SRC_DIR, mod, 'index.ts');
@@ -355,6 +355,16 @@ describe('Scorecard: Architecture Invariants', () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  // ─── ARCH-INV-8: Domain Types File Contains Only Types ────────────
+  // shared/provider/types.ts must only contain interfaces and type aliases,
+  // never variables, functions, or classes. This is enforced here rather than
+  // ESLint to avoid no-restricted-syntax rule conflicts.
+  it('ARCH-INV-8: types.ts exports only types', () => {
+    const typesPath = join(SRC_DIR, 'shared/provider/types.ts');
+    const content = readFileSync(typesPath, 'utf-8');
+    expect(content).not.toMatch(/^export (const|let|var|function|class|default) /m);
   });
 });
 
@@ -1066,7 +1076,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   // Scorecard CQ-INV-2: No Dead Public Exports
   // See: scorecard/SCORECARD.md § Code Quality > Invariants > CQ-INV-2
   it.fails('CQ-INV-2: No dead barrel exports — every export has a consumer', () => {
-    const modules = ['shared/provider', 'shared/database', 'shared/transport', 'shared/runtime', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
+    const modules = ['shared/provider', 'shared/infra/database', 'shared/infra/runtime', 'gateway', 'features/search', 'features/live', 'features/scheduler', 'features/admin'];
     const deadExports: Array<{ module: string; exportName: string }> = [];
 
     // Collect all consumer files grouped by module

@@ -1,16 +1,11 @@
 import { randomBytes, createHash } from 'crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getConfigDir } from '../config';
 
 interface Config {
   apiKeyHash?: string;
   apiKeyCreatedAt?: string;
-}
-
-// Dynamic config path to support testing via env var
-function getConfigDir(): string {
-  return process.env.CLAUDE_HISTORY_CONFIG_DIR || join(homedir(), '.claude-history-server');
 }
 
 function getConfigFile(): string {

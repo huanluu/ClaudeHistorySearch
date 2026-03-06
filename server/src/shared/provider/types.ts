@@ -1,4 +1,57 @@
-import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord } from './connection';
+/**
+ * Domain contracts — types and interfaces shared across features.
+ * This file must only contain types/interfaces, never values.
+ *
+ * Features import these to define their dependencies.
+ * Infra (shared/infra/) implements the repository interfaces.
+ * Composition root (app.ts) wires implementations to features.
+ */
+
+// ── Record types (database row shapes) ─────────────────────────────
+
+export interface SessionRecord {
+  id: string;
+  project: string;
+  started_at: number;
+  last_activity_at: number | null;
+  message_count: number;
+  preview: string | null;
+  title: string | null;
+  last_indexed: number | null;
+  is_automatic: number;
+  is_unread: number;
+  is_hidden: number;
+}
+
+export interface HeartbeatStateRecord {
+  key: string;
+  last_changed: string | null;
+  last_processed: number | null;
+}
+
+export interface MessageRecord {
+  session_id: string;
+  role: string;
+  content: string;
+  timestamp: number | null;
+  uuid: string;
+}
+
+export interface SearchResultRecord extends MessageRecord {
+  project: string;
+  started_at: number;
+  title: string | null;
+  highlighted_content: string;
+  rank: number;
+}
+
+export interface LastIndexedRecord {
+  last_indexed: number | null;
+}
+
+export type SortOption = 'relevance' | 'date';
+
+// ── Repository interfaces ──────────────────────────────────────────
 
 export interface IndexSessionParams {
   sessionId: string;

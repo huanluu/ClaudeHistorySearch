@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { createLogger } from '../src/shared/provider/index';
 import type { Logger } from '../src/shared/provider/index';
 import { FileWatcher } from '../src/features/search/index';
-import type { SessionRepository } from '../src/shared/database/index';
+import type { SessionRepository } from '../src/shared/provider/index';
 
 let testDir: string;
 let logPath: string;

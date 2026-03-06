@@ -1,5 +1,5 @@
 import { type Router, type Request, type Response } from 'express';
-import type { SessionRepository, SortOption } from '../../shared/database/index';
+import type { SessionRepository, SortOption } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
 import { indexAllSessions } from './indexer';
 import type { IndexAllResult } from './indexer';

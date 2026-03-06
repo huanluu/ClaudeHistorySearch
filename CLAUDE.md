@@ -242,13 +242,24 @@ For server test conventions, see `server/CLAUDE.md`.
 - Feature branches: `feature/{description}`, fix branches: `fix/{description}`
 - `main` is always deployable — the launchd agent runs from it
 
-## Code Review Gate
+## Code Review Gate — CRITICAL
+
+**EVERY commit MUST go through `/agent-code-review`.** No exceptions, no shortcuts, no "it's just a config change."
 
 A PreToolUse hook (`.claude/hooks/check-code-review.sh`) blocks `git commit` unless staged changes have been reviewed. The hook checks for a `.code-reviewed` marker file containing a shasum of the reviewed diff.
 
-- **If the hook blocks your commit**: Run `/agent-code-review` to review the staged changes. The skill spawns a review subagent, fixes critical findings, and writes the `.code-reviewed` marker.
+**The ONLY way to create the `.code-reviewed` marker is by running `/agent-code-review`.** This skill:
+1. Checks for staged changes
+2. Spawns a review subagent to find bugs, security issues, and architecture violations
+3. Fixes critical findings automatically
+4. Writes the `.code-reviewed` marker with the correct hash
+
+**Rules:**
+- **Before EVERY commit**: Run `/agent-code-review`. Period.
+- **If the hook blocks your commit**: You forgot to run `/agent-code-review`. Run it now.
 - **If you re-stage files after review** (e.g., fixing a critical finding): Run `/agent-code-review` again — the marker hash must match the current staged diff.
-- **Do not bypass this gate.** Never manually create the `.code-reviewed` file or skip the hook with `--no-verify`.
+- **NEVER manually create the `.code-reviewed` file.** Never `echo hash > .code-reviewed`. Never `shasum > .code-reviewed`. The skill must do it.
+- **NEVER skip the hook** with `--no-verify`.
 
 ## Worktree Discipline
 
