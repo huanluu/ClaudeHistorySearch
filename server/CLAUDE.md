@@ -16,48 +16,108 @@ npm run key:generate   # Generate API key (destructive — invalidates existing 
 
 **Do NOT run `npm start` or `npm run dev` as an agent** — they start long-lived processes that die with the Claude Code session. The production server is managed by launchd (see Server Management below). For testing worktree changes, see "Testing Server from a Worktree".
 
-## Feature-First Architecture (ESLint-Enforced)
+## Layered Architecture (ESLint-Enforced)
 
-The server is organized by **feature** (vertical slices) with shared infrastructure:
+The server has 4 layers with strict dependency rules:
 
 ```
-shared/provider → shared/database → shared/runtime
-         ↓               ↓               ↓
-    features/search, features/live, features/scheduler, features/admin
-                              ↓
-                           app.ts (composition root)
+shared/provider     (utility: types, contracts, auth, logging)
+       ↓ imported by all layers
+       ├── gateway/          (HTTP + WS protocol, client communication)
+       ├── shared/infra/     (database, CLI runtime — effectful adapters)
+       └── features/*        (business logic, handler registration)
+                ↓
+             app.ts          (composition root — wires everything)
 ```
+
+### Dependency Rules (ESLint-enforced)
+
+| From → To | provider | infra | gateway | features | app.ts |
+|-----------|:--------:|:-----:|:-------:|:--------:|:------:|
+| **provider** | — | NO | NO | NO | — |
+| **infra** | YES | — | NO | NO | — |
+| **gateway** | YES | NO | — | NO | — |
+| **features** | YES | **NEVER** | type-only | type-only cross-feature | — |
+| **app.ts** | YES | YES | YES | YES | — |
+
+### Where to Put New Code
+
+| I need to... | Put it in... |
+|-------------|-------------|
+| Add a new REST endpoint | `features/X/routes.ts` → register with HTTP router |
+| Add a new WebSocket message type | `gateway/protocol.ts` (type) + `features/X/handlers.ts` (handler) |
+| Add a new CLI runtime (e.g., Copilot CLI) | `shared/infra/runtime/` (implementation) + port interface in consuming feature |
+| Add a new database table/query | `shared/provider/types.ts` (interface) + `shared/infra/database/` (implementation) |
+| Add a utility function | `shared/provider/` |
+| Push a notification to the Mac app | Feature calls `eventBus.broadcast()` (injected from gateway via app.ts) |
+| Add a new workflow type | `features/workflows/` (handler + config) |
+
+### Key Contracts
+
+| Contract | File | Between | Defines |
+|----------|------|---------|---------|
+| Wire protocol | `gateway/protocol.ts` | Server ↔ Client (Mac app) | All message types, payload shapes |
+| Gateway interface | `gateway/types.ts` | Gateway ↔ Features | Handler registration, send/broadcast, client lifecycle hooks |
+| Domain types | `shared/provider/types.ts` | Features ↔ Infra | SessionRepository, HeartbeatRepository, record types (types only, no values) |
+| Feature ports | `features/*/index.ts` | Feature ↔ Infra | Per-feature interfaces (e.g., `AgentExecutorPort` in features/live) |
+
+### Gateway
+
+| File | Purpose |
+|------|---------|
+| `gateway/protocol.ts` | All wire format message types — single source of truth |
+| `gateway/types.ts` | Gateway interface types (`WsHandler`, `WsGateway`, `AuthenticatedClient`) |
+| `gateway/HttpTransport.ts` | Express setup, middleware, HTTP route registration |
+| `gateway/WebSocketGateway.ts` | WS setup, auth, connections, message routing by type |
 
 ### Shared Modules
 
 | Module | Purpose | Can Import |
 |--------|---------|------------|
-| `shared/provider/` | Cross-cutting: logger, auth, security | Nothing |
-| `shared/database/` | Data access: SQLite, FTS5, repository interfaces + implementations | `shared/provider` |
-| `shared/transport/` | HTTP server infrastructure: Express, Transport base class | `shared/provider` |
-| `shared/runtime/` | Agent execution: `AgentExecutor` spawns headless `claude -p` processes | `shared/provider` |
+| `shared/provider/` | Utilities + domain type contracts | Nothing (base layer) |
+| `shared/provider/types.ts` | Types/interfaces only — SessionRepository, record types | Nothing |
+| `shared/infra/database/` | SQLite implementations of repository contracts | `shared/provider` (strict barrel) |
+| `shared/infra/runtime/` | CLI runtime adapters (AgentExecutor) | `shared/provider` (strict barrel) |
 
 ### Feature Modules
 
 | Module | Purpose | Key Files |
 |--------|---------|-----------|
 | `features/search/` | Session indexing, FTS5 search, file watching | `indexer.ts`, `FileWatcher.ts`, `routes.ts` |
-| `features/live/` | Interactive agent sessions via WebSocket | `AgentStore.ts`, `WebSocketTransport.ts` |
-| `features/scheduler/` | Autonomous agent runs on a schedule (ADO work items) | `HeartbeatService.ts`, `routes.ts` |
-| `features/admin/` | Observability, config management, admin UI | `DiagnosticsService.ts`, `ConfigService.ts`, `routes.ts` |
+| `features/live/` | Interactive agent sessions | `AgentStore.ts`, `handlers.ts` (registers WS handlers) |
+| `features/scheduler/` | Autonomous agent runs on a schedule | `HeartbeatService.ts`, `routes.ts` |
+| `features/admin/` | Observability, config management | `DiagnosticsService.ts`, `ConfigService.ts`, `routes.ts` |
 
 ### Root Files
 
 | File | Purpose |
 |------|---------|
 | `index.ts` | Entry point, signal handlers, error safety net |
-| `app.ts` | Composition root — wires shared + features, only place for cross-module `new` |
+| `app.ts` | Composition root — wires gateway + features + infra, only place for cross-module `new` |
+
+### Feature Registration Pattern
+
+Features export registration functions. `app.ts` calls them, passing gateway interfaces and dependencies:
+
+```typescript
+// features/search/routes.ts — HTTP handlers
+export function registerSearchRoutes(router, deps: SearchDeps) { ... }
+
+// features/live/handlers.ts — WebSocket handlers
+export function registerLiveHandlers(gateway: WsGateway, deps: LiveDeps) {
+  gateway.on('session.start', (client, payload) => { ... });
+  gateway.onDisconnect((client) => { /* cleanup */ });
+}
+```
+
+Features receive narrow interfaces — never the full gateway or infra internals.
 
 **Key rules (enforced by ESLint + scorecard):**
-- Features import from `shared/`, never from each other (type-only cross-feature imports allowed)
+- Features NEVER import from `shared/infra/` — use interfaces from `shared/provider/` and receive implementations via injection
+- Features can only `import type` from `gateway/` — receive gateway dependencies via injection
 - All cross-module imports go through `index.ts` barrels
 - No circular dependencies
-- Each feature exports `registerXxxRoutes(router, deps)` — `app.ts` calls all of them
+- `shared/provider/types.ts` must only contain types/interfaces (enforced by scorecard test)
 
 Violations cause ESLint errors. The scorecard test (`tests/scorecard.test.ts`) also validates at test time.
 
@@ -66,14 +126,17 @@ Violations cause ESLint errors. The scorecard test (`tests/scorecard.test.ts`) a
 Every module has an `index.ts` barrel as its public API. **All cross-module imports must go through barrels** (enforced by ESLint):
 
 ```typescript
-// BEST — type-only import
-import type { SessionRepository } from '../../shared/database/index';
+// BEST — type-only import from provider
+import type { SessionRepository } from '../../shared/provider/index';
 
-// OK — value import from barrel
-import { createSessionRepository } from '../../shared/database/index';
+// OK — value import from infra barrel (only in app.ts)
+import { createSessionRepository } from '../../shared/infra/database/index';
 
 // WRONG — bypasses barrel, ESLint error
-import { SqliteSessionRepository } from '../../shared/database/SqliteSessionRepository';
+import { SqliteSessionRepository } from '../../shared/infra/database/SqliteSessionRepository';
+
+// WRONG — features cannot import from shared/infra at all
+import type { SessionRepository } from '../../shared/infra/database/index'; // use shared/provider
 ```
 
 Barrel files are exempt from this rule since they wire internal imports.
@@ -210,13 +273,15 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | Path | Purpose |
 |------|---------|
 | `src/app.ts` | Composition root — start here to understand wiring |
-| `src/shared/database/interfaces.ts` | `SessionRepository` and `HeartbeatRepository` contracts |
-| `src/shared/runtime/AgentExecutor.ts` | Spawns headless `claude -p` subprocesses |
+| `src/gateway/protocol.ts` | Wire format: all message types between server and client |
+| `src/gateway/WebSocketGateway.ts` | WebSocket auth, connection management, message routing |
+| `src/shared/provider/types.ts` | Domain contracts: `SessionRepository`, `HeartbeatRepository`, record types |
+| `src/shared/infra/runtime/AgentExecutor.ts` | Spawns headless `claude -p` subprocesses |
 | `src/features/search/indexer.ts` | JSONL parsing and SQLite FTS5 indexing |
-| `src/features/live/WebSocketTransport.ts` | WebSocket protocol, auth, session lifecycle |
+| `src/features/live/handlers.ts` | WebSocket session handlers (start, resume, cancel) |
+| `src/features/live/AgentStore.ts` | Session tracking + `AgentExecutorPort` interface |
 | `src/features/scheduler/HeartbeatService.ts` | Autonomous agent runs on a schedule |
-| `src/features/admin/DiagnosticsService.ts` | Health checks, system diagnostics |
 | `eslint.config.js` | Module boundary + quality rules (flat config format) |
 | `tests/__fixtures__/` | Sample JSONL files for testing |
-| `tests/scorecard.test.ts` | Structural invariant enforcement |
+| `tests/scorecard.test.ts` | Structural invariant enforcement (38 invariants) |
 | `scorecard/SCORECARD.md` | Quality criteria, invariants, metrics, baseline |
