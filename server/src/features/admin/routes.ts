@@ -6,10 +6,15 @@ import type { Logger } from '../../shared/provider/index';
 import type { DiagnosticsService } from './DiagnosticsService';
 import type { ConfigService } from './ConfigService';
 
-// Read admin.html at module load
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const adminHtml = readFileSync(join(__dirname, 'admin.html'), 'utf-8');
+let adminHtml: string | null = null;
+function getAdminHtml(): string {
+  if (!adminHtml) {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    adminHtml = readFileSync(join(__dirname, 'admin.html'), 'utf-8');
+  }
+  return adminHtml;
+}
 
 export interface AdminRouteDeps {
   diagnosticsService?: DiagnosticsService;
@@ -53,7 +58,7 @@ export function registerAdminRoutes(router: Router, deps: AdminRouteDeps): void 
    * GET /admin
    */
   router.get('/admin', (_req: Request, res: Response) => {
-    res.type('html').send(adminHtml);
+    res.type('html').send(getAdminHtml());
   });
 
   /**

@@ -16,6 +16,57 @@ npm run key:generate   # Generate API key (destructive — invalidates existing 
 
 **Do NOT run `npm start` or `npm run dev` as an agent** — they start long-lived processes that die with the Claude Code session. The production server is managed by launchd (see Server Management below). For testing worktree changes, see "Testing Server from a Worktree".
 
+## CLI Infrastructure Dependency
+
+This server **piggybacks on the local file artifacts** produced by AI coding CLIs. It does not maintain its own conversation storage — the CLI-written files are the source of truth, and our SQLite database is a read-optimized index.
+
+### Currently supported: Claude CLI
+
+Claude Code stores every session transcript as a JSONL file:
+
+```
+~/.claude/projects/<encoded-path>/<session-uuid>.jsonl
+```
+
+- **Format**: JSONL (one JSON object per line), entries have `type: "user"|"assistant"`, `sessionId`, `cwd`, `timestamp`, `message.content` (string or `ContentBlock[]`)
+- **Titles**: `sessions-index.json` in each project directory maps `sessionId → summary`
+- **Encoded path**: `/Users/huanlu/Developer/Foo` becomes `-Users-huanlu-Developer-Foo` (directory name)
+- **Headless mode**: `claude -p "prompt" --output-format stream-json --verbose --dangerously-skip-permissions` with env `CI=1 TERM=dumb NO_COLOR=1`
+- **Resume**: `claude --resume <sessionId> -p "follow-up" ...` (same working directory required)
+- **Session ID**: Appears in the **first** stdout event (`{type:"system", subtype:"init", session_id:"..."}`)
+
+### Planned: GitHub Copilot CLI
+
+Copilot CLI stores session history in a parallel structure:
+
+```
+~/.copilot/history-session-state/session_<uuid>_<timestamp>.json
+```
+
+- **Format**: Single JSON file with `{sessionId, startTime, chatMessages: [{role, content, tool_calls?}], timeline: [...], selectedModel}`
+- **Working directory**: Not in the history file — lives in `~/.copilot/session-state/<uuid>/workspace.yaml` (`cwd`, `git_root`, `branch`)
+- **Headless mode**: `copilot -p "prompt" --output-format json --allow-all-tools --no-color` (no special env vars needed)
+- **Resume**: `copilot --resume <sessionId>` (same flag pattern as Claude)
+- **Session ID**: Appears in the **last** stdout event (`{type:"result", sessionId:"..."}`)
+
+### Key Differences for Implementation
+
+| Concern | Claude | Copilot |
+|---------|--------|---------|
+| File format | JSONL (streaming-friendly) | Single JSON |
+| Session discovery | Walk `projects/` dirs, glob `*.jsonl` | Glob `history-session-state/*.json` |
+| Project/cwd | `cwd` field on each JSONL entry | Separate `workspace.yaml` file |
+| Message timestamps | Per-message `timestamp` field | Cross-reference `timeline[]` array |
+| Content cleanup | Handle `string \| ContentBlock[]` | Strip injected `<reminder>` system tags |
+| Headless session ID | First event (init) | Last event (result) |
+
+### Architectural Implications
+
+- **Indexer**: Needs a `SessionSource` abstraction — each CLI provides its own parser that transforms external formats into `ParsedSession` (our domain type). The indexer only works with `ParsedSession`, never with CLI-specific formats.
+- **FileWatcher**: Must watch multiple directories (`~/.claude/projects/`, `~/.copilot/history-session-state/`) with different glob patterns.
+- **Live sessions**: The `AgentExecutor` spawns CLI processes. Both CLIs support `-p` and `--resume` with JSONL output, but event schemas differ — needs per-runtime stream parsing.
+- **Boundary rule**: CLI file formats are **untrusted external data**. Parsers validate and transform at the boundary; domain code never touches raw CLI formats.
+
 ## Layered Architecture (ESLint-Enforced)
 
 The server has 4 layers with strict dependency rules:

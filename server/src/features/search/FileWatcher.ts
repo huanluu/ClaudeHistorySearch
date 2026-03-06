@@ -1,7 +1,9 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { indexSessionFile } from './indexer';
-import type { SessionRepository } from '../../shared/provider/index';
-import type { Logger } from '../../shared/provider/index';
+import type { SessionRepository, Logger } from '../../shared/provider/index';
+
+export type IndexFn = (filePath: string, forceReindex: boolean, repo: SessionRepository, logger: Logger) => Promise<void>;
+export type WatchFn = typeof watch;
 
 /**
  * FileWatcher monitors the Claude projects directory for new or changed JSONL
@@ -10,16 +12,16 @@ import type { Logger } from '../../shared/provider/index';
  * Lifecycle: call `start()` to begin watching, `stop()` to tear down.
  */
 export class FileWatcher {
-  private projectsDir: string;
-  private repo: SessionRepository;
-  private logger: Logger;
   private watcher: FSWatcher | null = null;
 
-  constructor(projectsDir: string, repo: SessionRepository, logger: Logger) {
-    this.projectsDir = projectsDir;
-    this.repo = repo;
-    this.logger = logger;
-  }
+  constructor(
+    private readonly projectsDir: string,
+    private readonly repo: SessionRepository,
+    private readonly logger: Logger,
+    private readonly indexFn: IndexFn = (filePath, forceReindex, repo, logger) =>
+      indexSessionFile(filePath, forceReindex, new Map(), repo, logger).then(() => {}),
+    private readonly watchFn: WatchFn = watch,
+  ) {}
 
   /**
    * Start watching for JSONL file changes.
@@ -30,7 +32,7 @@ export class FileWatcher {
       return; // Already watching
     }
 
-    this.watcher = watch(`${this.projectsDir}/**/*.jsonl`, {
+    this.watcher = this.watchFn(`${this.projectsDir}/**/*.jsonl`, {
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -45,12 +47,12 @@ export class FileWatcher {
 
     this.watcher.on('change', async (path: string) => {
       this.logger.log({ msg: `File changed: ${path}`, op: 'filewatcher.change', context: { path } });
-      await indexSessionFile(path, true, new Map(), this.repo, this.logger);
+      await this.indexFn(path, true, this.repo, this.logger);
     });
 
     this.watcher.on('add', async (path: string) => {
       this.logger.log({ msg: `New file: ${path}`, op: 'filewatcher.add', context: { path } });
-      await indexSessionFile(path, false, new Map(), this.repo, this.logger);
+      await this.indexFn(path, false, this.repo, this.logger);
     });
 
     this.logger.log({ msg: 'Watching for file changes...', op: 'filewatcher.start' });
