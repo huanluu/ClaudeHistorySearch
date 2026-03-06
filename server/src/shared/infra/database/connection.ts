@@ -2,50 +2,13 @@ import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import { dirname, join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import type { Logger } from '../provider/index';
+import type { Logger } from '../../provider/index';
 
-// Types for database records
-export interface SessionRecord {
-  id: string;
-  project: string;
-  started_at: number;
-  last_activity_at: number | null;
-  message_count: number;
-  preview: string | null;
-  title: string | null;
-  last_indexed: number | null;
-  is_automatic: number;
-  is_unread: number;
-  is_hidden: number;
-}
-
-export interface HeartbeatStateRecord {
-  key: string;
-  last_changed: string | null;
-  last_processed: number | null;
-}
-
-export interface MessageRecord {
-  session_id: string;
-  role: string;
-  content: string;
-  timestamp: number | null;
-  uuid: string;
-}
-
-export interface SearchResultRecord extends MessageRecord {
-  project: string;
-  started_at: number;
-  title: string | null;
-  highlighted_content: string;
-  rank: number;
-}
-
-export interface LastIndexedRecord {
-  last_indexed: number | null;
-}
-
-export type SortOption = 'relevance' | 'date';
+// Re-export record types from provider for backward compatibility
+export type {
+  SessionRecord, HeartbeatStateRecord, MessageRecord,
+  SearchResultRecord, LastIndexedRecord, SortOption,
+} from '../../provider/index';
 
 export const DB_PATH = join(homedir(), '.claude-history-server', 'search.db');
 

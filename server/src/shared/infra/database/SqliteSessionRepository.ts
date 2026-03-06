@@ -1,7 +1,6 @@
 import { statSync } from 'fs';
 import type { Database as DatabaseType, Statement } from 'better-sqlite3';
-import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord } from './connection';
-import type { SessionRepository, IndexSessionParams, DatabaseStats } from './interfaces';
+import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, SessionRepository, IndexSessionParams, DatabaseStats } from '../../provider/index';
 
 export class SqliteSessionRepository implements SessionRepository {
   private readonly db: DatabaseType;

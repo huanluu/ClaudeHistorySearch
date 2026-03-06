@@ -1,47 +1,8 @@
-import type { SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord } from './connection';
-
-export interface IndexSessionParams {
-  sessionId: string;
-  project: string;
-  startedAt: number;
-  lastActivityAt: number;
-  messageCount: number;
-  preview: string;
-  title: string | null;
-  lastIndexed: number;
-  isAutomatic: boolean;
-  messages: Array<{ role: string; content: string; timestamp: number | null; uuid: string }>;
-}
-
-export interface SessionRepository {
-  // Read (routes)
-  getRecentSessions(limit: number, offset: number): SessionRecord[];
-  getManualSessions(limit: number, offset: number): SessionRecord[];
-  getAutomaticSessions(limit: number, offset: number): SessionRecord[];
-  getSessionById(id: string): SessionRecord | undefined;
-  getMessagesBySessionId(sessionId: string): MessageRecord[];
-  searchMessages(query: string, limit: number, offset: number, sort?: SortOption, automaticOnly?: boolean): SearchResultRecord[];
-
-  // Write (routes)
-  markSessionAsRead(id: string): void;
-  hideSession(id: string): void;
-
-  // Indexing (indexer)
-  getSessionLastIndexed(id: string): LastIndexedRecord | undefined;
-  indexSession(params: IndexSessionParams): void;
-
-  // Stats (diagnostics)
-  getStats(dbPath: string): DatabaseStats;
-}
-
-export interface DatabaseStats {
-  sessionCount: number;
-  messageCount: number;
-  dbSizeBytes: number;
-}
-
-export interface HeartbeatRepository {
-  getState(key: string): HeartbeatStateRecord | undefined;
-  upsertState(key: string, lastChanged: string, lastProcessed: number): void;
-  getAllState(): HeartbeatStateRecord[];
-}
+// Re-export from the canonical location (shared/provider/types)
+// This file is kept for backward compatibility during the migration.
+export type {
+  IndexSessionParams,
+  SessionRepository,
+  DatabaseStats,
+  HeartbeatRepository,
+} from '../provider/types';

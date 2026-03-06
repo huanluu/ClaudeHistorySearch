@@ -10,24 +10,38 @@ import tseslint from 'typescript-eslint';
  *   features/search, features/live, features/scheduler, features/admin
  */
 const moduleBoundaries = [
-  { name: 'shared/provider',     message: "Import from 'shared/provider/index' instead." },
-  { name: 'shared/database',     message: "Import from 'shared/database/index' instead." },
-  { name: 'shared/transport',    message: "Import from 'shared/transport/index' instead." },
-  { name: 'shared/runtime',      message: "Import from 'shared/runtime/index' instead." },
-  { name: 'features/search',     message: "Import from 'features/search/index' instead." },
-  { name: 'features/live',       message: "Import from 'features/live/index' instead." },
-  { name: 'features/scheduler',  message: "Import from 'features/scheduler/index' instead." },
-  { name: 'features/admin',      message: "Import from 'features/admin/index' instead." },
+  { name: 'shared/provider',       message: "Import from 'shared/provider/index' instead." },
+  { name: 'shared/database',       message: "Import from 'shared/database/index' instead." },
+  { name: 'shared/infra/database', message: "Import from 'shared/infra/database/index' instead." },
+  { name: 'shared/infra/runtime',  message: "Import from 'shared/infra/runtime/index' instead." },
+  { name: 'shared/transport',      message: "Import from 'shared/transport/index' instead." },
+  { name: 'shared/runtime',        message: "Import from 'shared/runtime/index' instead." },
+  { name: 'features/search',       message: "Import from 'features/search/index' instead." },
+  { name: 'features/live',         message: "Import from 'features/live/index' instead." },
+  { name: 'features/scheduler',    message: "Import from 'features/scheduler/index' instead." },
+  { name: 'features/admin',        message: "Import from 'features/admin/index' instead." },
 ];
 
 /**
  * Generate barrel-enforcement patterns for the given module names.
  * Blocks `*​/name/*` but allows `*​/name/index*` (the barrel).
+ * Type imports are allowed to bypass the barrel (for features importing types).
  */
 function barrelPatterns(...names) {
   return names.map(name => {
     const def = moduleBoundaries.find(m => m.name === name);
     return { group: [`*/${name}/*`, `!*/${name}/index*`], allowTypeImports: true, message: def.message };
+  });
+}
+
+/**
+ * Strict barrel-enforcement — blocks ALL imports (including type-only) that bypass the barrel.
+ * Used for infra modules that must always go through the barrel, even for types.
+ */
+function strictBarrelPatterns(...names) {
+  return names.map(name => {
+    const def = moduleBoundaries.find(m => m.name === name);
+    return { group: [`*/${name}/*`, `!*/${name}/index*`], message: def.message };
   });
 }
 
@@ -54,6 +68,8 @@ export default tseslint.config(
       'src/shared/database/index.ts',
       'src/shared/transport/index.ts',
       'src/shared/runtime/index.ts',
+      'src/shared/infra/database/index.ts',
+      'src/shared/infra/runtime/index.ts',
       'src/shared/provider/index.ts',
       'src/shared/provider/security/index.ts',
       'src/shared/provider/auth/index.ts',
@@ -123,6 +139,40 @@ export default tseslint.config(
           { group: ['*/shared/database/*', '*/shared/database'], message: 'shared/runtime/ cannot depend on shared/database/.' },
           { group: ['*/shared/transport/*', '*/shared/transport'], message: 'shared/runtime/ cannot depend on shared/transport/.' },
           { group: ['*/features/*'], message: 'shared/runtime/ cannot depend on features/.' },
+        ],
+      }],
+    },
+  },
+
+  // ── Block 6a: shared/infra/database — can import shared/provider (strict barrel) only ──
+  {
+    files: ['src/shared/infra/database/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [
+          ...strictBarrelPatterns('shared/provider'),
+          { group: ['*/shared/infra/runtime/*', '*/shared/infra/runtime'], message: 'shared/infra/database/ cannot depend on shared/infra/runtime/.' },
+          { group: ['*/shared/database/*', '*/shared/database'], message: 'Import from shared/provider/index for types, not the shim.' },
+          { group: ['*/shared/runtime/*', '*/shared/runtime'], message: 'Import from shared/provider/index for types, not the shim.' },
+          { group: ['*/features/*'], message: 'shared/infra/ cannot depend on features/.' },
+          { group: ['*/gateway/*', '*/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
+        ],
+      }],
+    },
+  },
+
+  // ── Block 6b: shared/infra/runtime — can import shared/provider (strict barrel) only ──
+  {
+    files: ['src/shared/infra/runtime/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [
+          ...strictBarrelPatterns('shared/provider'),
+          { group: ['*/shared/infra/database/*', '*/shared/infra/database'], message: 'shared/infra/runtime/ cannot depend on shared/infra/database/.' },
+          { group: ['*/shared/database/*', '*/shared/database'], message: 'Import from shared/provider/index for types, not the shim.' },
+          { group: ['*/shared/runtime/*', '*/shared/runtime'], message: 'Import from shared/provider/index for types, not the shim.' },
+          { group: ['*/features/*'], message: 'shared/infra/ cannot depend on features/.' },
+          { group: ['*/gateway/*', '*/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
         ],
       }],
     },
