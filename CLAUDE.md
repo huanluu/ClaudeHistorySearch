@@ -96,6 +96,7 @@ Features import from `shared/` but never from each other. Cross-feature wiring h
 - Server runs on port **3847**, advertises via Bonjour as `_claudehistory._tcp`
 - iOS/Mac apps auto-discover server via Bonjour, cache last-known URL
 - Database: `~/.claude-history-server/search.db`
+- Server log: `~/.claude-history-server/server.log` (structured JSON, one entry per line)
 - Session source: `~/.claude/projects/**/*.jsonl`
 
 ## Code Conventions
