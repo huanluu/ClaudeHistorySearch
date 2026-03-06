@@ -4,9 +4,16 @@ Use this skill to review staged changes before committing. Invoked via `/agent-c
 
 ## Steps
 
-1. **Check for staged changes** — Run `git diff --cached --stat`. If nothing is staged, tell the user and stop.
+1. **Resolve the target repo** — Find the git root from the current directory:
+   ```bash
+   TARGET=$(git rev-parse --show-toplevel)
+   echo "Review target: $TARGET"
+   ```
+   Use `git -C "$TARGET"` for **all** git commands in subsequent steps.
 
-2. **Spawn a review subagent** — Use the Agent tool with `subagent_type: "general-purpose"` and `model: "opus"` to review the staged diff. The subagent prompt should be:
+2. **Check for staged changes** — Run `git -C "$TARGET" diff --cached --stat`. If nothing is staged, tell the user and stop.
+
+3. **Spawn a review subagent** — Use the Agent tool with `subagent_type: "general-purpose"` and `model: "opus"` to review the staged diff. The subagent prompt should be:
 
    > You are a senior code reviewer. Review the following staged git diff for this project.
    >
@@ -33,18 +40,20 @@ Use this skill to review staged changes before committing. Invoked via `/agent-c
    >
    > Here is the staged diff:
    > ```
-   > {paste the output of `git diff --cached` here}
+   > {paste the output of `git -C "$TARGET" diff --cached` here}
    > ```
 
-3. **Evaluate findings** — Read the subagent's response.
-   - **Critical findings**: Fix them immediately, then re-stage the fixed files with `git add <file>`.
+4. **Evaluate findings** — Read the subagent's response.
+   - **Critical findings**: Fix them immediately, then re-stage the fixed files with `git -C "$TARGET" add <file>`.
    - **Warnings**: Fix if straightforward (< 5 min each). Otherwise note them for the user.
    - **Nits**: Skip — do not fix nits.
 
-4. **Stamp the review** — After all fixes are staged, run:
+5. **Stamp the review** — After all fixes are staged, run:
    ```bash
-   git diff --cached | shasum | awk '{print $1}' > "$(git rev-parse --show-toplevel)/.code-reviewed"
+   TARGET=$(git rev-parse --show-toplevel)
+   HASH=$(git -C "$TARGET" diff --cached | shasum | awk '{print $1}')
+   echo "$HASH" > "$TARGET/.code-reviewed"
+   echo "Review marker written: $TARGET/.code-reviewed (hash: $HASH)"
    ```
-   This writes a content-addressed hash of the final staged diff. The pre-commit hook will verify this hash matches before allowing the commit.
 
-5. **Report** — Summarize what was reviewed, what was fixed, and confirm the review marker is written. If there were warnings you skipped, list them so the user can decide.
+6. **Report** — Summarize what was reviewed, what was fixed, and confirm the review marker is written. If there were warnings you skipped, list them so the user can decide.
