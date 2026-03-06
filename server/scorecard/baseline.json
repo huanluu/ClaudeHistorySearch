@@ -15,11 +15,12 @@
     "SEC-INV-1":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
     "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
     "SEC-INV-5":  { "status": "fail", "enforcedBy": "scorecard/tests/security.test.ts", "note": "HeartbeatService reads process.env directly" },
-    "REL-INV-2":  { "status": "fail", "enforcedBy": "scorecard/tests/reliability.test.ts" }
+    "REL-INV-2":  { "status": "fail", "enforcedBy": "scorecard/tests/reliability.test.ts" },
+    "CQ-INV-6":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "note": "Missing: keyManager, middleware, FileWatcher, SqliteSessionRepository, config, connection, AgentStore, handlers" }
   },
   "summary": {
     "passing": 11,
-    "total": 15,
-    "passRate": "73%"
+    "total": 16,
+    "passRate": "69%"
   }
 }

@@ -1,6 +1,6 @@
 # Codebase Scorecard
 
-> 15 invariants. Pass/fail. No judgment needed.
+> 16 invariants. Pass/fail. No judgment needed.
 >
 > Agents optimize locally and create global entropy — each session might produce correct
 > code that gradually degrades the system. These invariants are electric fences that catch drift.
@@ -101,6 +101,14 @@ All wiring happens in `app.ts`.
 
 - Agents pile code into existing functions instead of extracting
 - Forces decomposition before functions become unmaintainable
+- **Enforced by:** `scorecard/tests/code-quality.test.ts`
+
+#### CQ-INV-6: Test Existence Floor
+> Every source file with exported logic has a co-located `*.test.ts` file.
+
+- Agents add modules without tests — this is the #1 cause of coverage regression
+- Skips barrels (`index.ts`), entry point, composition root (`app.ts`), and type-only files
+- Matches by source basename: `Foo.ts` → `Foo.test.ts` or `Foo.security.test.ts`
 - **Enforced by:** `scorecard/tests/code-quality.test.ts`
 
 ### Observability

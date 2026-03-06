@@ -6,7 +6,7 @@
  * Tests here cover invariants requiring cross-file structural analysis.
  */
 import { readFileSync } from 'fs';
-import { relative } from 'path';
+import { relative, basename } from 'path';
 import { collectSrcFiles, collectAllTestFiles, SRC_DIR, SERVER_DIR } from './helpers';
 
 describe('Scorecard: Code Quality Invariants', () => {
@@ -110,5 +110,35 @@ describe('Scorecard: Code Quality Invariants', () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  // ─── CQ-INV-6: Test Existence Floor ─────────────────────────────
+  it.fails('CQ-INV-6: Every source module with exported logic has a co-located test', () => {
+    const srcFiles = collectSrcFiles(SRC_DIR);
+    const allTestBasenames = collectAllTestFiles().map(f => basename(f));
+    const missingTests: string[] = [];
+
+    for (const file of srcFiles) {
+      const relFile = relative(SRC_DIR, file);
+      const base = basename(file, '.ts');
+
+      // Skip barrels, entry point, composition root
+      if (base === 'index' || relFile === 'index.ts' || relFile === 'app.ts') continue;
+
+      // Skip type-only files (no exported functions, classes, or const assignments)
+      const content = readFileSync(file, 'utf-8');
+      const hasExportedLogic = /^export\s+(default\s+)?(async\s+)?(function|class|const\s+\w+\s*=|enum\s)/m.test(content);
+      if (!hasExportedLogic) continue;
+
+      // Check for a co-located test file matching the source basename
+      const hasTest = allTestBasenames.some(t =>
+        t.startsWith(`${base}.`) && t.endsWith('.test.ts')
+      );
+      if (!hasTest) {
+        missingTests.push(relFile);
+      }
+    }
+
+    expect(missingTests).toEqual([]);
   });
 });
