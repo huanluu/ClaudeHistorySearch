@@ -3,8 +3,9 @@ import { execSync } from 'child_process';
 import { Router } from 'express';
 import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/database/index';
 import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './shared/provider/index';
-import { HttpTransport } from './shared/transport/index';
-import { AgentStore, WebSocketTransport, type AuthenticatedWebSocket, type WSMessage } from './features/live/index';
+import { HttpTransport, WebSocketGateway } from './gateway/index';
+import type { AuthenticatedClient } from './gateway/index';
+import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AgentExecutor } from './shared/runtime/index';
 import { indexAllSessions, PROJECTS_DIR, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
@@ -66,12 +67,13 @@ export function createApp(config: AppConfig): App {
 
   // --- Diagnostics ---
   const startedAt = new Date();
+  let wsGateway: WebSocketGateway | null = null;
   const diagnosticsService = new DiagnosticsService({
     repo: sessionRepo,
     errorBuffer,
     fileWatcher,
     heartbeatService,
-    getWsClientCount: () => wsTransport?.getClientCount() ?? 0,
+    getWsClientCount: () => wsGateway?.getClientCount() ?? 0,
     getActiveSessionCount: () => agentStore.getAll().length,
     startedAt,
     dbPath: DB_PATH,
@@ -84,12 +86,11 @@ export function createApp(config: AppConfig): App {
     logger,
   };
 
-  // --- Transports ---
+  // --- HTTP Transport (middleware order matters: logger → auth → routes) ---
   const transport = new HttpTransport({ port });
   transport.use(createRequestLogger(requestLoggerOptions));
   transport.use(authMiddleware);
 
-  let wsTransport: WebSocketTransport | null = null;
   let bonjour: Bonjour | null = null;
   let service: ReturnType<Bonjour['publish']> | null = null;
   let reindexTimer: NodeJS.Timeout | null = null;
@@ -116,7 +117,7 @@ export function createApp(config: AppConfig): App {
     }
   };
 
-  // --- Router ---
+  // --- HTTP Routes ---
   const router = Router();
   registerSearchRoutes(router, { repo: sessionRepo, logger, indexFn: indexAllSessions });
   registerSchedulerRoutes(router, { heartbeatService, logger });
@@ -140,34 +141,42 @@ export function createApp(config: AppConfig): App {
     logger.log({ msg: `Claude History Server running on http://0.0.0.0:${boundPort}`, op: 'server.start', context: { port: boundPort } });
     logger.log({ msg: `Database: ${DB_PATH}`, op: 'server.start', context: { dbPath: DB_PATH } });
 
-    // Initialize WebSocket transport (attached to HTTP server)
+    // Initialize WebSocket gateway (attached to HTTP server AFTER it's listening)
     const httpServer = transport.getServer();
     if (httpServer) {
-      wsTransport = new WebSocketTransport({
+      wsGateway = new WebSocketGateway({
         server: httpServer,
         path: '/ws',
         pingInterval: 30000,
+        logger,
+      });
+
+      // Register feature handlers with gateway
+      registerLiveHandlers(wsGateway, {
+        agentStore,
         validator: workingDirValidator,
         logger,
-        sessionStore: agentStore,
-        onConnection: (ws: AuthenticatedWebSocket) => {
-          logger.log({ msg: `Client connected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`, op: 'ws.connect', context: { clientId: ws.clientId, total: wsTransport?.getClientCount() } });
-        },
-        onDisconnection: (ws: AuthenticatedWebSocket) => {
-          logger.log({ msg: `Client disconnected: ${ws.clientId} (${wsTransport?.getClientCount()} total)`, op: 'ws.disconnect', context: { clientId: ws.clientId, total: wsTransport?.getClientCount() } });
-        },
-        onMessage: (ws: AuthenticatedWebSocket, message: WSMessage) => {
-          logger.log({ msg: `Message from ${ws.clientId}: ${message.type}`, op: 'ws.message', context: { clientId: ws.clientId, type: message.type } });
-          if (message.type === 'message') {
-            wsTransport?.send(ws, {
-              type: 'message',
-              payload: { echo: message.payload },
-              id: message.id
-            });
-          }
-        }
       });
-      wsTransport.start();
+
+      // Connection logging
+      wsGateway.onConnect((client: AuthenticatedClient) => {
+        logger.log({ msg: `Client connected: ${client.clientId} (${wsGateway?.getClientCount()} total)`, op: 'ws.connect', context: { clientId: client.clientId, total: wsGateway?.getClientCount() } });
+      });
+      wsGateway.onDisconnect((client: AuthenticatedClient) => {
+        logger.log({ msg: `Client disconnected: ${client.clientId} (${wsGateway?.getClientCount()} total)`, op: 'ws.disconnect', context: { clientId: client.clientId, total: wsGateway?.getClientCount() } });
+      });
+
+      // Fallback handler for 'message' type (echo)
+      wsGateway.on('message', (client, payload, id) => {
+        logger.log({ msg: `Message from ${client.clientId}`, op: 'ws.message', context: { clientId: client.clientId } });
+        client.send({
+          type: 'message',
+          payload: { echo: payload },
+          id,
+        });
+      });
+
+      wsGateway.start();
       logger.log({ msg: `WebSocket server available at ws://0.0.0.0:${boundPort}/ws`, op: 'server.start', context: { port: boundPort } });
     }
 
@@ -236,7 +245,7 @@ export function createApp(config: AppConfig): App {
     service?.stop?.();
     bonjour?.destroy();
     await fileWatcher.stop();
-    await wsTransport?.stop();
+    await wsGateway?.stop();
     await transport.stop();
     logger.log({ msg: 'Server stopped', op: 'server.stop' });
   }

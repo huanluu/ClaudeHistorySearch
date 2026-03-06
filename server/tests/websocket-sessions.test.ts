@@ -5,8 +5,8 @@ import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import WebSocket from 'ws';
 import { WorkingDirValidator } from '../src/shared/provider/index';
-import { HttpTransport } from '../src/shared/transport/index';
-import { WebSocketTransport, AgentStore } from '../src/features/live/index';
+import { HttpTransport, WebSocketGateway } from '../src/gateway/index';
+import { AgentStore, registerLiveHandlers } from '../src/features/live/index';
 import { AgentExecutor } from '../src/shared/runtime/index';
 import type { Logger } from '../src/shared/provider/index';
 
@@ -64,7 +64,7 @@ interface WSMessage {
 
 describe('WebSocket Session Integration', () => {
   let httpTransport: InstanceType<typeof HttpTransport>;
-  let wsTransport: InstanceType<typeof WebSocketTransport>;
+  let wsGateway: WebSocketGateway;
   let testApiKey: string;
   let serverPort: number;
 
@@ -81,18 +81,18 @@ describe('WebSocket Session Integration', () => {
     const address = server.address() as { port: number };
     serverPort = address.port;
 
-    // Start WebSocket server with working directory validator
-    // Allow TEST_CONFIG_DIR and /tmp (resolve symlinks for macOS /var → /private/var)
+    // Start WebSocket gateway with handler registration
     const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
     const resolvedTmp = realpathSync('/tmp');
     const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
-    const sessionStore = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
-    wsTransport = new WebSocketTransport({ server, path: '/ws', validator, logger: noopLogger, sessionStore });
-    wsTransport.start();
+    const agentStore = new AgentStore(noopLogger, (id, log) => new AgentExecutor(id, log));
+    wsGateway = new WebSocketGateway({ server, path: '/ws', logger: noopLogger });
+    registerLiveHandlers(wsGateway, { agentStore, validator, logger: noopLogger });
+    wsGateway.start();
   });
 
   afterAll(async () => {
-    await wsTransport?.stop();
+    await wsGateway?.stop();
     await httpTransport?.stop();
     rmSync(TEST_CONFIG_DIR, { recursive: true, force: true });
   });
