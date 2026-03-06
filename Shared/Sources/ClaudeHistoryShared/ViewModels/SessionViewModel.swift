@@ -24,7 +24,7 @@ public class SessionViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    private let webSocketClient: WebSocketClient?
+    private let webSocketClient: (any WebSocketClientProtocol)?
     private let apiClient: (any NetworkService)?
 
     // MARK: - Session Info
@@ -48,14 +48,14 @@ public class SessionViewModel: ObservableObject {
     }
 
     /// Initialize for live session execution
-    public init(webSocketClient: WebSocketClient) {
+    public init(webSocketClient: any WebSocketClientProtocol) {
         self.webSocketClient = webSocketClient
         self.apiClient = nil
         self.mode = .live
     }
 
     /// Initialize with both clients (for resuming sessions)
-    public init(apiClient: any NetworkService, webSocketClient: WebSocketClient) {
+    public init(apiClient: any NetworkService, webSocketClient: any WebSocketClientProtocol) {
         self.apiClient = apiClient
         self.webSocketClient = webSocketClient
         self.mode = .historical  // Starts historical, can switch to live
