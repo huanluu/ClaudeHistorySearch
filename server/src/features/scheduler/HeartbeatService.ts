@@ -3,7 +3,7 @@ import { join } from 'path';
 import { execSync, spawn, type ChildProcess } from 'child_process';
 import { getConfigDir } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/database/index';
+import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
 
 /**
  * Configuration for the heartbeat service

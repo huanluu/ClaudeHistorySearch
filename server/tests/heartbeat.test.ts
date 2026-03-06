@@ -10,7 +10,7 @@ import {
   type WorkItem,
   type CommandExecutor
 } from '../src/features/scheduler/HeartbeatService';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../src/shared/database/index';
+import type { HeartbeatRepository, HeartbeatStateRecord } from '../src/shared/provider/index';
 import type { Logger } from '../src/shared/provider/index';
 
 const noopLogger: Logger = {

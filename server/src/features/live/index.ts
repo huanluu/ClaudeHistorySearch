@@ -1,2 +1,2 @@
-export { AgentStore, type ExecutorFactory } from './AgentStore';
+export { AgentStore, type ExecutorFactory, type AgentExecutorPort } from './AgentStore';
 export { registerLiveHandlers, type LiveHandlerDeps } from './handlers';

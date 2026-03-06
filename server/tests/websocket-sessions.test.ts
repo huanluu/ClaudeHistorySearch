@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 import { WorkingDirValidator } from '../src/shared/provider/index';
 import { HttpTransport, WebSocketGateway } from '../src/gateway/index';
 import { AgentStore, registerLiveHandlers } from '../src/features/live/index';
-import { AgentExecutor } from '../src/shared/runtime/index';
+import { AgentExecutor } from '../src/shared/infra/runtime/index';
 import type { Logger } from '../src/shared/provider/index';
 
 const noopLogger: Logger = {

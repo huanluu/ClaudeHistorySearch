@@ -2,7 +2,7 @@ import type { Mock } from 'vitest';
 import { ErrorRingBuffer } from '../src/shared/provider/index';
 import { DiagnosticsService } from '../src/features/admin/DiagnosticsService';
 import type { DiagnosticsSources } from '../src/features/admin/DiagnosticsService';
-import type { SessionRepository, DatabaseStats } from '../src/shared/database/index';
+import type { SessionRepository, DatabaseStats } from '../src/shared/provider/index';
 import type { FileWatcher } from '../src/features/search/index';
 import type { HeartbeatService } from '../src/features/scheduler/index';
 

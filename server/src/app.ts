@@ -1,12 +1,12 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
 import { Router } from 'express';
-import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/database/index';
+import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/infra/database/index';
 import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './shared/provider/index';
 import { HttpTransport, WebSocketGateway } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
-import { AgentExecutor } from './shared/runtime/index';
+import { AgentExecutor } from './shared/infra/runtime/index';
 import { indexAllSessions, PROJECTS_DIR, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
 import { ConfigService, DiagnosticsService, registerAdminRoutes } from './features/admin/index';
