@@ -3,7 +3,7 @@ import { execSync } from 'child_process';
 import { Router } from 'express';
 import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/infra/database/index';
 import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions } from './shared/provider/index';
-import { HttpTransport, WebSocketGateway } from './gateway/index';
+import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQuerySchema, SessionsQuerySchema, ConfigUpdateBodySchema } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AgentExecutor } from './shared/infra/runtime/index';
@@ -116,6 +116,13 @@ export function createApp(config: AppConfig): App {
       logger.log({ msg: `Security config updated: ${updatedDirs.length} allowed working director${updatedDirs.length === 1 ? 'y' : 'ies'}`, op: 'server.config', context: { allowedDirs: updatedDirs.length } });
     }
   };
+
+  // --- HTTP Validation Middleware (gateway layer validates before features handle) ---
+  const validationRouter = Router();
+  validationRouter.get('/search', validateQuery(SearchQuerySchema));
+  validationRouter.get('/sessions', validateQuery(SessionsQuerySchema));
+  validationRouter.put('/api/config/:section', validateBody(ConfigUpdateBodySchema));
+  transport.use('/', validationRouter);
 
   // --- HTTP Routes ---
   const router = Router();

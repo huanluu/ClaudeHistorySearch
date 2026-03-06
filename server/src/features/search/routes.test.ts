@@ -9,6 +9,8 @@ import type { SessionRepository } from '../../shared/provider/index';
 import type { SessionRecord, MessageRecord, SearchResultRecord } from '../../shared/provider/index';
 import { registerSearchRoutes, type SearchRouteDeps } from './index';
 import type { Logger } from '../../shared/provider/index';
+import { validateQuery } from '../../gateway/validation';
+import { SearchQuerySchema, SessionsQuerySchema } from '../../gateway/schemas';
 
 // Test configuration
 const TEST_CONFIG_DIR = join(tmpdir(), `claude-history-test-search-${Date.now()}`);
@@ -98,6 +100,13 @@ function createSearchApp(deps: { repo: SessionRepository; logger?: Logger; index
   });
 
   const logger = deps.logger ?? noopLogger;
+
+  // Validation middleware (mirrors app.ts wiring)
+  const validationRouter = Router();
+  validationRouter.get('/search', validateQuery(SearchQuerySchema));
+  validationRouter.get('/sessions', validateQuery(SessionsQuerySchema));
+  app.use('/', validationRouter);
+
   const router = Router();
   registerSearchRoutes(router, { repo: deps.repo, logger, indexFn: deps.indexFn });
   app.use('/', router);
@@ -250,13 +259,13 @@ describe('Search Routes', () => {
       expect(res.body.pagination.offset).toBe(5);
     });
 
-    it('should cap limit at 100', async () => {
+    it('should reject limit exceeding 100', async () => {
       const res = await request(app)
         .get('/sessions?limit=500')
         .set('X-API-Key', testApiKey);
 
-      expect(res.status).toBe(200);
-      expect(res.body.pagination.limit).toBe(100);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Validation error');
     });
 
     it('should call getAutomaticSessions when automatic=true', async () => {
@@ -326,7 +335,7 @@ describe('Search Routes', () => {
         .set('X-API-Key', testApiKey);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Search query is required');
+      expect(res.body.error).toContain('Search query is required');
     });
 
     it('should support date sort', async () => {

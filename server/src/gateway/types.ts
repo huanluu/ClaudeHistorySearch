@@ -5,7 +5,11 @@
 
 import type { AuthenticatedClient, WSMessage } from './protocol';
 
-export type WsHandler = (client: AuthenticatedClient, payload: unknown, messageId?: string) => void;
+/**
+ * Handler for a validated WebSocket message payload.
+ * Payloads are Zod-validated by the gateway before reaching handlers.
+ */
+export type WsHandler<T = unknown> = (client: AuthenticatedClient, payload: T, messageId?: string) => void;
 export type WsConnectionHandler = (client: AuthenticatedClient) => void;
 
 /**
@@ -14,7 +18,7 @@ export type WsConnectionHandler = (client: AuthenticatedClient) => void;
  */
 export interface WsGateway {
   /** Register a handler for a specific message type (e.g., 'session.start') */
-  on(type: string, handler: WsHandler): void;
+  on<T = unknown>(type: string, handler: WsHandler<T>): void;
 
   /** Register a callback for new client connections */
   onConnect(handler: WsConnectionHandler): void;

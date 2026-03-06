@@ -56,12 +56,9 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
    * GET /sessions
    * List recent sessions with pagination
    */
-  router.get('/sessions', (req: Request, res: Response) => {
+  router.get('/sessions', (_req: Request, res: Response) => {
     try {
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-      const offset = parseInt(req.query.offset as string) || 0;
-
-      const automaticParam = req.query.automatic as string | undefined;
+      const { limit, offset, automatic: automaticParam } = (res.locals.validated?.query ?? { limit: 20, offset: 0 }) as { limit: number; offset: number; automatic?: string };
       let sessions;
       if (automaticParam === 'true') {
         sessions = repo.getAutomaticSessions(limit, offset);
@@ -138,21 +135,13 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
    * GET /search
    * Full-text search across all messages
    */
-  router.get('/search', (req: Request, res: Response) => {
+  router.get('/search', (_req: Request, res: Response) => {
     try {
-      const query = req.query.q as string;
+      const { q: query, limit, offset, sort, automatic: automaticSearchParam } = (res.locals.validated?.query ?? { q: '', limit: 50, offset: 0, sort: 'relevance' }) as { q: string; limit: number; offset: number; sort: SortOption; automatic?: string };
       if (!query || query.trim().length === 0) {
         res.status(400).json({ error: 'Search query is required' });
         return;
       }
-
-      const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
-      const offsetParam = Array.isArray(req.query.offset) ? req.query.offset[0] : req.query.offset;
-      const sortParam = Array.isArray(req.query.sort) ? req.query.sort[0] : req.query.sort;
-
-      const limit = Math.min(parseInt(limitParam as string) || 50, 200);
-      const offset = parseInt(offsetParam as string) || 0;
-      const sort: SortOption = sortParam === 'date' ? 'date' : 'relevance';
 
       const sanitizedQuery = query
         .replace(/['"*()]/g, '')
@@ -166,7 +155,6 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
         return;
       }
 
-      const automaticSearchParam = req.query.automatic as string | undefined;
       const automaticOnly = automaticSearchParam === 'true';
 
       const fetchLimit = (limit + offset) * 3;

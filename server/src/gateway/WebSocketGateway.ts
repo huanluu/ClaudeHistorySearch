@@ -1,10 +1,12 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
 import { URL } from 'url';
+import { ZodError } from 'zod';
 import { validateApiKey, hasApiKey } from '../shared/provider/index';
 import type { Logger } from '../shared/provider/index';
-import type { AuthenticatedClient, WSMessage } from './protocol';
+import type { AuthenticatedClient, MessageType, WSMessage } from './protocol';
 import type { WsHandler, WsConnectionHandler, WsGateway } from './types';
+import { payloadSchemas } from './schemas';
 
 /**
  * Extended WebSocket with authentication state (internal to gateway)
@@ -40,7 +42,7 @@ export class WebSocketGateway implements WsGateway {
   private clientMap: Map<string, InternalClient> = new Map();
   private logger: Logger;
 
-  private handlers: Map<string, WsHandler> = new Map();
+  private handlers: Map<string, WsHandler<unknown>> = new Map();
   private connectHandlers: WsConnectionHandler[] = [];
   private disconnectHandlers: WsConnectionHandler[] = [];
 
@@ -53,8 +55,9 @@ export class WebSocketGateway implements WsGateway {
     this.logger = options.logger;
   }
 
-  on(type: string, handler: WsHandler): void {
-    this.handlers.set(type, handler);
+  on<T = unknown>(type: string, handler: WsHandler<T>): void {
+    // Safe: gateway validates payload matches schema before calling handler
+    this.handlers.set(type, handler as WsHandler<unknown>);
   }
 
   onConnect(handler: WsConnectionHandler): void {
@@ -218,22 +221,52 @@ export class WebSocketGateway implements WsGateway {
 
   private _handleMessage(client: AuthenticatedClient, data: RawData): void {
     try {
-      const message = JSON.parse(data.toString()) as WSMessage;
+      const raw = JSON.parse(data.toString());
 
-      // Handle ping/pong at gateway level
-      if (message.type === 'ping') {
-        client.send({ type: 'pong', id: message.id });
+      // Basic envelope validation: must have a string `type`
+      if (!raw || typeof raw.type !== 'string') {
+        client.send({
+          type: 'error',
+          payload: { message: 'Invalid message: missing or non-string "type" field' },
+        });
+        return;
+      }
+
+      const messageType = raw.type as MessageType;
+
+      // Handle ping/pong at gateway level (no payload to validate)
+      if (messageType === 'ping') {
+        client.send({ type: 'pong', id: raw.id });
         return;
       }
 
       // Route to registered handler
-      const handler = this.handlers.get(message.type);
-      if (handler) {
-        handler(client, message.payload, message.id);
-      } else {
-        this.logger.log({ msg: `Unhandled message type: ${message.type}`, op: 'ws.message', context: { type: message.type, clientId: client.clientId } });
+      const handler = this.handlers.get(messageType);
+      if (!handler) {
+        this.logger.log({ msg: `Unhandled message type: ${messageType}`, op: 'ws.message', context: { type: messageType, clientId: client.clientId } });
+        return;
       }
+
+      // Validate payload against schema if one exists
+      const schema = payloadSchemas[messageType];
+      let validatedPayload = raw.payload;
+      if (schema) {
+        validatedPayload = schema.parse(raw.payload);
+      }
+
+      handler(client, validatedPayload, raw.id);
     } catch (error) {
+      if (error instanceof ZodError) {
+        const details = error.issues.map(
+          (issue) => `${issue.path.join('.')}: ${issue.message}`,
+        ).join('; ');
+        this.logger.log({ msg: `Payload validation failed: ${details}`, op: 'ws.validation', context: { clientId: client.clientId } });
+        client.send({
+          type: 'error',
+          payload: { message: `Validation error: ${details}` },
+        });
+        return;
+      }
       this.logger.error({ msg: `Failed to parse message: ${(error as Error).message}`, op: 'ws.error', err: error });
       client.send({
         type: 'error',

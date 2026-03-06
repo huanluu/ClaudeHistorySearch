@@ -1,9 +1,9 @@
 import type { Logger, WorkingDirValidator } from '../../shared/provider/index';
 import type {
   AuthenticatedClient,
-  SessionStartPayload,
-  SessionResumePayload,
-  SessionCancelPayload,
+  ValidatedSessionStartPayload,
+  ValidatedSessionResumePayload,
+  ValidatedSessionCancelPayload,
   WsGateway,
 } from '../../gateway/index';
 import type { AgentStore } from './AgentStore';
@@ -21,8 +21,7 @@ export interface LiveHandlerDeps {
 export function registerLiveHandlers(gateway: WsGateway, deps: LiveHandlerDeps): void {
   const { agentStore, validator, logger } = deps;
 
-  gateway.on('session.start', (client, payload) => {
-    const p = payload as SessionStartPayload;
+  gateway.on<ValidatedSessionStartPayload>('session.start', (client, p) => {
     logger.log({
       msg: `session.start received: sessionId=${p.sessionId}`,
       op: 'ws.message',
@@ -39,8 +38,7 @@ export function registerLiveHandlers(gateway: WsGateway, deps: LiveHandlerDeps):
     logger.log({ msg: `session.start: executor started`, op: 'ws.message', context: { sessionId: p.sessionId } });
   });
 
-  gateway.on('session.resume', (client, payload) => {
-    const p = payload as SessionResumePayload;
+  gateway.on<ValidatedSessionResumePayload>('session.resume', (client, p) => {
     logger.log({
       msg: `session.resume received: sessionId=${p.sessionId}, resumeSessionId=${p.resumeSessionId}`,
       op: 'ws.message',
@@ -57,8 +55,7 @@ export function registerLiveHandlers(gateway: WsGateway, deps: LiveHandlerDeps):
     logger.log({ msg: `session.resume: executor started`, op: 'ws.message', context: { sessionId: p.sessionId } });
   });
 
-  gateway.on('session.cancel', (_client, payload) => {
-    const p = payload as SessionCancelPayload;
+  gateway.on<ValidatedSessionCancelPayload>('session.cancel', (_client, p) => {
     const executor = agentStore.get(p.sessionId);
     if (executor) {
       executor.cancel();
