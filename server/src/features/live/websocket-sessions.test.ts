@@ -8,6 +8,8 @@ import { HttpTransport, WebSocketGateway } from '../../gateway/index';
 import { AgentStore, registerLiveHandlers } from './index';
 import { ClaudeAgentSession } from '../../shared/infra/runtime/index';
 import { noopLogger, createTestApiKey } from '../../../tests/__helpers/index';
+import { waitForMessage, waitFor } from '../../../tests/__helpers/ws-helpers';
+import type { WSMessage } from '../../../tests/__helpers/ws-helpers';
 
 // Hoist the mock so it's available when vi.mock factory runs
 const mockSpawn = vi.hoisted(() => vi.fn());
@@ -30,48 +32,6 @@ function createMockProcess() {
     pid: Math.floor(Math.random() * 10000)
   });
   return mockProcess;
-}
-
-interface WSMessage {
-  type: string;
-  id?: string;
-  payload?: unknown;
-}
-
-/** Wait for a WebSocket message matching the given type. */
-function waitForMessage(ws: WebSocket, type: string, timeout = 2000): Promise<WSMessage> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Timeout waiting for '${type}' message`)), timeout);
-    function handler(data: WebSocket.RawData) {
-      const msg = JSON.parse(data.toString()) as WSMessage;
-      if (msg.type === type) {
-        clearTimeout(timer);
-        ws.off('message', handler);
-        resolve(msg);
-      }
-    }
-    ws.on('message', handler);
-  });
-}
-
-/** Poll a predicate until it passes or times out. */
-function waitFor(fn: () => void, timeout = 2000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeout;
-    function check() {
-      try {
-        fn();
-        resolve();
-      } catch {
-        if (Date.now() >= deadline) {
-          reject(new Error(`waitFor timed out after ${timeout}ms`));
-        } else {
-          setTimeout(check, 10);
-        }
-      }
-    }
-    check();
-  });
 }
 
 describe('WebSocket Session Integration', () => {
