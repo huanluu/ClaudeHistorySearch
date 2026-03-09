@@ -16,11 +16,13 @@
     "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
     "SEC-INV-5":  { "status": "fail", "enforcedBy": "scorecard/tests/security.test.ts", "note": "HeartbeatService reads process.env directly" },
     "REL-INV-2":  { "status": "fail", "enforcedBy": "scorecard/tests/reliability.test.ts" },
-    "CQ-INV-6":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "note": "Missing: keyManager, middleware, FileWatcher, SqliteSessionRepository, config, connection, AgentStore, handlers" }
+    "CQ-INV-6":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "note": "Missing: keyManager, middleware, FileWatcher, SqliteSessionRepository, config, connection, AgentStore, handlers" },
+    "ARCH-INV-9":  { "status": "fail", "enforcedBy": "eslint.config.js Block 7c + scorecard/tests/architecture.test.ts", "note": "4 files with I/O imports: ConfigService.ts (fs), routes.ts/admin (fs), HeartbeatService.ts (fs+child_process), indexer.ts (fs)" },
+    "ARCH-INV-10": { "status": "pass", "enforcedBy": "eslint.config.js Blocks 4, 5, 5b + scorecard/tests/architecture.test.ts" }
   },
   "summary": {
-    "passing": 11,
-    "total": 16,
-    "passRate": "69%"
+    "passing": 12,
+    "total": 18,
+    "passRate": "67%"
   }
 }

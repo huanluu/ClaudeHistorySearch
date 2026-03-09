@@ -173,4 +173,59 @@ describe('Scorecard: Architecture Invariants', () => {
     const content = readFileSync(typesPath, 'utf-8');
     expect(content).not.toMatch(/^export (const|let|var|function|class|default) /m);
   });
+
+  // ─── ARCH-INV-9: Features Must Be Effectless ──────────────────
+  it.fails('ARCH-INV-9: Feature files do not import I/O modules', () => {
+    const featureDir = join(SRC_DIR, 'features');
+    const featureFiles = collectSrcFiles(featureDir);
+    const ioModules = [
+      'fs', 'fs/promises', 'child_process', 'net', 'http', 'https',
+      'better-sqlite3',
+      'node:fs', 'node:fs/promises', 'node:child_process', 'node:net', 'node:http', 'node:https',
+    ];
+    const violations: Array<{ file: string; module: string }> = [];
+
+    for (const file of featureFiles) {
+      const imports = extractImports(file);
+      for (const imp of imports) {
+        if (ioModules.includes(imp)) {
+          violations.push({
+            file: relative(SRC_DIR, file),
+            module: imp,
+          });
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  // ─── ARCH-INV-10: Infra Sibling Isolation ──────────────────────
+  it('ARCH-INV-10: Infra modules do not import from sibling infra modules', () => {
+    const infraModules = ['database', 'runtime', 'parsers'];
+    const violations: Array<{ file: string; importsFrom: string }> = [];
+
+    for (const moduleName of infraModules) {
+      const moduleDir = join(SRC_DIR, 'shared/infra', moduleName);
+      if (!existsSync(moduleDir)) continue;
+
+      const files = collectSrcFiles(moduleDir);
+      for (const file of files) {
+        const imports = extractImports(file);
+        for (const imp of imports) {
+          for (const sibling of infraModules) {
+            if (sibling === moduleName) continue;
+            if (imp.includes(`shared/infra/${sibling}`)) {
+              violations.push({
+                file: relative(SRC_DIR, file),
+                importsFrom: `shared/infra/${sibling}`,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
 });

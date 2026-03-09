@@ -79,10 +79,11 @@ Every async task must make it clear who started it, who awaits it, how errors su
 ## 9. Every external side effect must be behind an interface or adapter
 
 **Labels:** Architecture, Testability
+**Enforcement:** **ARCH-INV-9** (ESLint Block 7c + scorecard test)
 
-Database access, filesystem writes, network requests, and process spawning should be behind focused abstractions. The point is to localize volatility and create seams for testing, mocking, and future replacement.
+Database access, filesystem writes, network requests, and process spawning should be behind focused abstractions. The point is to localize volatility and create seams for testing, mocking, and future replacement. Features must be **effectless** — they define port interfaces for the I/O they need, and adapters in `shared/infra/` implement those ports.
 
-**In this codebase:** Database access is behind `SessionRepository` and `HeartbeatRepository` interfaces in `shared/provider/types.ts`. CLI execution is behind `AgentExecutorPort` in `features/live/`. No module may export singleton instances (enforced by **ARCH-INV-7**).
+**In this codebase:** Database access is behind `SessionRepository` and `HeartbeatRepository` interfaces in `shared/provider/types.ts`. CLI execution is behind `CliRuntime`/`AgentSession` interfaces. Feature code is forbidden from importing I/O modules (`fs`, `child_process`, `better-sqlite3`, etc.) — enforced by ESLint. Adapters live in `shared/infra/<feature>/` (feature-specific) or `shared/infra/provider/` (cross-cutting). No module may export singleton instances (enforced by **ARCH-INV-7**).
 
 ## 10. API and persistence boundaries must not leak internal representations
 
@@ -127,13 +128,22 @@ Expected business failures should use explicit result types or well-defined doma
 
 **In this codebase:** Route handlers catch errors at the boundary and map to HTTP status codes. The `ErrorRingBuffer` in `DiagnosticsService` tracks recent errors for debugging.
 
-## 15. Tooling must fail the build when invariants are violated
+## 15. Infra adapters must be isolated from sibling adapters
+
+**Labels:** Architecture, Refactorability
+**Enforcement:** **ARCH-INV-10** (ESLint Blocks 4, 5, 5b)
+
+Infra modules (`shared/infra/<technology>/`) must not import from sibling infra modules. Each adapter depends only on `shared/provider/` (ports). This prevents lateral coupling — if the database adapter changes its connection setup, it should never break the runtime adapter.
+
+**In this codebase:** `shared/infra/database/`, `shared/infra/runtime/`, and `shared/infra/parsers/` are isolated from each other by ESLint rules. Each only imports from `shared/provider/`.
+
+## 16. Tooling must fail the build when invariants are violated
 
 **Labels:** Testability, Security, Maintainability
 
 Important invariants should not depend on memory, taste, or code review alone. They should be encoded into strict compiler settings, lint rules, and structural tests. A codebase maintained with coding agents will evolve too quickly for purely social enforcement to hold.
 
-**In this codebase:** 15 invariants are enforced by ESLint rules and structural tests in `server/scorecard/`. TypeScript `strict: true` with all strict checks. The scorecard uses an `it.fails()` ratchet for known violations — when fixed, the invariant is permanently enforced.
+**In this codebase:** 18 invariants are enforced by ESLint rules and structural tests in `server/scorecard/`. TypeScript `strict: true` with all strict checks. The scorecard uses an `it.fails()` ratchet for known violations — when fixed, the invariant is permanently enforced.
 
 ---
 

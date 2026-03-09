@@ -54,7 +54,7 @@ Personal AI work assistant with local search, live sessions, and autonomous work
 5. **Delete code** — Less code = fewer bugs. Question every addition
 6. **Verify, don't assume** — Run `npm test`, `swift test`, `npm run lint`. Prove it works
 
-For detailed design invariants (boundary validation, side effect containment, error modeling, etc.), see `docs/invariants.md`. The server enforces 15 structural invariants via `server/scorecard/` — see `server/scorecard/SCORECARD.md`.
+For detailed design invariants (boundary validation, side effect containment, error modeling, etc.), see `docs/invariants.md`. The server enforces 18 structural invariants via `server/scorecard/` — see `server/scorecard/SCORECARD.md`.
 
 ## Quick Reference
 
@@ -72,17 +72,20 @@ cd Shared && swift test            # Swift package tests
 
 ## Architecture
 
-The server uses a **feature-first** architecture with a shared linear dependency chain, enforced by ESLint. See `server/CLAUDE.md` for full details.
+The server uses a **ports-and-adapters** (hexagonal) architecture enforced by ESLint. See `server/CLAUDE.md` for full details.
+
+**Core rule: features are effectless.** Feature code contains business logic, domain rules, and handler registration — never direct I/O. All external effects (database, filesystem, process spawning, network) are behind port interfaces. Adapters in `shared/infra/` implement those ports; `app.ts` wires adapters into features.
 
 ```
-shared/provider → shared/database → shared/runtime
-         ↓               ↓               ↓
-    features/search, features/live, features/scheduler, features/admin
-                              ↓
-                           app.ts (composition root)
+shared/provider/              (cross-cutting ports: types, contracts, auth, logging)
+shared/infra/<technology>/    (adapters organized by technology: database/, runtime/, parsers/)
+gateway/                      (HTTP + WS protocol, message routing)
+features/*/                   (effectless business logic + feature-only ports)
+       ↓
+    app.ts                    (composition root — wires ports to adapters)
 ```
 
-Features import from `shared/` but never from each other. Cross-feature wiring happens in `app.ts`.
+Features import from `shared/provider/` (ports) but never from `shared/infra/` (adapters). Cross-feature imports are type-only. All wiring happens in `app.ts`.
 
 ### Shared Package (`Shared/Sources/ClaudeHistoryShared/`)
 

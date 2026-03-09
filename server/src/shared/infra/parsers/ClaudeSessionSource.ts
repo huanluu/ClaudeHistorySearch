@@ -173,4 +173,8 @@ export class ClaudeSessionSource implements SessionSource {
   async parse(filePath: string): Promise<ParsedSession> {
     return parseClaudeSessionFile(filePath);
   }
+
+  loadTitleMap(projectDir: string): Map<string, string> {
+    return loadSessionsIndex(projectDir);
+  }
 }

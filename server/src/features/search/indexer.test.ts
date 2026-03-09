@@ -2,7 +2,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { copyFileSync, mkdirSync, rmSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
-import { parseSessionFile, type ParsedSession, detectAutomaticSession, indexSessionFile } from './indexer';
+import { type ParsedSession, detectAutomaticSession, indexSessionFile } from './indexer';
 import { createDatabase, createSessionRepository } from '../../shared/infra/database/index';
 import type { SessionRepository } from '../../shared/provider/index';
 import { ClaudeSessionSource } from '../../shared/infra/parsers/index';
@@ -11,6 +11,9 @@ import { noopLogger } from '../../../tests/__helpers/index';
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, '../../../tests/__fixtures__');
+
+const claudeSource = new ClaudeSessionSource();
+const parseSessionFile = claudeSource.parse.bind(claudeSource);
 
 describe('parseSessionFile', () => {
   describe('basic parsing with string content', () => {

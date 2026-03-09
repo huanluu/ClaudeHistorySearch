@@ -9,11 +9,6 @@ export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 // Re-export domain types for backward compatibility
 export type { ParsedMessage, ParsedSession } from '../../shared/provider/index';
 
-// Re-export parseSessionFile for backward compatibility with existing tests
-import { ClaudeSessionSource } from '../../shared/infra/parsers/index';
-const _claudeSource = new ClaudeSessionSource();
-export const parseSessionFile = _claudeSource.parse.bind(_claudeSource);
-
 export interface IndexResult {
   sessionId: string;
   messageCount: number;
@@ -121,21 +116,14 @@ export async function indexSessionFile(
 
 /**
  * Index all session files from the given sources.
- * Falls back to Claude-only indexing if no sources are provided (backward compat).
  */
 export async function indexAllSessions(
   forceReindex: boolean = false,
   repo: SessionRepository,
   logger: Logger,
-  sources?: SessionSource[],
+  sources: SessionSource[],
 ): Promise<IndexAllResult> {
-  // If sources are provided, use the multi-source path
-  if (sources && sources.length > 0) {
-    return indexAllFromSources(forceReindex, sources, repo, logger);
-  }
-
-  // Legacy fallback: Claude-only indexing (for backward compatibility with existing callers)
-  return indexClaudeSessions(forceReindex, repo, logger);
+  return indexAllFromSources(forceReindex, sources, repo, logger);
 }
 
 /**
@@ -188,7 +176,6 @@ async function indexSourceDirectory(
 
   if (pattern.startsWith('**')) {
     // Deeply nested (Claude: projects/<path>/*.jsonl)
-    const { loadSessionsIndex } = await import('../../shared/infra/parsers/index');
     const extension = pattern.includes('.jsonl') ? '.jsonl' : '.json';
     const projectDirs = readdirSync(source.sessionDir);
 
@@ -197,7 +184,7 @@ async function indexSourceDirectory(
       const stat = statSync(projectPath);
       if (!stat.isDirectory()) continue;
 
-      const titleMap = loadSessionsIndex(projectPath);
+      const titleMap = source.loadTitleMap?.(projectPath) ?? new Map<string, string>();
       const files = readdirSync(projectPath);
 
       for (const file of files) {
@@ -261,55 +248,6 @@ async function indexSourceDirectory(
     }
   }
 
-  return { indexed, skipped };
-}
-
-/**
- * Legacy Claude-only indexing (backward compat for callers without SessionSource[]).
- */
-async function indexClaudeSessions(
-  forceReindex: boolean,
-  repo: SessionRepository,
-  logger: Logger,
-): Promise<IndexAllResult> {
-  const { ClaudeSessionSource, loadSessionsIndex } = await import('../../shared/infra/parsers/index');
-  const source = new ClaudeSessionSource();
-  logger.log({ msg: 'Starting indexing of Claude sessions...', op: 'indexer.run' });
-
-  if (!existsSync(PROJECTS_DIR)) {
-    logger.log({ msg: `Projects directory not found: ${PROJECTS_DIR}`, op: 'indexer.run', context: { dir: PROJECTS_DIR } });
-    return { indexed: 0, skipped: 0 };
-  }
-
-  let indexed = 0;
-  let skipped = 0;
-
-  const projectDirs = readdirSync(PROJECTS_DIR);
-
-  for (const projectDir of projectDirs) {
-    const projectPath = join(PROJECTS_DIR, projectDir);
-    const stat = statSync(projectPath);
-    if (!stat.isDirectory()) continue;
-
-    const titleMap = loadSessionsIndex(projectPath);
-    const files = readdirSync(projectPath);
-
-    for (const file of files) {
-      if (!file.endsWith('.jsonl')) continue;
-      const filePath = join(projectPath, file);
-      try {
-        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, titleMap);
-        if (result) indexed++;
-        else skipped++;
-      } catch (e) {
-        const error = e as Error;
-        logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
-        skipped++;
-      }
-    }
-  }
-
-  logger.log({ msg: `Indexing complete: ${indexed} sessions indexed, ${skipped} skipped`, op: 'indexer.run', context: { indexed, skipped } });
   return { indexed, skipped };
 }
 

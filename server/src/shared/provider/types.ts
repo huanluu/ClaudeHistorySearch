@@ -129,6 +129,8 @@ export interface SessionSource {
   readonly sessionDir: string;
   readonly filePattern: string;
   parse(filePath: string): Promise<ParsedSession>;
+  /** Load a title map (sessionId → title) for a project directory, if supported by this source. */
+  loadTitleMap?(projectDir: string): Map<string, string>;
 }
 
 // ── CLI runtime interfaces (write-side abstraction) ─────────────────

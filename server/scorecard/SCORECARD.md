@@ -1,6 +1,6 @@
 # Codebase Scorecard
 
-> 16 invariants. Pass/fail. No judgment needed.
+> 18 invariants. Pass/fail. No judgment needed.
 >
 > Agents optimize locally and create global entropy — each session might produce correct
 > code that gradually degrades the system. These invariants are electric fences that catch drift.
@@ -11,20 +11,21 @@
 
 ---
 
-## Architecture (4-layer tree, ESLint-enforced)
+## Architecture (ports-and-adapters, ESLint-enforced)
 
 ```
-shared/provider     (base layer: types, contracts, auth, logging)
+shared/provider/              (effectless: cross-cutting ports — types, contracts, auth, logging)
        |
-       +-- gateway/          (HTTP + WS protocol)
-       +-- shared/infra/     (database, CLI runtime)
-       +-- features/*        (business logic)
+       +-- gateway/            (effectful: HTTP + WS protocol)
+       +-- shared/infra/<tech>  (effectful: adapters organized by technology)
+       +-- features/*          (effectless: business logic + feature-only ports)
        |
-    app.ts                   (composition root)
+    app.ts                     (composition root — wires ports to adapters)
 ```
 
-Features import from `shared/provider` only. Cross-feature imports are type-only via barrels.
-All wiring happens in `app.ts`.
+Features are effectless — no direct I/O. They define port interfaces and receive adapters via injection.
+Ports: cross-cutting → `shared/provider/types.ts`, feature-only → `features/X/ports.ts`.
+Adapters: always `shared/infra/<technology>/`. All wiring happens in `app.ts`.
 
 ---
 
@@ -73,6 +74,22 @@ All wiring happens in `app.ts`.
 - No variables, functions, or classes — only `interface` and `type` declarations
 - Prevents contract pollution with runtime values
 - **Enforced by:** `scorecard/tests/architecture.test.ts`
+
+#### ARCH-INV-9: Features Must Be Effectless
+> Feature code must not import I/O modules directly.
+
+- Features define port interfaces for the effects they need; adapters in `shared/infra/` implement them
+- Blocked modules: `fs`, `fs/promises`, `child_process`, `net`, `http`, `https`, `better-sqlite3` (and `node:` prefixed variants)
+- Tests are exempt (they may import I/O for mocking/fixtures)
+- **Enforced by:** `eslint.config.js` Block 7c + `scorecard/tests/architecture.test.ts`
+
+#### ARCH-INV-10: Infra Sibling Isolation
+> Infra modules (`shared/infra/<technology>/`) cannot import from sibling infra modules.
+
+- `shared/infra/database/` cannot import from `shared/infra/runtime/` or `shared/infra/parsers/`
+- Each infra module only imports from `shared/provider/` (ports)
+- Prevents lateral coupling between adapter implementations
+- **Enforced by:** `eslint.config.js` Blocks 4, 5, 5b
 
 ### Code Quality
 
@@ -159,8 +176,8 @@ All wiring happens in `app.ts`.
 
 | Layer | Tool | What It Checks |
 |-------|------|---------------|
-| Per-file rules | ESLint (`npm run lint`) | Import direction, barrel encapsulation, `any` usage, `console` usage, `.js` extensions |
-| Cross-file analysis | Vitest (`npm test`) | Cycles, composition root, singletons, type purity, file/function size, secrets, subprocess safety, env containment, process tracking |
+| Per-file rules | ESLint (`npm run lint`) | Import direction, barrel encapsulation, `any` usage, `console` usage, `.js` extensions, effectless features (I/O imports), adapter isolation |
+| Cross-file analysis | Vitest (`npm test`) | Cycles, composition root, singletons, type purity, file/function size, secrets, subprocess safety, env containment, process tracking, effectless features, adapter isolation |
 
 ## How to Run
 

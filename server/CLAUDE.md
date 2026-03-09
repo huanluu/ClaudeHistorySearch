@@ -67,18 +67,31 @@ Copilot CLI stores session history as JSONL event logs:
 - **Live sessions**: The `AgentExecutor` spawns CLI processes. Both CLIs support `-p` and `--resume` with JSONL output, but event schemas differ — needs per-runtime stream parsing.
 - **Boundary rule**: CLI file formats are **untrusted external data**. Parsers validate and transform at the boundary; domain code never touches raw CLI formats.
 
-## Layered Architecture (ESLint-Enforced)
+## Ports-and-Adapters Architecture (ESLint-Enforced)
 
-The server has 4 layers with strict dependency rules:
+### The Effectful/Effectless Boundary
+
+This is the most important architectural concept. Every file in the server falls on one side:
+
+| | Effectless (pure logic) | Effectful (I/O, side effects) |
+|---|---|---|
+| **What** | Business logic, domain rules, data transforms, handler registration | Database queries, process spawning, filesystem reads, network calls |
+| **Where** | `features/*/`, `shared/provider/` | `shared/infra/`, `gateway/` |
+| **Ports** | Features define interfaces for the effects they need | Adapters implement those interfaces |
+| **Rule** | Features NEVER import I/O modules (`fs`, `child_process`, `better-sqlite3`) | Adapters NEVER contain business logic |
+
+Features define **what** should happen. Adapters define **how** it touches the outside world. `app.ts` wires them together.
+
+### Layer Diagram
 
 ```
-shared/provider     (utility: types, contracts, auth, logging)
+shared/provider/            (effectless: cross-cutting ports — types, contracts, auth, logging)
        ↓ imported by all layers
-       ├── gateway/          (HTTP + WS protocol, client communication)
-       ├── shared/infra/     (database, CLI runtime — effectful adapters)
-       └── features/*        (business logic, handler registration)
+       ├── gateway/          (effectful: HTTP + WS protocol, client communication)
+       ├── shared/infra/<technology>/  (effectful: adapters organized by technology)
+       └── features/*        (effectless: business logic, feature ports, handler registration)
                 ↓
-             app.ts          (composition root — wires everything)
+             app.ts          (composition root — wires ports to adapters)
 ```
 
 ### Dependency Rules (ESLint-enforced)
@@ -86,22 +99,71 @@ shared/provider     (utility: types, contracts, auth, logging)
 | From → To | provider | infra | gateway | features | app.ts |
 |-----------|:--------:|:-----:|:-------:|:--------:|:------:|
 | **provider** | — | NO | NO | NO | — |
-| **infra** | YES | — | NO | NO | — |
+| **infra** | YES | sibling infra: NO | NO | NO | — |
 | **gateway** | YES | NO | — | NO | — |
 | **features** | YES | **NEVER** | type-only | type-only cross-feature | — |
 | **app.ts** | YES | YES | YES | YES | — |
 
 ### Where to Put New Code
 
-| I need to... | Put it in... |
-|-------------|-------------|
-| Add a new REST endpoint | `features/X/routes.ts` → register with HTTP router |
-| Add a new WebSocket message type | `gateway/protocol.ts` (type) + `features/X/handlers.ts` (handler) |
-| Add a new CLI runtime (e.g., Copilot CLI) | `shared/infra/runtime/` (implementation) + port interface in consuming feature |
-| Add a new database table/query | `shared/provider/types.ts` (interface) + `shared/infra/database/` (implementation) |
-| Add a utility function | `shared/provider/` |
-| Push a notification to the Mac app | Feature calls `eventBus.broadcast()` (injected from gateway via app.ts) |
-| Add a new workflow type | `features/workflows/` (handler + config) |
+**Decision tree** — ask these questions in order:
+
+1. **Does it perform I/O or side effects?** (DB, filesystem, network, process spawn)
+   - YES → It's an **adapter** → `shared/infra/<technology>/` (named by what it wraps, e.g., `database/`, `runtime/`, `llm/`)
+   - NO → Continue...
+2. **Is it business logic, domain rules, or handler registration?**
+   - YES → It's a **feature** → `features/X/`
+   - NO → Continue...
+3. **Is it a type/interface for an I/O capability?**
+   - Used by 2+ features → Cross-cutting **port** → `shared/provider/types.ts`
+   - Used by 1 feature only → Feature **port** → `features/X/ports.ts`
+4. **Is it about HTTP/WS protocol, message routing, or client communication?**
+   - YES → `gateway/`
+5. **Is it a cross-cutting utility?** (logging, auth, config resolution)
+   - YES → `shared/provider/<area>/`
+
+**Quick reference:**
+
+| I need to... | Port (interface) | Adapter (implementation) | Feature (logic) |
+|---|---|---|---|
+| Add a new REST endpoint | — | — | `features/X/routes.ts` |
+| Add a new WebSocket message type | `gateway/protocol.ts` (wire type) | — | `features/X/handlers.ts` (handler) |
+| Add a new CLI runtime | `shared/provider/types.ts` (`CliRuntime`) | `shared/infra/runtime/` | — |
+| Add a new DB table/query | `shared/provider/types.ts` (repository interface) | `shared/infra/database/` | — |
+| Call an external API (LLM, REST, etc.) | Port in `shared/provider/types.ts` or `features/X/ports.ts` | `shared/infra/<technology>/` (e.g., `llm/`) | — |
+| Add a utility function | `shared/provider/` | — | — |
+| Push a notification to the Mac app | — | — | Feature calls `broadcast()` (injected from gateway via app.ts) |
+
+### Port and Adapter Placement Rules
+
+**Ports** — where to define the interface:
+
+| Port consumed by... | Put it in... | Example |
+|---|---|---|
+| 2+ features (cross-cutting) | `shared/provider/types.ts` | `SessionRepository`, `CliRuntime`, `AgentSession` |
+| 1 feature only | `features/X/ports.ts` | (created when needed — none exist yet) |
+| Wire/transport | `gateway/protocol.ts` | `WSMessage`, `AuthenticatedClient` |
+| Gateway handler registration | `gateway/types.ts` | `WsGateway`, `WsHandler` |
+
+**Adapters** — always organized by technology, never by feature:
+
+| Technology | Adapter folder | Implements |
+|---|---|---|
+| SQLite | `shared/infra/database/` | `SessionRepository`, `HeartbeatRepository` |
+| CLI subprocesses | `shared/infra/runtime/` | `CliRuntime`, `AgentSession` |
+| Session file parsing | `shared/infra/parsers/` | `SessionSource` |
+| *(new: LLM API)* | `shared/infra/llm/` | *(future LLM port)* |
+
+**Current ports** — all cross-cutting, all in `shared/provider/types.ts`:
+
+| Port | Consumers | Adapter |
+|---|---|---|
+| `SessionRepository` | search, admin | `shared/infra/database/` |
+| `HeartbeatRepository` | scheduler, admin | `shared/infra/database/` |
+| `CliRuntime`, `AgentSession` | live, scheduler | `shared/infra/runtime/` |
+| `SessionSource` | search | `shared/infra/parsers/` |
+
+Note: `SessionSource` is only consumed by `search` — if it stays that way, it's a candidate for `features/search/ports.ts`.
 
 ### Key Contracts
 
@@ -109,8 +171,8 @@ shared/provider     (utility: types, contracts, auth, logging)
 |----------|------|---------|---------|
 | Wire protocol | `gateway/protocol.ts` | Server ↔ Client (Mac app) | All message types, payload shapes |
 | Gateway interface | `gateway/types.ts` | Gateway ↔ Features | Handler registration, send/broadcast, client lifecycle hooks |
-| Domain types | `shared/provider/types.ts` | Features ↔ Infra | SessionRepository, HeartbeatRepository, record types (types only, no values) |
-| Feature ports | `features/*/index.ts` | Feature ↔ Infra | Per-feature interfaces (e.g., `AgentExecutorPort` in features/live) |
+| Cross-cutting ports | `shared/provider/types.ts` | Features ↔ Infra | SessionRepository, HeartbeatRepository, CliRuntime, record types (types only, no values) |
+| Feature ports | `features/*/ports.ts` | Feature ↔ Infra | Interfaces consumed by only that feature (created when needed) |
 
 ### Gateway
 
@@ -123,21 +185,24 @@ shared/provider     (utility: types, contracts, auth, logging)
 
 ### Shared Modules
 
-| Module | Purpose | Can Import |
-|--------|---------|------------|
-| `shared/provider/` | Utilities + domain type contracts | Nothing (base layer) |
-| `shared/provider/types.ts` | Types/interfaces only — SessionRepository, record types | Nothing |
-| `shared/infra/database/` | SQLite implementations of repository contracts | `shared/provider` (strict barrel) |
-| `shared/infra/runtime/` | CLI runtime adapters (AgentExecutor) | `shared/provider` (strict barrel) |
+| Module | Effectful? | Purpose | Can Import |
+|--------|:---:|---------|------------|
+| `shared/provider/` | No | Cross-cutting ports: domain type contracts, auth, logging, security | Nothing (base layer) |
+| `shared/provider/types.ts` | No | Types/interfaces only — repositories, CliRuntime, record types | Nothing |
+| `shared/infra/database/` | **Yes** | SQLite: DB connection, schema, `SqliteSessionRepository`, `SqliteHeartbeatRepository` | `shared/provider` (strict barrel) |
+| `shared/infra/runtime/` | **Yes** | CLI subprocesses: `ClaudeRuntime`, `CopilotRuntime` | `shared/provider` (strict barrel) |
+| `shared/infra/parsers/` | **Yes** | Session file parsing: `ClaudeSessionSource`, `CopilotSessionSource` | `shared/provider` (strict barrel) |
 
-### Feature Modules
+### Feature Modules (effectless — no I/O)
 
 | Module | Purpose | Key Files |
 |--------|---------|-----------|
 | `features/search/` | Session indexing, FTS5 search, file watching | `indexer.ts`, `FileWatcher.ts`, `routes.ts` |
-| `features/live/` | Interactive agent sessions | `AgentStore.ts`, `handlers.ts` (registers WS handlers) |
+| `features/live/` | Interactive agent sessions | `AgentStore.ts`, `handlers.ts` |
 | `features/scheduler/` | Autonomous agent runs on a schedule | `HeartbeatService.ts`, `routes.ts` |
 | `features/admin/` | Observability, config management | `DiagnosticsService.ts`, `ConfigService.ts`, `routes.ts` |
+
+Feature `ports.ts` files are created only when a feature needs a port that no other feature shares. Currently all ports are cross-cutting and live in `shared/provider/types.ts`.
 
 ### Root Files
 
@@ -164,8 +229,10 @@ export function registerLiveHandlers(gateway: WsGateway, deps: LiveDeps) {
 Features receive narrow interfaces — never the full gateway or infra internals.
 
 **Key rules (enforced by ESLint + scorecard):**
+- Features are **effectless** — no direct I/O imports (`fs`, `child_process`, `better-sqlite3`, etc.) (enforced by **ARCH-INV-9**)
 - Features NEVER import from `shared/infra/` — use interfaces from `shared/provider/` and receive implementations via injection
 - Features can only `import type` from `gateway/` — receive gateway dependencies via injection
+- Feature-specific adapters in `shared/infra/<feature>/` can import from `shared/infra/provider/` (cross-cutting adapters) but not from other feature adapters
 - All cross-module imports go through `index.ts` barrels
 - No circular dependencies
 - `shared/provider/types.ts` must only contain types/interfaces (enforced by scorecard test)
@@ -197,7 +264,7 @@ Barrel files are exempt from this rule since they wire internal imports.
 - **No `any`**: ESLint forbids `any` in source code. Use precise types or `unknown`
 - **No `console`**: Use the structured logger from `shared/provider/`. `console` is ESLint-banned outside logger
 - **Constructor injection**: Services receive dependencies explicitly via the composition root (`app.ts`). No global singletons
-- **Repository pattern**: Data access behind interfaces (`SessionRepository`, `HeartbeatRepository`) in `shared/database/interfaces.ts`
+- **Repository pattern**: Data access behind interfaces (`SessionRepository`, `HeartbeatRepository`) in `shared/provider/types.ts`, implemented in `shared/infra/<feature>/`
 - **TypeScript strictness**: `tsconfig.json` enables all strict checks — `noImplicitAny`, `strictNullChecks`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`. Code must compile cleanly
 
 ## Composition Root
@@ -346,16 +413,19 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | `src/app.ts` | Composition root — start here to understand wiring |
 | `src/gateway/protocol.ts` | Wire format: all message types between server and client |
 | `src/gateway/WebSocketGateway.ts` | WebSocket auth, connection management, message routing |
-| `src/shared/provider/types.ts` | Domain contracts: `SessionRepository`, `HeartbeatRepository`, record types |
-| `src/shared/infra/runtime/AgentExecutor.ts` | Spawns headless `claude -p` subprocesses |
-| `src/features/search/indexer.ts` | JSONL parsing and SQLite FTS5 indexing |
+| `src/shared/provider/types.ts` | Cross-cutting ports: `SessionRepository`, `HeartbeatRepository`, `CliRuntime`, record types |
+| `src/shared/infra/database/` | Adapter: SQLite connection, schema, repositories |
+| `src/shared/infra/runtime/` | Adapter: `ClaudeRuntime`, `CopilotRuntime` (CLI subprocesses) |
+| `src/shared/infra/parsers/` | Adapter: `ClaudeSessionSource`, `CopilotSessionSource` (file parsing) |
+| `src/features/*/ports.ts` | Feature-only port interfaces (created when port serves one feature) |
+| `src/features/search/indexer.ts` | JSONL parsing and SQLite FTS5 indexing (effectless) |
 | `src/features/live/handlers.ts` | WebSocket session handlers (start, resume, cancel) |
-| `src/features/live/AgentStore.ts` | Session tracking + `AgentExecutorPort` interface |
+| `src/features/live/AgentStore.ts` | Session tracking + `SessionFactory` port |
 | `src/features/scheduler/HeartbeatService.ts` | Autonomous agent runs on a schedule |
 | `eslint.config.js` | Module boundary + quality rules (flat config format) |
 | `tests/__fixtures__/` | Shared test fixtures (sample JSONL files) |
 | `src/**/*.test.ts` | Co-located unit tests (next to source files) |
-| `scorecard/SCORECARD.md` | 15 invariant definitions (pass/fail, no metrics) |
+| `scorecard/SCORECARD.md` | 17 invariant definitions (pass/fail, no metrics) |
 | `scorecard/tests/*.test.ts` | Structural invariant tests, split by domain |
 | `scorecard/baseline.json` | Current invariant pass/fail state |
 | `docs/invariants.md` | Design principles for AI-assisted development |
