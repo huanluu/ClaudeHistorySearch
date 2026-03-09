@@ -83,7 +83,7 @@ Every async task must make it clear who started it, who awaits it, how errors su
 
 Database access, filesystem writes, network requests, and process spawning should be behind focused abstractions. The point is to localize volatility and create seams for testing, mocking, and future replacement. Features must be **effectless** — they define port interfaces for the I/O they need, and adapters in `shared/infra/` implement those ports.
 
-**In this codebase:** Database access is behind `SessionRepository` and `HeartbeatRepository` interfaces in `shared/provider/types.ts`. CLI execution is behind `CliRuntime`/`AgentSession` interfaces. Feature code is forbidden from importing I/O modules (`fs`, `child_process`, `better-sqlite3`, etc.) — enforced by ESLint. Adapters live in `shared/infra/<feature>/` (feature-specific) or `shared/infra/provider/` (cross-cutting). No module may export singleton instances (enforced by **ARCH-INV-7**).
+**In this codebase:** Database access is behind `SessionRepository` and `HeartbeatRepository` interfaces in `shared/provider/types.ts`. CLI execution is behind `CliRuntime`/`AgentSession` interfaces. Feature code is forbidden from importing I/O modules (`fs`, `child_process`, `better-sqlite3`, etc.) — enforced by ESLint. Adapters live in `shared/infra/<technology>/` (organized by what they wrap: `database/`, `runtime/`, `parsers/`). Ports are organized by consumer: cross-cutting in `shared/provider/types.ts`, feature-specific in `features/X/ports.ts`. No module may export singleton instances (enforced by **ARCH-INV-7**).
 
 ## 10. API and persistence boundaries must not leak internal representations
 

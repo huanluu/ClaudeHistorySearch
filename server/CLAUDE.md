@@ -232,7 +232,7 @@ Features receive narrow interfaces — never the full gateway or infra internals
 - Features are **effectless** — no direct I/O imports (`fs`, `child_process`, `better-sqlite3`, etc.) (enforced by **ARCH-INV-9**)
 - Features NEVER import from `shared/infra/` — use interfaces from `shared/provider/` and receive implementations via injection
 - Features can only `import type` from `gateway/` — receive gateway dependencies via injection
-- Feature-specific adapters in `shared/infra/<feature>/` can import from `shared/infra/provider/` (cross-cutting adapters) but not from other feature adapters
+- Infra adapters in `shared/infra/<technology>/` can import from `shared/provider/` (cross-cutting ports) but not from sibling infra adapters
 - All cross-module imports go through `index.ts` barrels
 - No circular dependencies
 - `shared/provider/types.ts` must only contain types/interfaces (enforced by scorecard test)
@@ -321,7 +321,7 @@ describe('SessionRepository', () => {
 
 ### Scorecard System
 
-15 pass/fail invariants enforced by ESLint and structural tests. No subjective metrics.
+18 pass/fail invariants enforced by ESLint and structural tests. No subjective metrics.
 
 | File | Purpose |
 |------|---------|
@@ -425,7 +425,7 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | `eslint.config.js` | Module boundary + quality rules (flat config format) |
 | `tests/__fixtures__/` | Shared test fixtures (sample JSONL files) |
 | `src/**/*.test.ts` | Co-located unit tests (next to source files) |
-| `scorecard/SCORECARD.md` | 17 invariant definitions (pass/fail, no metrics) |
+| `scorecard/SCORECARD.md` | 18 invariant definitions (pass/fail, no metrics) |
 | `scorecard/tests/*.test.ts` | Structural invariant tests, split by domain |
 | `scorecard/baseline.json` | Current invariant pass/fail state |
 | `docs/invariants.md` | Design principles for AI-assisted development |
