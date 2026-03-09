@@ -11,7 +11,9 @@
 export type MessageType =
   | 'ping' | 'pong' | 'auth' | 'auth_result' | 'error' | 'message'
   | 'session.start' | 'session.cancel' | 'session.resume'
-  | 'session.output' | 'session.error' | 'session.complete';
+  | 'session.output' | 'session.error' | 'session.complete'
+  | 'assistant.message' | 'assistant.cancel'
+  | 'assistant.delta' | 'assistant.complete' | 'assistant.error';
 
 export interface WSMessage {
   type: MessageType;
@@ -59,6 +61,32 @@ export interface SessionErrorPayload {
 export interface SessionCompletePayload {
   sessionId: string;
   exitCode: number;
+}
+
+// ── Assistant payloads ──────────────────────────────────────────────
+
+export interface AssistantMessagePayload {
+  conversationId: string;
+  text: string;
+}
+
+export interface AssistantCancelPayload {
+  conversationId: string;
+}
+
+export interface AssistantDeltaPayload {
+  conversationId: string;
+  text: string;
+}
+
+export interface AssistantCompletePayload {
+  conversationId: string;
+}
+
+export interface AssistantErrorPayload {
+  conversationId: string;
+  error: string;
+  errorCode?: string;
 }
 
 // ── Client abstraction ──────────────────────────────────────────────

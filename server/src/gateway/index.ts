@@ -4,6 +4,8 @@ export type {
   AuthPayload, AuthResultPayload,
   SessionStartPayload, SessionResumePayload, SessionCancelPayload,
   SessionOutputPayload, SessionErrorPayload, SessionCompletePayload,
+  AssistantMessagePayload, AssistantCancelPayload,
+  AssistantDeltaPayload, AssistantCompletePayload, AssistantErrorPayload,
   AuthenticatedClient,
 } from './protocol';
 
@@ -14,12 +16,14 @@ export type { WsHandler, WsConnectionHandler, WsGateway } from './types';
 export {
   payloadSchemas,
   AuthPayloadSchema, SessionStartPayloadSchema, SessionResumePayloadSchema,
-  SessionCancelPayloadSchema, SearchQuerySchema, SessionsQuerySchema,
+  SessionCancelPayloadSchema, AssistantMessagePayloadSchema, AssistantCancelPayloadSchema,
+  SearchQuerySchema, SessionsQuerySchema,
   ConfigUpdateBodySchema,
 } from './schemas';
 export type {
   ValidatedSessionStartPayload, ValidatedSessionResumePayload,
-  ValidatedSessionCancelPayload, ValidatedSearchQuery, ValidatedSessionsQuery,
+  ValidatedSessionCancelPayload, ValidatedAssistantMessagePayload,
+  ValidatedAssistantCancelPayload, ValidatedSearchQuery, ValidatedSessionsQuery,
 } from './schemas';
 
 // Validation middleware

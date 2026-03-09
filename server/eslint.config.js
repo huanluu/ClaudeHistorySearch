@@ -23,6 +23,8 @@ const moduleBoundaries = [
   { name: 'features/live',         message: "Import from 'features/live/index' instead." },
   { name: 'features/scheduler',    message: "Import from 'features/scheduler/index' instead." },
   { name: 'features/admin',        message: "Import from 'features/admin/index' instead." },
+  { name: 'features/assistant',    message: "Import from 'features/assistant/index' instead." },
+  { name: 'shared/infra/assistant', message: "Import from 'shared/infra/assistant/index' instead." },
 ];
 
 /**
@@ -80,6 +82,8 @@ export default tseslint.config(
       'src/features/live/index.ts',
       'src/features/scheduler/index.ts',
       'src/features/admin/index.ts',
+      'src/features/assistant/index.ts',
+      'src/shared/infra/assistant/index.ts',
     ],
     rules: {
       '@typescript-eslint/no-restricted-imports': 'off',
@@ -109,6 +113,7 @@ export default tseslint.config(
           ...strictBarrelPatterns('shared/provider'),
           { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -125,6 +130,7 @@ export default tseslint.config(
           ...strictBarrelPatterns('shared/provider'),
           { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -141,6 +147,24 @@ export default tseslint.config(
           ...strictBarrelPatterns('shared/provider'),
           { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
+          { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
+        ],
+      }],
+    },
+  },
+
+  // ── Block 5c: shared/infra/assistant — imports shared/provider only, no sibling infra ──
+  {
+    files: ['src/shared/infra/assistant/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [
+          ...strictBarrelPatterns('shared/provider'),
+          { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -179,6 +203,7 @@ export default tseslint.config(
           { group: ['**/features/live/*', '!**/features/live/index*'], allowTypeImports: true, message: "Import from 'features/live/index' instead." },
           { group: ['**/features/scheduler/*', '!**/features/scheduler/index*'], allowTypeImports: true, message: "Import from 'features/scheduler/index' instead." },
           { group: ['**/features/admin/*', '!**/features/admin/index*'], allowTypeImports: true, message: "Import from 'features/admin/index' instead." },
+          { group: ['**/features/assistant/*', '!**/features/assistant/index*'], allowTypeImports: true, message: "Import from 'features/assistant/index' instead." },
         ],
       }],
     },

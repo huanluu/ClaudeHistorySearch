@@ -36,6 +36,17 @@ export const SessionCancelPayloadSchema = z.object({
   sessionId: z.string(),
 });
 
+// ── Assistant payload schemas ──────────────────────────────────────
+
+export const AssistantMessagePayloadSchema = z.object({
+  conversationId: z.string(),
+  text: z.string().min(1),
+});
+
+export const AssistantCancelPayloadSchema = z.object({
+  conversationId: z.string(),
+});
+
 // ping has no payload — validated separately in the gateway
 
 // ── Schema registry ────────────────────────────────────────────────
@@ -51,6 +62,8 @@ export const payloadSchemas: Partial<Record<MessageType, z.ZodType>> = {
   'session.start': SessionStartPayloadSchema,
   'session.resume': SessionResumePayloadSchema,
   'session.cancel': SessionCancelPayloadSchema,
+  'assistant.message': AssistantMessagePayloadSchema,
+  'assistant.cancel': AssistantCancelPayloadSchema,
 };
 
 // ── HTTP query param schemas ───────────────────────────────────────
@@ -79,5 +92,7 @@ export const ConfigUpdateBodySchema = z.record(z.string(), z.unknown());
 export type ValidatedSessionStartPayload = z.infer<typeof SessionStartPayloadSchema>;
 export type ValidatedSessionResumePayload = z.infer<typeof SessionResumePayloadSchema>;
 export type ValidatedSessionCancelPayload = z.infer<typeof SessionCancelPayloadSchema>;
+export type ValidatedAssistantMessagePayload = z.infer<typeof AssistantMessagePayloadSchema>;
+export type ValidatedAssistantCancelPayload = z.infer<typeof AssistantCancelPayloadSchema>;
 export type ValidatedSearchQuery = z.infer<typeof SearchQuerySchema>;
 export type ValidatedSessionsQuery = z.infer<typeof SessionsQuerySchema>;
