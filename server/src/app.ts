@@ -7,7 +7,7 @@ import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQue
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AssistantService, registerAssistantHandlers } from './features/assistant/index';
-import { EchoAssistantBackend } from './shared/infra/assistant/index';
+import { SdkAssistantBackend } from './shared/infra/assistant/index';
 import { ClaudeRuntime, CopilotRuntime } from './shared/infra/runtime/index';
 import type { CliRuntime } from './shared/provider/index';
 import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
@@ -194,8 +194,8 @@ export function createApp(config: AppConfig): App {
       });
 
       // Register assistant handlers
-      const echoBackend = new EchoAssistantBackend();
-      const assistantService = new AssistantService(echoBackend, logger);
+      const assistantBackend = new SdkAssistantBackend(logger);
+      const assistantService = new AssistantService(assistantBackend, logger);
       registerAssistantHandlers(wsGateway, { assistantService, logger });
 
       // Connection logging

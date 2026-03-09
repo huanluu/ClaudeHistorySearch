@@ -1,1 +1,1 @@
-export { EchoAssistantBackend } from './EchoAssistantBackend';
+export { SdkAssistantBackend } from './SdkAssistantBackend';

@@ -1,13 +1,15 @@
 #!/usr/bin/env tsx
 /**
- * Manual test script for the assistant WebSocket echo backend.
+ * Manual test script for the assistant WebSocket backend.
  *
  * Usage:
  *   cd server
  *   npx tsx scripts/test-assistant-ws.ts            # interactive mode
  *   npx tsx scripts/test-assistant-ws.ts "hello"    # one-shot mode
+ *   npx tsx scripts/test-assistant-ws.ts --smoke     # smoke test (structural assertions)
  *
  * Requires the server to be running (npm start or launchd).
+ * Must run OUTSIDE Claude Code (unset CLAUDECODE) for SDK backend.
  * Reads API key from ~/.claude-history-server/.api-key.
  */
 
@@ -93,13 +95,97 @@ function sendMessage(ws: WebSocket, text: string, conversationId: string): void 
   }));
 }
 
+/** Collect events for a single message, with timeout. */
+function collectEvents(
+  ws: WebSocket,
+  text: string,
+  conversationId: string,
+  timeoutMs = 60000,
+): Promise<WSMessage[]> {
+  return new Promise((resolve, reject) => {
+    const events: WSMessage[] = [];
+    const timer = setTimeout(() => {
+      ws.off('message', handler);
+      reject(new Error(`Timeout after ${timeoutMs}ms waiting for response`));
+    }, timeoutMs);
+
+    function handler(data: WebSocket.RawData): void {
+      const msg = JSON.parse(data.toString()) as WSMessage;
+      if (msg.type === 'assistant.delta' || msg.type === 'assistant.complete' || msg.type === 'assistant.error') {
+        const payload = msg.payload as Record<string, unknown> | undefined;
+        if (payload?.conversationId === conversationId) {
+          events.push(msg);
+          if (msg.type === 'assistant.complete' || msg.type === 'assistant.error') {
+            clearTimeout(timer);
+            ws.off('message', handler);
+            resolve(events);
+          }
+        }
+      }
+    }
+
+    ws.on('message', handler);
+    sendMessage(ws, text, conversationId);
+  });
+}
+
+async function runSmokeTest(ws: WebSocket): Promise<void> {
+  const conversationId = `smoke-${Date.now()}`;
+  let passed = 0;
+  let failed = 0;
+
+  function assert(name: string, condition: boolean, detail = ''): void {
+    if (condition) {
+      console.log(`  \x1b[32m✓\x1b[0m ${name}`);
+      passed++;
+    } else {
+      console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `: ${detail}` : ''}`);
+      failed++;
+    }
+  }
+
+  // --- Test 1: First message ---
+  console.log('\nTest 1: First message produces delta + complete');
+  const events1 = await collectEvents(ws, 'What is 2+2? Reply briefly.', conversationId);
+
+  const deltas1 = events1.filter(e => e.type === 'assistant.delta');
+  const completes1 = events1.filter(e => e.type === 'assistant.complete');
+
+  assert('At least one assistant.delta', deltas1.length >= 1, `got ${deltas1.length}`);
+  assert('Exactly one assistant.complete', completes1.length === 1, `got ${completes1.length}`);
+  assert('conversationId round-trips', (completes1[0]?.payload as Record<string, unknown>)?.conversationId === conversationId);
+
+  // --- Test 2: Second message (verifies resume works) ---
+  console.log('\nTest 2: Second message (session resume)');
+  const events2 = await collectEvents(ws, "Say the word 'pineapple'.", conversationId);
+
+  const deltas2 = events2.filter(e => e.type === 'assistant.delta');
+  const completes2 = events2.filter(e => e.type === 'assistant.complete');
+
+  assert('Second message produces deltas', deltas2.length >= 1, `got ${deltas2.length}`);
+  assert('Second message completes', completes2.length === 1, `got ${completes2.length}`);
+
+  // --- Summary ---
+  console.log(`\n${passed} passed, ${failed} failed`);
+  if (failed > 0) {
+    process.exitCode = 1;
+  }
+}
+
 async function main(): Promise<void> {
   const apiKey = getApiKey();
-  const oneShotText = process.argv[2];
+  const isSmokeTest = process.argv.includes('--smoke');
+  const oneShotText = isSmokeTest ? undefined : process.argv[2];
 
   console.log(`Connecting to ws://127.0.0.1:${PORT}/ws ...`);
   const ws = await connect(apiKey);
   console.log('Connected and authenticated.\n');
+
+  if (isSmokeTest) {
+    await runSmokeTest(ws);
+    ws.close();
+    return;
+  }
 
   listenForResponses(ws);
 

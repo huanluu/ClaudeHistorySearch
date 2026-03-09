@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import WebSocket from 'ws';
 import { HttpTransport, WebSocketGateway } from '../../gateway/index';
 import { AssistantService, registerAssistantHandlers } from './index';
-import { EchoAssistantBackend } from '../../shared/infra/assistant/index';
+import { MockAssistantBackend } from '../../../tests/__helpers/MockAssistantBackend';
 import { noopLogger, createTestApiKey } from '../../../tests/__helpers/index';
 import { waitForMessage } from '../../../tests/__helpers/ws-helpers';
 import type { WSMessage } from '../../../tests/__helpers/ws-helpers';
@@ -32,8 +32,27 @@ describe('Assistant WebSocket Integration', () => {
     const address = server.address() as { port: number };
     serverPort = address.port;
 
-    const echoBackend = new EchoAssistantBackend();
-    const assistantService = new AssistantService(echoBackend, noopLogger);
+    // Each call gets its own event sequence — enough sequences for all test cases.
+    // The mock cycles through sequences; tests that send multiple messages need multiple entries.
+    const mockBackend = new MockAssistantBackend([
+      // Test 1: sends assistant.message and receives delta + complete
+      [{ type: 'delta', text: 'Hello back' }, { type: 'complete', sessionId: 'integ-sess-1' }],
+      // Test 2: deltas contain correct conversationId
+      [{ type: 'delta', text: 'Test response' }, { type: 'complete', sessionId: 'integ-sess-2' }],
+      // Test 3: multi-turn first message
+      [{ type: 'delta', text: 'First reply' }, { type: 'complete', sessionId: 'integ-sess-3' }],
+      // Test 3: multi-turn second message
+      [{ type: 'delta', text: 'Second reply' }, { type: 'complete', sessionId: 'integ-sess-3' }],
+      // Test 4: cancel — first message (may be aborted)
+      [{ type: 'delta', text: 'Cancelled' }, { type: 'complete', sessionId: 'integ-sess-4' }],
+      // Test 4: message after cancel
+      [{ type: 'delta', text: 'Still works' }, { type: 'complete', sessionId: 'integ-sess-5' }],
+      // Test 6: disconnect/reconnect first message
+      [{ type: 'delta', text: 'Turn 1' }, { type: 'complete', sessionId: 'integ-sess-6' }],
+      // Test 6: disconnect/reconnect second message
+      [{ type: 'delta', text: 'Turn 2' }, { type: 'complete', sessionId: 'integ-sess-6' }],
+    ]);
+    const assistantService = new AssistantService(mockBackend, noopLogger);
 
     wsGateway = new WebSocketGateway({ server, path: '/ws', logger: noopLogger });
     registerAssistantHandlers(wsGateway, { assistantService, logger: noopLogger });
@@ -78,7 +97,7 @@ describe('Assistant WebSocket Integration', () => {
 
     const delta = await deltaP;
     expect((delta.payload as { conversationId: string }).conversationId).toBe('conv-1');
-    expect((delta.payload as { text: string }).text).toBe('Echo: hello world');
+    expect((delta.payload as { text: string }).text).toBe('Hello back');
 
     const complete = await completeP;
     expect((complete.payload as { conversationId: string }).conversationId).toBe('conv-1');
@@ -122,7 +141,7 @@ describe('Assistant WebSocket Integration', () => {
     }));
 
     const delta2 = await delta2P;
-    expect((delta2.payload as { text: string }).text).toBe('Echo: second');
+    expect((delta2.payload as { text: string }).text).toBe('Second reply');
 
     const complete2 = await complete2P;
     expect((complete2.payload as { conversationId: string }).conversationId).toBe('conv-multi');
@@ -138,7 +157,7 @@ describe('Assistant WebSocket Integration', () => {
       payload: { conversationId: 'conv-cancel', text: 'something' },
     }));
 
-    // EchoBackend is fast, but we send cancel anyway to verify it doesn't crash
+    // MockBackend is fast, but we send cancel anyway to verify it doesn't crash
     ws.send(JSON.stringify({
       type: 'assistant.cancel',
       payload: { conversationId: 'conv-cancel' },
@@ -151,7 +170,7 @@ describe('Assistant WebSocket Integration', () => {
     }));
 
     const delta = await waitForMessage(ws, 'assistant.delta');
-    expect((delta.payload as { text: string }).text).toBe('Echo: still works');
+    expect((delta.payload as { text: string }).text).toBe('Still works');
 
     ws.close();
   });
@@ -191,7 +210,7 @@ describe('Assistant WebSocket Integration', () => {
     }));
 
     const delta = await delta2P;
-    expect((delta.payload as { text: string }).text).toBe('Echo: turn2');
+    expect((delta.payload as { text: string }).text).toBe('Turn 2');
 
     const complete = await complete2P;
     expect((complete.payload as { conversationId: string }).conversationId).toBe('conv-reconnect');

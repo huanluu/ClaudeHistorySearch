@@ -20,6 +20,12 @@ npm run key:generate   # Generate API key (destructive — invalidates existing 
 
 This server **piggybacks on the local file artifacts** produced by AI coding CLIs. It does not maintain its own conversation storage — the CLI-written files are the source of truth, and our SQLite database is a read-optimized index.
 
+### Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+
+The assistant feature uses the Claude Agent SDK to provide real LLM conversations. The SDK **piggybacks on the local Claude CLI** — no separate API key or Anthropic account needed. It spawns Claude CLI as a subprocess and streams responses.
+
+**Important**: The SDK cannot run inside Claude Code (the `CLAUDECODE` env var blocks nested subprocess spawning). When testing the assistant backend manually, run the server in a separate terminal with `CLAUDECODE` unset.
+
 ### Currently supported: Claude CLI
 
 Claude Code stores every session transcript as a JSONL file:
