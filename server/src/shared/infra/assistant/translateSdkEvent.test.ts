@@ -148,8 +148,16 @@ describe('translateSdkEvent', () => {
     expect(result2.state.sessionId).toBe('sess-2');
   });
 
+  it('assistant message is swallowed but captures session_id', () => {
+    const msg: SdkMessage = { type: 'assistant', session_id: 'sess-from-assistant' };
+    const result = translateSdkEvent(msg, emptyState());
+
+    expect(result.event).toBeNull();
+    expect(result.state.sessionId).toBe('sess-from-assistant');
+  });
+
   it('unknown message type returns null event', () => {
-    const msg: SdkMessage = { type: 'assistant' };
+    const msg: SdkMessage = { type: 'status' };
     const result = translateSdkEvent(msg, stateWithSession('sess-1'));
 
     expect(result.event).toBeNull();

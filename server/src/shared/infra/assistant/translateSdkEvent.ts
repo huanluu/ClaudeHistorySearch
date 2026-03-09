@@ -53,12 +53,18 @@ interface SdkErrorResult {
   session_id: string;
 }
 
+interface SdkAssistantMessage {
+  type: 'assistant';
+  session_id: string;
+}
+
 /** Union of SDK messages we explicitly handle. Unknown types fall through to null. */
 export type SdkMessage =
   | SdkSystemMessage
   | SdkStreamEvent
   | SdkSuccessResult
   | SdkErrorResult
+  | SdkAssistantMessage
   | { type: string };
 
 // --- Translation types (structural match for AssistantEvent) ---
@@ -141,6 +147,12 @@ export function translateSdkEvent(
 
   if (message.type === 'stream_event' && 'event' in message) {
     return handleStreamEvent(message as SdkStreamEvent, state);
+  }
+
+  // 'assistant' arrives mid-stream (before stop events). Swallow it but capture session_id.
+  if (message.type === 'assistant' && 'session_id' in message) {
+    const sessionId = (message as SdkAssistantMessage).session_id || state.sessionId;
+    return { event: null, state: { sessionId } };
   }
 
   if (message.type === 'result' && 'subtype' in message) {
