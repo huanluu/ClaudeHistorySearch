@@ -155,6 +155,14 @@ build(scheme, configuration: .release, clean: true)
    - **B. Edge cases**: Unusual but valid → implement after core is solid
    - **C. Out of scope**: Document as TODO, don't implement
 
+### Design Review Gate
+
+After creating or updating a plan (in plan mode or a plan file), **automatically run `/design-review-agent`** before writing any code. This is not optional — it catches architecture violations, over-engineering, and invariant gaps before they become code.
+
+- If the review has **blocking** findings: revise the plan to address them, then re-run `/design-review-agent`
+- Repeat until the review verdict is **Approve** (no blocking findings)
+- Only then proceed to implementation
+
 ### Implementation Order
 
 1. Write failing test for core happy path
