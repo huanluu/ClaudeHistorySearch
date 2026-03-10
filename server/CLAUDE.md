@@ -333,12 +333,12 @@ describe('SessionRepository', () => {
 |------|---------|
 | `scorecard/SCORECARD.md` | Invariant definitions and rationale |
 | `scorecard/CLAUDE.md` | Agent procedures (adding/fixing invariants) |
-| `scorecard/baseline.json` | Current pass/fail state |
+| `scorecard/history/*.json` | Scorecard snapshots (latest = current state) |
 | `scorecard/tests/*.test.ts` | Structural tests split by domain |
 
 For design principles behind the invariants, see `docs/invariants.md`.
 
-Known failing invariants use `it.fails()` — when fixed, promote to `it()` and update baseline.
+Known failing invariants use `it.fails()` — when fixed, promote to `it()` and update the latest snapshot in `scorecard/history/`.
 
 ## API Endpoints
 
@@ -433,5 +433,5 @@ Always verify which server is running: `lsof -ti:3847 | xargs ps -p`
 | `src/**/*.test.ts` | Co-located unit tests (next to source files) |
 | `scorecard/SCORECARD.md` | 18 invariant definitions (pass/fail, no metrics) |
 | `scorecard/tests/*.test.ts` | Structural invariant tests, split by domain |
-| `scorecard/baseline.json` | Current invariant pass/fail state |
+| `scorecard/history/*.json` | Scorecard snapshots — latest file is current state |
 | `docs/invariants.md` | Design principles for AI-assisted development |

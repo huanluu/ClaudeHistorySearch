@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-03-09T00:00:00Z",
+  "note": "Snapshot from live scorecard tests. 12/18 passing (67%), unchanged from 2026-03-06 baseline.",
+  "invariants": {
+    "ARCH-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Blocks 3-7" },
+    "ARCH-INV-2":  { "status": "pass", "enforcedBy": "eslint + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-3":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-4":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-7":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-8":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-9":  { "status": "fail", "enforcedBy": "eslint.config.js Block 7c + scorecard/tests/architecture.test.ts", "violations": [
+      "features/admin/ConfigService.ts -> fs",
+      "features/admin/routes.ts -> fs",
+      "features/scheduler/HeartbeatService.ts -> fs, child_process",
+      "features/search/indexer.ts -> fs"
+    ]},
+    "ARCH-INV-10": { "status": "pass", "enforcedBy": "eslint.config.js Blocks 4, 5, 5b + scorecard/tests/architecture.test.ts" },
+    "CQ-INV-1":   { "status": "pass", "enforcedBy": "eslint.config.js Block 9/9b" },
+    "CQ-INV-3":   { "status": "pass", "enforcedBy": "eslint + scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-4":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "violations": [
+      "features/scheduler/HeartbeatService.ts: 554 lines"
+    ]},
+    "CQ-INV-5":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "violations": [
+      "app.ts: createApp() 251 lines, start() 118 lines",
+      "features/admin/routes.ts: registerAdminRoutes() 104 lines",
+      "features/assistant/handlers.ts: registerAssistantHandlers() 108 lines",
+      "features/search/indexer.ts: indexSourceDirectory() 87 lines",
+      "features/search/routes.ts: registerSearchRoutes() 214 lines",
+      "shared/infra/database/SqliteSessionRepository.ts: constructor() 115 lines",
+      "shared/infra/database/connection.ts: createDatabase() 117 lines",
+      "shared/infra/parsers/ClaudeSessionSource.ts: parseClaudeSessionFile() 82 lines",
+      "shared/infra/parsers/CopilotSessionSource.ts: parseCopilotEventsFile() 90 lines",
+      "shared/provider/logger/logger.ts: createLogger() 84 lines"
+    ]},
+    "CQ-INV-6":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "violations": [
+      "shared/infra/database/connection.ts",
+      "shared/infra/runtime/lineBuffer.ts",
+      "shared/provider/config.ts"
+    ]},
+    "OBS-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Block 10" },
+    "SEC-INV-1":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-5":  { "status": "fail", "enforcedBy": "scorecard/tests/security.test.ts", "violations": [
+      "features/scheduler/HeartbeatService.ts: 10 process.env reads (lines 274-293)",
+      "shared/infra/runtime/CopilotRuntime.ts: 2 process.env reads (lines 12-13)"
+    ]},
+    "REL-INV-2":  { "status": "fail", "enforcedBy": "scorecard/tests/reliability.test.ts", "violations": [
+      "shared/infra/runtime/ClaudeRuntime.ts:120 — child.unref() detaches process from tracking"
+    ]}
+  },
+  "summary": {
+    "passing": 12,
+    "total": 18,
+    "passRate": "67%"
+  },
+  "delta": {
+    "since": "2026-03-06",
+    "changed": [
+      "CQ-INV-6: improved from 8 missing tests to 3 (connection, lineBuffer, config remain)",
+      "CQ-INV-4: HeartbeatService grew from >400 to 554 lines",
+      "SEC-INV-5: CopilotRuntime.ts now also has process.env reads (new since baseline)"
+    ],
+    "passRateChange": "0% (12/18 → 12/18)"
+  },
+  "testExecution": {
+    "scorecardTestFiles": 4,
+    "scorecardTests": 22,
+    "scorecardDuration": "150ms",
+    "fullSuiteTestFiles": 43,
+    "fullSuiteTests": 539,
+    "fullSuiteDuration": "1.47s",
+    "allPassing": true
+  }
+}

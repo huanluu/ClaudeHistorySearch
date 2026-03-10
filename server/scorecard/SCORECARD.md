@@ -7,7 +7,7 @@
 >
 > For the design principles behind these invariants, see `docs/invariants.md`.
 > For agent procedures (adding/fixing invariants), see `scorecard/CLAUDE.md`.
-> For current pass/fail state, see `scorecard/baseline.json`.
+> For current pass/fail state, see the latest file in `scorecard/history/`.
 
 ---
 
