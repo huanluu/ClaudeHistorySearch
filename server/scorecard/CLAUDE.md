@@ -37,7 +37,7 @@ To record the current scorecard state:
 3. Include a `delta` section noting changes since the previous snapshot
 4. Commit the new snapshot
 
-The latest snapshot is determined by lexicographic sort of filenames (`YYYY-MM-DD` format ensures correct ordering). If multiple snapshots share a date, append a suffix (e.g., `2026-03-09-2.json`).
+The latest snapshot is determined by lexicographic sort of filenames **after stripping `.json`** (e.g., `ls -1 *.json | sed 's/\.json$//' | sort | tail -1`). Plain sort on full filenames breaks when `-N` suffixes are present because `-` (ASCII 45) sorts before `.` (ASCII 46), causing `2026-03-09-2.json` to sort before `2026-03-09.json`. If multiple snapshots share a date, append a suffix (e.g., `2026-03-09-2.json`).
 
 ## File Layout
 
