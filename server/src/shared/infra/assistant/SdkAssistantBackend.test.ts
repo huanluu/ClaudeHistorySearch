@@ -265,21 +265,32 @@ describe('SdkAssistantBackend', () => {
     backend.destroyAll();
   });
 
-  it('includes session_id and parent_tool_use_id in user messages', async () => {
-    let capturedGenerator: AsyncGenerator<unknown> | undefined;
+  it('pushes user messages with required SDK fields', async () => {
+    const capturedMessages: unknown[] = [];
     mockQuery.mockImplementation((params: Record<string, unknown>) => {
-      capturedGenerator = params.prompt as AsyncGenerator<unknown>;
-      return createStreamingMockQuery([
-        [{ type: 'result', subtype: 'success', result: 'ok', session_id: 's1' }],
-      ])(params);
+      const generator = params.prompt as AsyncGenerator<unknown>;
+
+      async function* capturingQuery(): AsyncGenerator<SdkMessage> {
+        yield { type: 'system', subtype: 'init', session_id: 's1' } as SdkMessage;
+        for await (const userMsg of generator) {
+          capturedMessages.push(userMsg);
+          yield { type: 'result', subtype: 'success', result: 'ok', session_id: 's1' } as SdkMessage;
+        }
+      }
+
+      return capturingQuery();
     });
 
     const backend = new SdkAssistantBackend(logger);
     for await (const _e of backend.run('hello', { conversationId: 'c1' })) { /* drain */ }
 
-    // The generator was consumed by the mock — verify the message shape was correct
-    // by checking the mock query received a generator (not a string)
-    expect(capturedGenerator).toBeDefined();
+    expect(capturedMessages).toHaveLength(1);
+    expect(capturedMessages[0]).toEqual({
+      type: 'user',
+      session_id: '',
+      parent_tool_use_id: null,
+      message: { role: 'user', content: 'hello' },
+    });
 
     backend.destroyAll();
   });
