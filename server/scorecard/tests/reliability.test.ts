@@ -8,7 +8,7 @@ import { collectSrcFiles, SRC_DIR } from './helpers';
 describe('Scorecard: Reliability Invariants', () => {
 
   // ─── REL-INV-2: Spawned Processes Tracked and Cleaned ──────────
-  it.fails('REL-INV-2: All spawn() calls are tracked and cleaned on shutdown', () => {
+  it('REL-INV-2: All spawn() calls are tracked and cleaned on shutdown', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; issue: string }> = [];
 

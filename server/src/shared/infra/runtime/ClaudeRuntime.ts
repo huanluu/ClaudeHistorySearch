@@ -95,9 +95,17 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
 
 export class ClaudeRuntime implements CliRuntime {
   readonly name = 'claude';
+  readonly trackedProcesses = new Set<ChildProcess>();
 
   startSession(sessionId: string, logger: Logger): AgentSession {
     return new ClaudeAgentSession(sessionId, logger);
+  }
+
+  cleanup(): void {
+    for (const child of this.trackedProcesses) {
+      child.kill('SIGTERM');
+    }
+    this.trackedProcesses.clear();
   }
 
   runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }> {
@@ -110,6 +118,7 @@ export class ClaudeRuntime implements CliRuntime {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
+      this.trackedProcesses.add(child);
       let resolved = false;
 
       const handleLine = createLineBuffer((msg) => {
@@ -117,7 +126,6 @@ export class ClaudeRuntime implements CliRuntime {
         const m = msg as Record<string, unknown>;
         if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
           resolved = true;
-          child.unref();
           resolve({ sessionId: m.session_id as string });
         }
       });
@@ -134,6 +142,7 @@ export class ClaudeRuntime implements CliRuntime {
       });
 
       child.on('close', () => {
+        this.trackedProcesses.delete(child);
         if (!resolved) {
           resolved = true;
           logger.log({ msg: 'Claude process exited before returning session ID', op: 'runtime.headless', context: { runtime: this.name } });

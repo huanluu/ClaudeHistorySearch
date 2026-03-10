@@ -112,12 +112,13 @@ describe('ClaudeAgentSession', () => {
 
 describe('ClaudeRuntime', () => {
   let mockProcess: ReturnType<typeof createMockProcess>;
-  const runtime = new ClaudeRuntime();
+  let runtime: ClaudeRuntime;
 
   beforeEach(() => {
     mockSpawn.mockReset();
     mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    runtime = new ClaudeRuntime();
   });
 
   it('has name "claude"', () => {
@@ -144,15 +145,47 @@ describe('ClaudeRuntime', () => {
       expect(result.sessionId).toBe('extracted-uuid');
     });
 
-    it('unrefs child after extracting session ID', async () => {
+    it('tracks child process in trackedProcesses', async () => {
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
+
+      expect(runtime.trackedProcesses.size).toBe(1);
+      expect(runtime.trackedProcesses.has(mockProcess as unknown as import('child_process').ChildProcess)).toBe(true);
+
+      mockProcess.stdout.emit('data', Buffer.from(
+        '{"type":"system","subtype":"init","session_id":"uuid-123"}\n'
+      ));
+      await promise;
+    });
+
+    it('removes child from trackedProcesses on close', async () => {
       const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
 
       mockProcess.stdout.emit('data', Buffer.from(
         '{"type":"system","subtype":"init","session_id":"uuid-123"}\n'
       ));
-
       await promise;
-      expect(mockProcess.unref).toHaveBeenCalled();
+      expect(runtime.trackedProcesses.size).toBe(1);
+
+      mockProcess.emit('close');
+      expect(runtime.trackedProcesses.size).toBe(0);
+    });
+
+    it('cleanup kills all tracked processes', async () => {
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
+
+      mockProcess.stdout.emit('data', Buffer.from(
+        '{"type":"system","subtype":"init","session_id":"uuid-123"}\n'
+      ));
+      await promise;
+
+      runtime.cleanup();
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(runtime.trackedProcesses.size).toBe(0);
+    });
+
+    it('cleanup is safe when no processes are tracked', () => {
+      expect(() => runtime.cleanup()).not.toThrow();
+      expect(runtime.trackedProcesses.size).toBe(0);
     });
 
     it('returns null sessionId if process exits before init', async () => {

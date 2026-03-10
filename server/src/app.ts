@@ -281,6 +281,7 @@ export function createApp(config: AppConfig): App {
 
   async function stop(): Promise<void> {
     logger.log({ msg: 'Shutting down...', op: 'server.stop' });
+    claudeRuntime.cleanup();
     if (reindexTimer) {
       clearInterval(reindexTimer);
       reindexTimer = null;
