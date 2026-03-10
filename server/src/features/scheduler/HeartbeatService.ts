@@ -5,6 +5,7 @@ import { getConfigDir } from '../../shared/provider/index';
 import type { Logger, CliRuntime, HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
 import type { HeartbeatConfig, HeartbeatTask, HeartbeatResult, WorkItem, ChangeSet, CommandExecutor } from './types';
 import { checkForChanges, buildWorkItemPrompt } from './workItems';
+import { parseHeartbeatConfig, parseHeartbeatContent } from './heartbeatParser';
 
 /** Default command executor using real child_process */
 const defaultExecutor: CommandExecutor = {
@@ -13,23 +14,7 @@ const defaultExecutor: CommandExecutor = {
   },
 };
 
-/**
- * HeartbeatService reads HEARTBEAT.md and executes enabled tasks periodically.
- *
- * Configuration is loaded from:
- * 1. Default values
- * 2. ~/.claude-history-server/config.json (overrides defaults)
- * 3. Environment overrides passed via constructor (resolved in app.ts)
- *
- * HEARTBEAT.md format:
- * ```markdown
- * # HEARTBEAT.md
- *
- * ## Work Items
- * - [x] Enabled task (checked)
- * - [ ] Disabled task (unchecked)
- * ```
- */
+/** Reads HEARTBEAT.md and executes enabled tasks on a schedule. */
 export class HeartbeatService {
   /** Maximum number of Claude sessions to spawn per heartbeat run */
   static readonly MAX_SESSIONS_PER_HEARTBEAT = 3;
@@ -163,100 +148,23 @@ export class HeartbeatService {
     this.schedulerRunCount = 0;
   }
 
-  /**
-   * Load configuration from config.json with env overrides (injected via constructor)
-   */
   private loadConfig(): HeartbeatConfig {
-    // Start with defaults
-    const config: HeartbeatConfig = {
-      enabled: true,
-      intervalMs: 3600000, // 1 hour
-      workingDirectory: process.cwd(),
-      maxItems: 0,  // 0 = unlimited
-      maxRuns: 0    // 0 = unlimited
-    };
-
-    // Load from config file if it exists
     const configPath = join(this.configDir, 'config.json');
+    let fileConfig: Record<string, unknown> | null = null;
     if (existsSync(configPath)) {
       try {
-        const fileContent = readFileSync(configPath, 'utf-8');
-        const fileConfig = JSON.parse(fileContent);
-
-        if (fileConfig.heartbeat) {
-          if (typeof fileConfig.heartbeat.enabled === 'boolean') {
-            config.enabled = fileConfig.heartbeat.enabled;
-          }
-          if (typeof fileConfig.heartbeat.intervalMs === 'number') {
-            config.intervalMs = fileConfig.heartbeat.intervalMs;
-          }
-          if (typeof fileConfig.heartbeat.workingDirectory === 'string') {
-            config.workingDirectory = fileConfig.heartbeat.workingDirectory;
-          }
-          if (typeof fileConfig.heartbeat.maxItems === 'number') {
-            config.maxItems = fileConfig.heartbeat.maxItems;
-          }
-          if (typeof fileConfig.heartbeat.maxRuns === 'number') {
-            config.maxRuns = fileConfig.heartbeat.maxRuns;
-          }
-        }
+        fileConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
       } catch (error) {
-        // Malformed config file - use defaults
-        this.logger.warn({ msg: `Warning: Could not parse config.json: ${(error as Error).message}`, op: 'heartbeat.config', err: error });
+        this.logger.warn({ msg: `Could not parse config.json: ${(error as Error).message}`, op: 'heartbeat.config', err: error });
       }
     }
-
-    // Apply env overrides (resolved in app.ts, injected via constructor)
-    return { ...config, ...this.envOverrides };
+    return parseHeartbeatConfig(fileConfig, this.envOverrides);
   }
 
-  /**
-   * Parse HEARTBEAT.md and return enabled tasks
-   */
   parseHeartbeatFile(): HeartbeatTask[] {
     const heartbeatPath = join(this.configDir, 'HEARTBEAT.md');
-
-    if (!existsSync(heartbeatPath)) {
-      return [];
-    }
-
-    const content = readFileSync(heartbeatPath, 'utf-8');
-    if (!content.trim()) {
-      return [];
-    }
-
-    const tasks: HeartbeatTask[] = [];
-    let currentSection = 'Default';
-
-    const lines = content.split('\n');
-
-    for (const line of lines) {
-      // Check for section headers (## Section Name)
-      const sectionMatch = line.match(/^##\s+(.+)$/);
-      if (sectionMatch) {
-        currentSection = sectionMatch[1].trim();
-        continue;
-      }
-
-      // Check for checklist items
-      // - [x] Enabled task
-      // - [ ] Disabled task
-      const checklistMatch = line.match(/^-\s+\[([ xX])\]\s+(.+)$/);
-      if (checklistMatch) {
-        const isChecked = checklistMatch[1].toLowerCase() === 'x';
-        const description = checklistMatch[2].trim();
-
-        if (isChecked) {
-          tasks.push({
-            section: currentSection,
-            description,
-            enabled: true
-          });
-        }
-      }
-    }
-
-    return tasks;
+    if (!existsSync(heartbeatPath)) return [];
+    return parseHeartbeatContent(readFileSync(heartbeatPath, 'utf-8'));
   }
 
   /**
