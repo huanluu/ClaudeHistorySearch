@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
-import { FileWatcher } from './FileWatcher';
+import { FileWatcher, type IndexFn, type WatchFn } from './FileWatcher';
 import type { Logger, SessionRepository, SessionSource } from '../../shared/provider/index';
 
 function createMockWatcher() {
-  const emitter = new EventEmitter();
-  (emitter as Record<string, unknown>).close = vi.fn(() => Promise.resolve());
+  const emitter = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> };
+  emitter.close = vi.fn(() => Promise.resolve());
   return emitter;
 }
 
@@ -23,8 +23,8 @@ function createMockSource(name: string, dir: string, pattern: string): SessionSo
 
 describe('FileWatcher', () => {
   let mockWatcher: ReturnType<typeof createMockWatcher>;
-  let mockWatchFn: ReturnType<typeof vi.fn>;
-  let mockIndexFn: ReturnType<typeof vi.fn>;
+  let mockWatchFn: WatchFn;
+  let mockIndexFn: IndexFn;
   let mockRepo: SessionRepository;
   let mockLogger: Logger;
   let claudeSource: SessionSource;
@@ -32,8 +32,8 @@ describe('FileWatcher', () => {
 
   beforeEach(() => {
     mockWatcher = createMockWatcher();
-    mockWatchFn = vi.fn().mockReturnValue(mockWatcher);
-    mockIndexFn = vi.fn().mockResolvedValue(undefined);
+    mockWatchFn = vi.fn().mockReturnValue(mockWatcher) as unknown as WatchFn;
+    mockIndexFn = vi.fn().mockResolvedValue(undefined) as unknown as IndexFn;
     mockRepo = {} as SessionRepository;
     mockLogger = {
       log: vi.fn(),
@@ -91,7 +91,7 @@ describe('FileWatcher', () => {
       return callCount === 1 ? watcher1 : watcher2;
     });
 
-    const fw = new FileWatcher([claudeSource, copilotSource], mockRepo, mockLogger, mockIndexFn, watchFn as ReturnType<typeof vi.fn>);
+    const fw = new FileWatcher([claudeSource, copilotSource], mockRepo, mockLogger, mockIndexFn, watchFn as unknown as WatchFn);
     fw.start();
     await fw.stop();
     expect(watcher1.close).toHaveBeenCalled();

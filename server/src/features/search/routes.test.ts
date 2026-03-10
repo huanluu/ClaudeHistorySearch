@@ -5,7 +5,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { createHash } from 'crypto';
 import { Router } from 'express';
-import type { SessionRepository } from '../../shared/provider/index';
+import type { SessionRepository, Logger, DatabaseStats } from '../../shared/provider/index';
 import type { SessionRecord, MessageRecord, SearchResultRecord } from '../../shared/provider/index';
 import { registerSearchRoutes, type SearchRouteDeps } from './index';
 import { noopLogger, createTestApiKey } from '../../../tests/__helpers/index';
@@ -42,9 +42,12 @@ function createMockRepository(overrides?: Partial<SessionRepository>): SessionRe
     hideSession: () => {},
     getSessionLastIndexed: () => undefined,
     indexSession: () => {},
+    getStats: () => ({ sessionCount: 0, messageCount: 0, dbSizeBytes: 0 }) as DatabaseStats,
     ...overrides,
   };
 }
+
+interface TestConfig { apiKeyHash?: string }
 
 function createSearchApp(deps: { repo: SessionRepository; logger?: Logger; indexFn?: SearchRouteDeps['indexFn'] }, withAuth = true): Application {
   const app = express();
@@ -53,7 +56,7 @@ function createSearchApp(deps: { repo: SessionRepository; logger?: Logger; index
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (!withAuth) return next();
 
-    let config: Config = {};
+    let config: TestConfig = {};
     try {
       config = JSON.parse(readFileSync(TEST_CONFIG_FILE, 'utf-8'));
     } catch {
@@ -84,7 +87,8 @@ function createSearchApp(deps: { repo: SessionRepository; logger?: Logger; index
   app.use('/', validationRouter);
 
   const router = Router();
-  registerSearchRoutes(router, { repo: deps.repo, logger, indexFn: deps.indexFn });
+  const defaultIndexFn: SearchRouteDeps['indexFn'] = async () => ({ indexed: 0, skipped: 0 });
+  registerSearchRoutes(router, { repo: deps.repo, logger, indexFn: deps.indexFn ?? defaultIndexFn });
   app.use('/', router);
 
   return app;
@@ -105,6 +109,7 @@ const sampleSession: SessionRecord = {
   is_automatic: 0,
   is_unread: 0,
   is_hidden: 0,
+  source: 'claude',
 };
 
 const heartbeatSession: SessionRecord = {
@@ -119,6 +124,7 @@ const heartbeatSession: SessionRecord = {
   is_automatic: 1,
   is_unread: 1,
   is_hidden: 0,
+  source: 'claude',
 };
 
 const sampleMessages: MessageRecord[] = [

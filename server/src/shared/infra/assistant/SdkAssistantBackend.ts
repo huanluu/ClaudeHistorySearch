@@ -54,6 +54,7 @@ function createMessageChannel(): MessageChannel {
       return Promise.reject(e);
     },
     [Symbol.asyncIterator]() { return this; },
+    async [Symbol.asyncDispose]() { closed = true; },
   };
 
   return {

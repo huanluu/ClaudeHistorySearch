@@ -71,6 +71,13 @@ export class HttpTransport extends Transport {
   }
 
   /**
+   * Get the configured host address.
+   */
+  getHost(): string {
+    return this.host;
+  }
+
+  /**
    * Get the actual bound port.
    * When constructed with port 0, the OS assigns an ephemeral port;
    * this returns that real port after start().

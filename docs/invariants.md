@@ -147,6 +147,19 @@ Important invariants should not depend on memory, taste, or code review alone. T
 
 ---
 
+## 17. TypeScript typecheck must pass with zero errors
+
+**Labels:** Code Quality, Correctness
+**Enforcement:** `scorecard/tests/code-quality.test.ts` (CQ-INV-7) + pre-commit hook
+
+Configuring `strict: true` in `tsconfig.json` defines the rules. Running `tsc --noEmit` enforces them. Without the second step, type errors accumulate silently — the compiler settings are a promise nobody checks. This is the gap between "configured" and "enforced."
+
+Types catch errors that tests miss: a test verifies sampled scenarios, but the type system verifies structural consistency across every callsite. When a field is added to a domain type, `tsc` reports every location that needs updating — exhaustively, not by sampling.
+
+**In this codebase:** `npm run typecheck` runs `tsc --noEmit`. The pre-commit hook runs it before every commit. The scorecard tracks it as **CQ-INV-7**.
+
+---
+
 ## Summary
 
 These invariants serve one meta-goal: **reduce the cost of uncertainty**. Boundary validation reduces uncertainty about inputs. Type modeling reduces uncertainty about states. Controlled cross-cutting concerns reduce uncertainty about hidden dependencies. Observability reduces uncertainty in production. Enforced dependency direction reduces uncertainty during change.

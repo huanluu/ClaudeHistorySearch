@@ -1,26 +1,9 @@
 import request from 'supertest';
 import express, { type Application } from 'express';
 import { Router } from 'express';
-import type { SessionRepository } from '../../shared/provider/index';
 import { registerSchedulerRoutes, type SchedulerRouteDeps } from './index';
 import type { HeartbeatService } from './HeartbeatService';
 import { noopLogger } from '../../../tests/__helpers/index';
-
-function createMockRepository(overrides?: Partial<SessionRepository>): SessionRepository {
-  return {
-    getRecentSessions: () => [],
-    getManualSessions: () => [],
-    getAutomaticSessions: () => [],
-    getSessionById: () => undefined,
-    getMessagesBySessionId: () => [],
-    searchMessages: () => [],
-    markSessionAsRead: () => {},
-    hideSession: () => {},
-    getSessionLastIndexed: () => undefined,
-    indexSession: () => {},
-    ...overrides,
-  };
-}
 
 function createSchedulerApp(heartbeatService?: SchedulerRouteDeps['heartbeatService']): Application {
   const app = express();

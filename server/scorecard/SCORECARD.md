@@ -1,6 +1,6 @@
 # Codebase Scorecard
 
-> 18 invariants. Pass/fail. No judgment needed.
+> 19 invariants. Pass/fail. No judgment needed.
 >
 > Agents optimize locally and create global entropy — each session might produce correct
 > code that gradually degrades the system. These invariants are electric fences that catch drift.
@@ -120,6 +120,13 @@ Adapters: always `shared/infra/<technology>/`. All wiring happens in `app.ts`.
 - Forces decomposition before functions become unmaintainable
 - **Enforced by:** `scorecard/tests/code-quality.test.ts`
 
+#### CQ-INV-7: TypeScript Typecheck Passes
+> `tsc --noEmit` reports zero errors across all source files.
+
+- TypeScript `strict: true` with all strict checks is configured, but only enforced if `tsc` actually runs
+- Prevents type drift: added fields, changed signatures, and broken mocks are caught statically
+- **Enforced by:** `scorecard/tests/code-quality.test.ts` + pre-commit hook (`npm run typecheck`)
+
 #### CQ-INV-6: Test Existence Floor
 > Every source file with exported logic has a co-located `*.test.ts` file.
 
@@ -177,7 +184,8 @@ Adapters: always `shared/infra/<technology>/`. All wiring happens in `app.ts`.
 | Layer | Tool | What It Checks |
 |-------|------|---------------|
 | Per-file rules | ESLint (`npm run lint`) | Import direction, barrel encapsulation, `any` usage, `console` usage, `.js` extensions, effectless features (I/O imports), adapter isolation |
-| Cross-file analysis | Vitest (`npm test`) | Cycles, composition root, singletons, type purity, file/function size, secrets, subprocess safety, env containment, process tracking, effectless features, adapter isolation |
+| Type system | TypeScript (`npm run typecheck`) | Type consistency, missing properties, argument mismatches, null safety, unused variables |
+| Cross-file analysis | Vitest (`npm test`) | Cycles, composition root, singletons, type purity, file/function size, secrets, subprocess safety, env containment, process tracking, effectless features, adapter isolation, typecheck |
 
 ## How to Run
 

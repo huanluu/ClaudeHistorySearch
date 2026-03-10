@@ -15,22 +15,22 @@ describe('HttpTransport', () => {
   describe('constructor', () => {
     it('should use default port 3847 when not specified', () => {
       transport = new HttpTransport();
-      expect(transport.port).toBe(3847);
+      expect(transport.getPort()).toBe(3847);
     });
 
     it('should use custom port when specified', () => {
       transport = new HttpTransport({ port: 4000 });
-      expect(transport.port).toBe(4000);
+      expect(transport.getPort()).toBe(4000);
     });
 
     it('should use default host 0.0.0.0 when not specified', () => {
       transport = new HttpTransport();
-      expect(transport.host).toBe('0.0.0.0');
+      expect(transport.getHost()).toBe('0.0.0.0');
     });
 
     it('should use custom host when specified', () => {
       transport = new HttpTransport({ host: '127.0.0.1' });
-      expect(transport.host).toBe('127.0.0.1');
+      expect(transport.getHost()).toBe('127.0.0.1');
     });
 
     it('should initialize isRunning as false', () => {
@@ -124,7 +124,7 @@ describe('HttpTransport', () => {
       const response = await fetch(`http://127.0.0.1:${address.port}/ping`);
       expect(response.ok).toBe(true);
 
-      const data = await response.json();
+      const data = await response.json() as { pong: boolean };
       expect(data.pong).toBe(true);
     });
   });
@@ -197,7 +197,7 @@ describe('HttpTransport', () => {
       const server = transport.getServer();
       const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/api/hello`);
-      const data = await response.json();
+      const data = await response.json() as { message: string };
 
       expect(data.message).toBe('world');
     });

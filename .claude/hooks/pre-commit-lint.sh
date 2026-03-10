@@ -20,6 +20,14 @@ if [ ! -d server/node_modules ]; then
   fi
 fi
 
+# --- TypeScript typecheck ---
+TC_OUTPUT=$(cd server && npm run typecheck 2>&1)
+if [ $? -ne 0 ]; then
+  echo "TypeScript typecheck failed — fix type errors before committing:" >&2
+  echo "$TC_OUTPUT" >&2
+  exit 2
+fi
+
 # --- ESLint ---
 LINT_OUTPUT=$(cd server && npm run lint 2>&1)
 if [ $? -ne 0 ]; then

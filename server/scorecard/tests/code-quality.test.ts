@@ -112,6 +112,14 @@ describe('Scorecard: Code Quality Invariants', () => {
     expect(violations).toEqual([]);
   });
 
+  // ─── CQ-INV-7: TypeScript Typecheck Passes ─────────────────────
+  it('CQ-INV-7: tsc --noEmit reports zero errors', () => {
+    const { execSync } = require('child_process');
+    // execSync throws if tsc exits non-zero (type errors or infra failure).
+    // No catch needed — both cases should fail the test.
+    execSync('npm run typecheck', { cwd: SERVER_DIR, stdio: 'pipe' });
+  });
+
   // ─── CQ-INV-6: Test Existence Floor ─────────────────────────────
   it('CQ-INV-6: Every source module with exported logic has a co-located test', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);

@@ -14,8 +14,8 @@ class MockWsGateway implements WsGateway {
   connectHandlers: WsConnectionHandler[] = [];
   disconnectHandlers: WsConnectionHandler[] = [];
 
-  on(type: string, handler: WsHandler): void {
-    this.handlers.set(type, handler);
+  on<T = unknown>(type: string, handler: WsHandler<T>): void {
+    this.handlers.set(type, handler as WsHandler);
   }
   onConnect(handler: WsConnectionHandler): void {
     this.connectHandlers.push(handler);

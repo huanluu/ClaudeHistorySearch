@@ -1,11 +1,9 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'fs';
+import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   HeartbeatService,
-  type HeartbeatConfig,
-  type HeartbeatTask,
   type WorkItem,
   type CommandExecutor
 } from './HeartbeatService';

@@ -167,8 +167,6 @@ describe('Config API Routes', () => {
 
     // Create test app with real ConfigService
     const configService = new ConfigService(configDir);
-    let configChangedSection: string | null = null;
-
     app = express();
     app.use(express.json());
 
@@ -197,20 +195,23 @@ describe('Config API Routes', () => {
       res.json(configService.getAllEditableSections());
     });
 
-    app.get('/api/config/:section', (req: Request, res: Response) => {
-      const section = configService.getSection(req.params.section);
+    app.get('/api/config/:section', (req: Request, res: Response): void => {
+      const sectionName = req.params.section as string;
+      const section = configService.getSection(sectionName);
       if (section === null) {
-        return res.status(404).json({ error: `Unknown section: ${req.params.section}` });
+        res.status(404).json({ error: `Unknown section: ${sectionName}` });
+        return;
       }
       res.json(section);
     });
 
-    app.put('/api/config/:section', (req: Request, res: Response) => {
-      const validationError = configService.updateSection(req.params.section, req.body);
+    app.put('/api/config/:section', (req: Request, res: Response): void => {
+      const sectionName = req.params.section as string;
+      const validationError = configService.updateSection(sectionName, req.body);
       if (validationError) {
-        return res.status(400).json({ error: validationError });
+        res.status(400).json({ error: validationError });
+        return;
       }
-      configChangedSection = req.params.section;
       res.json({ success: true });
     });
   });

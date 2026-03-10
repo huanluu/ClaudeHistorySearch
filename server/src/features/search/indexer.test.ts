@@ -222,6 +222,7 @@ describe('detectAutomaticSession', () => {
       startedAt: Date.now(),
       lastActivityAt: Date.now(),
       preview: '[Heartbeat] Analyze Work Item #12345',
+      source: 'claude',
       messages: [
         { uuid: 'msg-1', role: 'user', content: '[Heartbeat] Analyze Work Item #12345', timestamp: Date.now() }
       ]
@@ -244,6 +245,7 @@ describe('detectAutomaticSession', () => {
       startedAt: Date.now(),
       lastActivityAt: Date.now(),
       preview: 'How do I implement a heartbeat check in my app?',
+      source: 'claude',
       messages: [
         { uuid: 'msg-1', role: 'user', content: 'How do I implement a heartbeat check in my app?', timestamp: Date.now() }
       ]
@@ -259,6 +261,7 @@ describe('detectAutomaticSession', () => {
       startedAt: null,
       lastActivityAt: null,
       preview: null,
+      source: 'claude',
       messages: []
     };
     const isAutomatic = detectAutomaticSession(session);

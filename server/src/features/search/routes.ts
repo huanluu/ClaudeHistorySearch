@@ -1,13 +1,12 @@
 import { type Router, type Request, type Response } from 'express';
 import type { SessionRepository, SortOption } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
-import { indexAllSessions } from './indexer';
 import type { IndexAllResult } from './indexer';
 
 export interface SearchRouteDeps {
   repo: SessionRepository;
   logger: Logger;
-  indexFn?: (force: boolean, repo: SessionRepository, logger: Logger) => Promise<IndexAllResult>;
+  indexFn: (force: boolean, repo: SessionRepository, logger: Logger) => Promise<IndexAllResult>;
 }
 
 // API Response types
@@ -51,7 +50,7 @@ interface SearchResultResponse {
 }
 
 export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): void {
-  const { repo, logger, indexFn = indexAllSessions } = deps;
+  const { repo, logger, indexFn } = deps;
 
   /**
    * GET /sessions
