@@ -233,7 +233,13 @@ export function createApp(config: AppConfig): App {
       });
 
       // Register assistant handlers
-      const assistantBackend = new SdkAssistantBackend(logger, { cron: cronMcpServer });
+      const assistantBackend = new SdkAssistantBackend(logger, {
+        cron: cronMcpServer,
+        'work-iq': {
+          command: '/opt/homebrew/bin/node',
+          args: ['/opt/homebrew/bin/workiq', 'mcp'],
+        },
+      });
       const assistantService = new AssistantService(assistantBackend, logger);
       registerAssistantHandlers(wsGateway, { assistantService, logger });
 

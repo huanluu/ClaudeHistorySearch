@@ -228,6 +228,8 @@ export class SdkAssistantBackend {
         abortController,
         tools: baseTools,
         allowedTools: baseTools,
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
         maxTurns: 50, // Per-session limit; streaming mode reuses one subprocess across turns
         ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
         ...(this.mcpServers && { mcpServers: this.mcpServers }),
