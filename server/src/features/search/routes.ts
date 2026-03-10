@@ -49,174 +49,95 @@ interface SearchResultResponse {
   };
 }
 
+function toSessionResponse(s: { id: string; project: string; started_at: number; message_count: number; preview: string | null; title: string | null; is_automatic: number; is_unread: number; source?: string | null }): SessionResponse {
+  return {
+    id: s.id, project: s.project, startedAt: s.started_at, messageCount: s.message_count,
+    preview: s.preview, title: s.title, isAutomatic: s.is_automatic === 1,
+    isUnread: s.is_unread === 1, source: s.source ?? 'claude',
+  };
+}
+
+function handleListSessions(repo: SessionRepository, res: Response, logger: Logger): void {
+  try {
+    const { limit, offset, automatic: automaticParam } = (res.locals.validated?.query ?? { limit: 20, offset: 0 }) as { limit: number; offset: number; automatic?: string };
+    let sessions;
+    if (automaticParam === 'true') sessions = repo.getAutomaticSessions(limit, offset);
+    else if (automaticParam === 'false') sessions = repo.getManualSessions(limit, offset);
+    else sessions = repo.getRecentSessions(limit, offset);
+
+    res.json({
+      sessions: sessions.map(toSessionResponse),
+      pagination: { limit, offset, hasMore: sessions.length === limit } as PaginationResponse,
+    });
+  } catch (error) {
+    logger.error({ msg: 'Error fetching sessions', op: 'sessions.list', err: error, errType: 'db_error' });
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+}
+
+function handleGetSession(repo: SessionRepository, req: Request, res: Response, logger: Logger): void {
+  try {
+    const id = req.params.id as string;
+    const session = repo.getSessionById(id);
+    if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+
+    const messages = repo.getMessagesBySessionId(id);
+    res.json({
+      session: toSessionResponse(session),
+      messages: messages.map((m): MessageResponse => ({ uuid: m.uuid, role: m.role, content: m.content, timestamp: m.timestamp })),
+    });
+  } catch (error) {
+    logger.error({ msg: 'Error fetching session', op: 'sessions.get', err: error, errType: 'db_error' });
+    res.status(500).json({ error: 'Failed to fetch session' });
+  }
+}
+
+function handleSearch(repo: SessionRepository, res: Response, logger: Logger): void {
+  try {
+    const { q: query, limit, offset, sort, automatic: automaticSearchParam } = (res.locals.validated?.query ?? { q: '', limit: 50, offset: 0, sort: 'relevance' }) as { q: string; limit: number; offset: number; sort: SortOption; automatic?: string };
+    if (!query || query.trim().length === 0) { res.status(400).json({ error: 'Search query is required' }); return; }
+
+    const sanitizedQuery = query.replace(/['"*()]/g, '').split(/\s+/).filter(t => t.length > 0).map(t => `${t}*`).join(' ');
+    if (!sanitizedQuery) { res.status(400).json({ error: 'Invalid search query' }); return; }
+
+    const automaticOnly = automaticSearchParam === 'true';
+    const allResults = repo.searchMessages(sanitizedQuery, (limit + offset) * 3, 0, sort, automaticOnly);
+
+    const seenSessions = new Set<string>();
+    const uniqueResults: typeof allResults = [];
+    for (const r of allResults) {
+      if (!seenSessions.has(r.session_id)) { seenSessions.add(r.session_id); uniqueResults.push(r); }
+    }
+
+    const paginatedResults = uniqueResults.slice(offset, offset + limit);
+    logger.log({ msg: `Search: "${query}" → ${uniqueResults.length} sessions`, op: 'search.query', context: { query, results: uniqueResults.length, sort } });
+
+    res.json({
+      results: paginatedResults.map((r): SearchResultResponse => ({
+        sessionId: r.session_id, project: r.project, sessionStartedAt: r.started_at, title: r.title,
+        message: { uuid: r.uuid, role: r.role, content: r.content, highlightedContent: r.highlighted_content, timestamp: r.timestamp },
+      })),
+      pagination: { limit, offset, hasMore: uniqueResults.length > offset + limit } as PaginationResponse,
+      query, sort,
+    });
+  } catch (error) {
+    logger.error({ msg: 'Error searching', op: 'search.query', err: error, errType: 'db_error' });
+    res.status(500).json({ error: 'Search failed' });
+  }
+}
+
 export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): void {
   const { repo, logger, indexFn } = deps;
 
-  /**
-   * GET /sessions
-   * List recent sessions with pagination
-   */
-  router.get('/sessions', (_req: Request, res: Response) => {
-    try {
-      const { limit, offset, automatic: automaticParam } = (res.locals.validated?.query ?? { limit: 20, offset: 0 }) as { limit: number; offset: number; automatic?: string };
-      let sessions;
-      if (automaticParam === 'true') {
-        sessions = repo.getAutomaticSessions(limit, offset);
-      } else if (automaticParam === 'false') {
-        sessions = repo.getManualSessions(limit, offset);
-      } else {
-        sessions = repo.getRecentSessions(limit, offset);
-      }
+  router.get('/sessions', (_req: Request, res: Response) => handleListSessions(repo, res, logger));
+  router.get('/sessions/:id', (req: Request, res: Response) => handleGetSession(repo, req, res, logger));
+  router.get('/search', (_req: Request, res: Response) => handleSearch(repo, res, logger));
 
-      res.json({
-        sessions: sessions.map((s): SessionResponse => ({
-          id: s.id,
-          project: s.project,
-          startedAt: s.started_at,
-          messageCount: s.message_count,
-          preview: s.preview,
-          title: s.title,
-          isAutomatic: s.is_automatic === 1,
-          isUnread: s.is_unread === 1,
-          source: s.source ?? 'claude'
-        })),
-        pagination: {
-          limit,
-          offset,
-          hasMore: sessions.length === limit
-        } as PaginationResponse
-      });
-    } catch (error) {
-      logger.error({ msg: 'Error fetching sessions', op: 'sessions.list', err: error, errType: 'db_error' });
-      res.status(500).json({ error: 'Failed to fetch sessions' });
-    }
-  });
-
-  /**
-   * GET /sessions/:id
-   * Get full conversation for a session
-   */
-  router.get('/sessions/:id', (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
-
-      const session = repo.getSessionById(id);
-      if (!session) {
-        res.status(404).json({ error: 'Session not found' });
-        return;
-      }
-
-      const messages = repo.getMessagesBySessionId(id);
-
-      res.json({
-        session: {
-          id: session.id,
-          project: session.project,
-          startedAt: session.started_at,
-          messageCount: session.message_count,
-          preview: session.preview,
-          title: session.title,
-          isAutomatic: session.is_automatic === 1,
-          isUnread: session.is_unread === 1,
-          source: session.source ?? 'claude'
-        } as SessionResponse,
-        messages: messages.map((m): MessageResponse => ({
-          uuid: m.uuid,
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp
-        }))
-      });
-    } catch (error) {
-      logger.error({ msg: 'Error fetching session', op: 'sessions.get', err: error, errType: 'db_error' });
-      res.status(500).json({ error: 'Failed to fetch session' });
-    }
-  });
-
-  /**
-   * GET /search
-   * Full-text search across all messages
-   */
-  router.get('/search', (_req: Request, res: Response) => {
-    try {
-      const { q: query, limit, offset, sort, automatic: automaticSearchParam } = (res.locals.validated?.query ?? { q: '', limit: 50, offset: 0, sort: 'relevance' }) as { q: string; limit: number; offset: number; sort: SortOption; automatic?: string };
-      if (!query || query.trim().length === 0) {
-        res.status(400).json({ error: 'Search query is required' });
-        return;
-      }
-
-      const sanitizedQuery = query
-        .replace(/['"*()]/g, '')
-        .split(/\s+/)
-        .filter(term => term.length > 0)
-        .map(term => `${term}*`)
-        .join(' ');
-
-      if (!sanitizedQuery) {
-        res.status(400).json({ error: 'Invalid search query' });
-        return;
-      }
-
-      const automaticOnly = automaticSearchParam === 'true';
-
-      const fetchLimit = (limit + offset) * 3;
-      const allResults = repo.searchMessages(sanitizedQuery, fetchLimit, 0, sort, automaticOnly);
-
-      const seenSessions = new Set<string>();
-      const uniqueResults: typeof allResults = [];
-
-      for (const r of allResults) {
-        if (!seenSessions.has(r.session_id)) {
-          seenSessions.add(r.session_id);
-          uniqueResults.push(r);
-        }
-      }
-
-      const paginatedResults = uniqueResults.slice(offset, offset + limit);
-
-      logger.log({ msg: `Search: "${query}" → ${uniqueResults.length} sessions`, op: 'search.query', context: { query, results: uniqueResults.length, sort } });
-
-      res.json({
-        results: paginatedResults.map((r): SearchResultResponse => ({
-          sessionId: r.session_id,
-          project: r.project,
-          sessionStartedAt: r.started_at,
-          title: r.title,
-          message: {
-            uuid: r.uuid,
-            role: r.role,
-            content: r.content,
-            highlightedContent: r.highlighted_content,
-            timestamp: r.timestamp
-          }
-        })),
-        pagination: {
-          limit,
-          offset,
-          hasMore: uniqueResults.length > offset + limit
-        } as PaginationResponse,
-        query,
-        sort
-      });
-    } catch (error) {
-      logger.error({ msg: 'Error searching', op: 'search.query', err: error, errType: 'db_error' });
-      res.status(500).json({ error: 'Search failed' });
-    }
-  });
-
-  /**
-   * DELETE /sessions/:id
-   */
   router.delete('/sessions/:id', (req: Request, res: Response) => {
     try {
       const id = req.params.id as string;
-
       const session = repo.getSessionById(id);
-      if (!session) {
-        res.status(404).json({ error: 'Session not found' });
-        return;
-      }
-
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
       repo.hideSession(id);
       res.json({ success: true });
     } catch (error) {
@@ -225,19 +146,11 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
     }
   });
 
-  /**
-   * POST /sessions/:id/read
-   */
   router.post('/sessions/:id/read', (req: Request, res: Response) => {
     try {
       const id = req.params.id as string;
-
       const session = repo.getSessionById(id);
-      if (!session) {
-        res.status(404).json({ error: 'Session not found' });
-        return;
-      }
-
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
       repo.markSessionAsRead(id);
       res.json({ success: true });
     } catch (error) {
@@ -246,17 +159,10 @@ export function registerSearchRoutes(router: Router, deps: SearchRouteDeps): voi
     }
   });
 
-  /**
-   * POST /reindex
-   */
   router.post('/reindex', async (req: Request, res: Response) => {
     try {
       const force = req.query.force === 'true';
-      const result = await indexFn(force, repo, logger);
-      res.json({
-        success: true,
-        ...result
-      });
+      res.json({ success: true, ...await indexFn(force, repo, logger) });
     } catch (error) {
       logger.error({ msg: 'Error reindexing', op: 'server.reindex', err: error, errType: 'internal_error' });
       res.status(500).json({ error: 'Reindex failed' });

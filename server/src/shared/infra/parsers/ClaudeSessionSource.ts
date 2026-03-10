@@ -75,72 +75,56 @@ export function loadSessionsIndex(projectPath: string): Map<string, string> {
 /**
  * Parses a Claude CLI JSONL session file into our domain model.
  */
+interface ParseState {
+  sessionId: string | null;
+  project: string | null;
+  earliestTimestamp: number | null;
+  latestTimestamp: number | null;
+  firstUserMessage: string | null;
+  messages: ParsedMessage[];
+}
+
+function processClaudeJsonlLine(line: string, state: ParseState): void {
+  const obj = JSON.parse(line) as JsonlEntry;
+
+  if (!obj.type || !['user', 'assistant'].includes(obj.type)) return;
+
+  if (!state.sessionId && obj.sessionId) state.sessionId = obj.sessionId;
+  if (!state.project && obj.cwd) state.project = obj.cwd;
+
+  const timestamp = obj.timestamp ? new Date(obj.timestamp).getTime() : null;
+  if (timestamp) {
+    if (!state.earliestTimestamp || timestamp < state.earliestTimestamp) state.earliestTimestamp = timestamp;
+    if (!state.latestTimestamp || timestamp > state.latestTimestamp) state.latestTimestamp = timestamp;
+  }
+
+  const role = obj.type;
+  const textContent = extractTextContent(obj.message?.content);
+  if (!textContent || obj.isMeta) return;
+
+  if (role === 'user' && !state.firstUserMessage && textContent.length > 0) {
+    if (!textContent.startsWith('<command-name>') && !textContent.startsWith('<local-command')) {
+      state.firstUserMessage = textContent.slice(0, 200);
+    }
+  }
+
+  state.messages.push({ uuid: obj.uuid || '', role, content: textContent, timestamp });
+}
+
 async function parseClaudeSessionFile(filePath: string): Promise<ParsedSession> {
-  const messages: ParsedMessage[] = [];
-  let sessionId: string | null = null;
-  let project: string | null = null;
-  let earliestTimestamp: number | null = null;
-  let latestTimestamp: number | null = null;
-  let firstUserMessage: string | null = null;
+  const state: ParseState = {
+    sessionId: null, project: null,
+    earliestTimestamp: null, latestTimestamp: null,
+    firstUserMessage: null, messages: [],
+  };
 
   const fileStream = createReadStream(filePath, { encoding: 'utf-8' });
-  const rl = createInterface({
-    input: fileStream,
-    crlfDelay: Infinity
-  });
+  const rl = createInterface({ input: fileStream, crlfDelay: Infinity });
 
   try {
     for await (const line of rl) {
       if (!line.trim()) continue;
-
-      try {
-        const obj = JSON.parse(line) as JsonlEntry;
-
-        if (!obj.type || !['user', 'assistant'].includes(obj.type)) {
-          continue;
-        }
-
-        if (!sessionId && obj.sessionId) {
-          sessionId = obj.sessionId;
-        }
-        if (!project && obj.cwd) {
-          project = obj.cwd;
-        }
-
-        const timestamp = obj.timestamp ? new Date(obj.timestamp).getTime() : null;
-
-        if (timestamp) {
-          if (!earliestTimestamp || timestamp < earliestTimestamp) {
-            earliestTimestamp = timestamp;
-          }
-          if (!latestTimestamp || timestamp > latestTimestamp) {
-            latestTimestamp = timestamp;
-          }
-        }
-
-        const role = obj.type;
-        const messageContent = obj.message?.content;
-        const textContent = extractTextContent(messageContent);
-
-        if (!textContent || obj.isMeta) {
-          continue;
-        }
-
-        if (role === 'user' && !firstUserMessage && textContent.length > 0) {
-          if (!textContent.startsWith('<command-name>') && !textContent.startsWith('<local-command')) {
-            firstUserMessage = textContent.slice(0, 200);
-          }
-        }
-
-        messages.push({
-          uuid: obj.uuid || '',
-          role,
-          content: textContent,
-          timestamp
-        });
-      } catch {
-        continue;
-      }
+      try { processClaudeJsonlLine(line, state); } catch { continue; }
     }
   } finally {
     rl.close();
@@ -148,13 +132,13 @@ async function parseClaudeSessionFile(filePath: string): Promise<ParsedSession> 
   }
 
   return {
-    sessionId,
-    project,
-    startedAt: earliestTimestamp,
-    lastActivityAt: latestTimestamp,
-    preview: firstUserMessage,
+    sessionId: state.sessionId,
+    project: state.project,
+    startedAt: state.earliestTimestamp,
+    lastActivityAt: state.latestTimestamp,
+    preview: state.firstUserMessage,
     source: 'claude',
-    messages
+    messages: state.messages,
   };
 }
 

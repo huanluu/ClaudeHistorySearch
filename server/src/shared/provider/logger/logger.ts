@@ -45,12 +45,7 @@ export interface CreateLoggerOptions extends LoggerOptions {
   errorBuffer?: ErrorRingBuffer;
 }
 
-export function createLogger(logPath: string, options: CreateLoggerOptions = {}): Logger {
-  const verbose = options.verbose ?? (process.env.LOG_VERBOSE === '1');
-  const useConsole = options.console ?? false;
-  const errorBuffer = options.errorBuffer;
-
-  // Ensure parent directory exists
+function ensureLogDirectory(logPath: string): void {
   const dir = dirname(logPath);
   try {
     if (!existsSync(dir)) {
@@ -59,8 +54,9 @@ export function createLogger(logPath: string, options: CreateLoggerOptions = {})
   } catch {
     // Best effort — don't crash
   }
+}
 
-  // Rotate at startup if file exceeds MAX_LOG_SIZE
+function rotateLogIfNeeded(logPath: string): void {
   try {
     if (existsSync(logPath)) {
       const stat = statSync(logPath);
@@ -71,6 +67,15 @@ export function createLogger(logPath: string, options: CreateLoggerOptions = {})
   } catch {
     // Best effort — don't crash
   }
+}
+
+export function createLogger(logPath: string, options: CreateLoggerOptions = {}): Logger {
+  const verbose = options.verbose ?? (process.env.LOG_VERBOSE === '1');
+  const useConsole = options.console ?? false;
+  const errorBuffer = options.errorBuffer;
+
+  ensureLogDirectory(logPath);
+  rotateLogIfNeeded(logPath);
 
   function writeToFile(level: LogLevel, entry: LogEntry): void {
     try {

@@ -54,6 +54,45 @@ function stripSystemTags(content: string): string {
 
 // ── JSONL parser (new format: session-state/<uuid>/events.jsonl) ────
 
+interface CopilotParseState {
+  sessionId: string | null;
+  project: string | null;
+  earliest: number | null;
+  latest: number | null;
+  firstUserMessage: string | null;
+  messages: ParsedMessage[];
+}
+
+function processCopilotEvent(event: CopilotEvent, ts: number | null, state: CopilotParseState): void {
+  switch (event.type) {
+    case 'session.start': {
+      const data = event.data as unknown as CopilotSessionStartData | undefined;
+      if (data?.sessionId) state.sessionId = data.sessionId;
+      if (data?.context?.cwd) state.project = data.context.cwd;
+      break;
+    }
+    case 'user.message': {
+      const data = event.data as unknown as CopilotUserMessageData | undefined;
+      if (!data?.content) break;
+      const cleanContent = stripSystemTags(data.content);
+      if (!cleanContent) break;
+      if (!state.firstUserMessage && cleanContent.length > 0) {
+        state.firstUserMessage = cleanContent.slice(0, 200);
+      }
+      state.messages.push({ uuid: event.id || '', role: 'user', content: cleanContent, timestamp: ts });
+      break;
+    }
+    case 'assistant.message': {
+      const data = event.data as unknown as CopilotAssistantMessageData | undefined;
+      if (!data?.content) break;
+      const msgContent = data.content.trim();
+      if (!msgContent) break;
+      state.messages.push({ uuid: event.id || '', role: 'assistant', content: msgContent, timestamp: ts });
+      break;
+    }
+  }
+}
+
 function parseCopilotEventsFile(filePath: string): ParsedSession {
   let content: string;
   try {
@@ -65,83 +104,29 @@ function parseCopilotEventsFile(filePath: string): ParsedSession {
     };
   }
 
-  const messages: ParsedMessage[] = [];
-  let sessionId: string | null = null;
-  let project: string | null = null;
-  let earliest: number | null = null;
-  let latest: number | null = null;
-  let firstUserMessage: string | null = null;
+  const state: CopilotParseState = {
+    sessionId: null, project: null, earliest: null,
+    latest: null, firstUserMessage: null, messages: [],
+  };
 
   for (const line of content.split('\n')) {
     if (!line.trim()) continue;
-
     let event: CopilotEvent;
-    try {
-      event = JSON.parse(line) as CopilotEvent;
-    } catch {
-      continue;
-    }
+    try { event = JSON.parse(line) as CopilotEvent; } catch { continue; }
 
     const ts = event.timestamp ? new Date(event.timestamp).getTime() : null;
     if (ts && !isNaN(ts)) {
-      if (earliest === null || ts < earliest) earliest = ts;
-      if (latest === null || ts > latest) latest = ts;
+      if (state.earliest === null || ts < state.earliest) state.earliest = ts;
+      if (state.latest === null || ts > state.latest) state.latest = ts;
     }
 
-    switch (event.type) {
-      case 'session.start': {
-        const data = event.data as unknown as CopilotSessionStartData | undefined;
-        if (data?.sessionId) sessionId = data.sessionId;
-        if (data?.context?.cwd) project = data.context.cwd;
-        break;
-      }
-
-      case 'user.message': {
-        const data = event.data as unknown as CopilotUserMessageData | undefined;
-        if (!data?.content) break;
-
-        const cleanContent = stripSystemTags(data.content);
-        if (!cleanContent) break;
-
-        if (!firstUserMessage && cleanContent.length > 0) {
-          firstUserMessage = cleanContent.slice(0, 200);
-        }
-
-        messages.push({
-          uuid: event.id || '',
-          role: 'user',
-          content: cleanContent,
-          timestamp: ts,
-        });
-        break;
-      }
-
-      case 'assistant.message': {
-        const data = event.data as unknown as CopilotAssistantMessageData | undefined;
-        if (!data?.content) break;
-
-        const content = data.content.trim();
-        if (!content) break;
-
-        messages.push({
-          uuid: event.id || '',
-          role: 'assistant',
-          content,
-          timestamp: ts,
-        });
-        break;
-      }
-    }
+    processCopilotEvent(event, ts, state);
   }
 
   return {
-    sessionId,
-    project,
-    startedAt: earliest,
-    lastActivityAt: latest,
-    preview: firstUserMessage,
-    source: 'copilot',
-    messages,
+    sessionId: state.sessionId, project: state.project,
+    startedAt: state.earliest, lastActivityAt: state.latest,
+    preview: state.firstUserMessage, source: 'copilot', messages: state.messages,
   };
 }
 

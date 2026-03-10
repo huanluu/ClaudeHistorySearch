@@ -76,290 +76,240 @@ function resolveHeartbeatEnvOverrides(): Partial<HeartbeatConfig> {
   return overrides;
 }
 
+// Shared mutable state for lifecycle functions
+interface AppContext {
+  config: AppConfig;
+  serviceType: string;
+  dbPath: string;
+  logger: ReturnType<typeof createLogger>;
+  sessionRepo: ReturnType<typeof createSessionRepository>;
+  sessionSources: SessionSource[];
+  fs: NodeFileSystem;
+  transport: HttpTransport;
+  fileWatcher: FileWatcher;
+  agentStore: AgentStore;
+  diagnosticsService: DiagnosticsService;
+  heartbeatService: HeartbeatService;
+  cronService: CronService;
+  cronMcpServer: ReturnType<typeof createCronMcpTools>;
+  claudeRuntime: ClaudeRuntime;
+  workingDirValidator: WorkingDirValidator;
+  allowedDirs: string[];
+  wsGateway: WebSocketGateway | null;
+  bonjour: Bonjour | null;
+  bonjourService: ReturnType<Bonjour['publish']> | null;
+  reindexTimer: NodeJS.Timeout | null;
+}
+
+function initializeWebSocketGateway(ctx: AppContext): void {
+  const httpServer = ctx.transport.getServer();
+  if (!httpServer) return;
+
+  const gw = new WebSocketGateway({ server: httpServer, path: '/ws', pingInterval: 30000, logger: ctx.logger });
+  ctx.wsGateway = gw;
+
+  registerLiveHandlers(gw, { agentStore: ctx.agentStore, validator: ctx.workingDirValidator, logger: ctx.logger });
+
+  const assistantBackend = new SdkAssistantBackend(ctx.logger, {
+    cron: ctx.cronMcpServer,
+    'work-iq': { command: '/opt/homebrew/bin/node', args: ['/opt/homebrew/bin/workiq', 'mcp'] },
+  });
+  const assistantService = new AssistantService(assistantBackend, ctx.logger);
+  registerAssistantHandlers(gw, { assistantService, logger: ctx.logger });
+
+  gw.onConnect((client: AuthenticatedClient) => {
+    ctx.logger.log({ msg: `Client connected: ${client.clientId} (${gw.getClientCount()} total)`, op: 'ws.connect', context: { clientId: client.clientId, total: gw.getClientCount() } });
+  });
+  gw.onDisconnect((client: AuthenticatedClient) => {
+    ctx.logger.log({ msg: `Client disconnected: ${client.clientId} (${gw.getClientCount()} total)`, op: 'ws.disconnect', context: { clientId: client.clientId, total: gw.getClientCount() } });
+  });
+  gw.on('message', (client, payload, id) => {
+    ctx.logger.log({ msg: `Message from ${client.clientId}`, op: 'ws.message', context: { clientId: client.clientId } });
+    client.send({ type: 'message', payload: { echo: payload }, id });
+  });
+
+  gw.start();
+  ctx.logger.log({ msg: `WebSocket server available at ws://0.0.0.0:${ctx.transport.getPort()}/ws`, op: 'server.start' });
+}
+
+function publishBonjourService(ctx: AppContext): void {
+  if (ctx.config.skipBonjour) {
+    ctx.logger.log({ msg: 'Bonjour advertisement skipped (skipBonjour option)', op: 'server.start' });
+    return;
+  }
+  if (isStealthModeEnabled()) {
+    ctx.logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
+    return;
+  }
+  const boundPort = ctx.transport.getPort();
+  ctx.bonjour = new Bonjour();
+  ctx.bonjourService = ctx.bonjour.publish({ name: 'Claude History Server', type: ctx.serviceType, port: boundPort, txt: { version: '1.0.0' } });
+  ctx.logger.log({ msg: `Bonjour service advertised as _${ctx.serviceType}._tcp on port ${boundPort}`, op: 'server.start', context: { serviceType: ctx.serviceType, port: boundPort } });
+}
+
+function setupPeriodicReindex(ctx: AppContext): void {
+  const REINDEX_INTERVAL = 5 * 60 * 1000;
+  ctx.reindexTimer = setInterval(async () => {
+    ctx.logger.log({ msg: 'Running periodic reindex...', op: 'server.reindex' });
+    const result = await indexAllSessions(false, ctx.sessionRepo, ctx.logger, ctx.sessionSources, ctx.fs);
+    ctx.diagnosticsService.setLastIndexResult(result);
+    ctx.logger.log({ msg: result.indexed > 0 ? `Periodic reindex: ${result.indexed} new sessions indexed` : 'Periodic reindex: no new sessions', op: 'server.reindex' });
+  }, REINDEX_INTERVAL);
+  ctx.logger.log({ msg: `Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes`, op: 'server.start', context: { intervalMinutes: REINDEX_INTERVAL / 1000 / 60 } });
+}
+
+function wireHttpRoutes(ctx: AppContext, configService: ConfigService, onConfigChanged: (s: string) => void): void {
+  const validationRouter = Router();
+  validationRouter.get('/search', validateQuery(SearchQuerySchema));
+  validationRouter.get('/sessions', validateQuery(SessionsQuerySchema));
+  validationRouter.put('/api/config/:section', validateBody(ConfigUpdateBodySchema));
+  ctx.transport.use('/', validationRouter);
+
+  const router = Router();
+  registerSearchRoutes(router, {
+    repo: ctx.sessionRepo, logger: ctx.logger,
+    indexFn: (force, repo, logger) => indexAllSessions(force, repo, logger, ctx.sessionSources, ctx.fs),
+  });
+  registerSchedulerRoutes(router, { heartbeatService: ctx.heartbeatService, logger: ctx.logger });
+  registerCronRoutes(router, { cronService: ctx.cronService, logger: ctx.logger });
+
+  const __filename = fileURLToPath(import.meta.url);
+  const adminHtmlPath = join(dirname(__filename), 'features', 'admin', 'admin.html');
+  const adminHtml = ctx.fs.exists(adminHtmlPath) ? ctx.fs.readFile(adminHtmlPath) : undefined;
+  registerAdminRoutes(router, { diagnosticsService: ctx.diagnosticsService, configService, onConfigChanged, logger: ctx.logger, adminHtml });
+  ctx.transport.use('/', router);
+}
+
+async function startApp(ctx: AppContext): Promise<void> {
+  if (ctx.allowedDirs.length === 0) {
+    ctx.logger.log({ msg: 'WARNING: No allowed working directories configured. All session.start/resume requests will be denied.', op: 'server.start' });
+    ctx.logger.log({ msg: 'Configure allowed directories via the admin UI at /admin', op: 'server.start' });
+  } else {
+    ctx.logger.log({ msg: `Security: ${ctx.allowedDirs.length} allowed working director${ctx.allowedDirs.length === 1 ? 'y' : 'ies'} configured`, op: 'server.start', context: { allowedDirs: ctx.allowedDirs.length } });
+  }
+
+  await ctx.transport.start();
+  const boundPort = ctx.transport.getPort();
+  ctx.logger.log({ msg: `Claude History Server running on http://0.0.0.0:${boundPort}`, op: 'server.start', context: { port: boundPort } });
+  ctx.logger.log({ msg: `Database: ${ctx.dbPath}`, op: 'server.start', context: { dbPath: ctx.dbPath } });
+
+  initializeWebSocketGateway(ctx);
+
+  ctx.logger.log({ msg: hasApiKey() ? 'Authentication: API key required' : 'Authentication: No API key configured (run "npm run key:generate" to secure the server)', op: 'server.start' });
+
+  ctx.logger.log({ msg: 'Starting initial index...', op: 'server.start' });
+  const result = await indexAllSessions(false, ctx.sessionRepo, ctx.logger, ctx.sessionSources, ctx.fs);
+  ctx.diagnosticsService.setLastIndexResult(result);
+  ctx.logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
+
+  publishBonjourService(ctx);
+  ctx.fileWatcher.start();
+  setupPeriodicReindex(ctx);
+
+  const heartbeatConfig = ctx.heartbeatService.getConfig();
+  if (heartbeatConfig.enabled) {
+    ctx.heartbeatService.startScheduler();
+    ctx.logger.log({ msg: `Heartbeat working directory: ${heartbeatConfig.workingDirectory}`, op: 'server.start', context: { workingDirectory: heartbeatConfig.workingDirectory } });
+  } else {
+    ctx.logger.log({ msg: 'Heartbeat: disabled', op: 'server.start' });
+  }
+
+  ctx.cronService.startScheduler();
+  const cronJobs = ctx.cronService.listJobs();
+  ctx.logger.log({ msg: `Cron scheduler started: ${cronJobs.length} job${cronJobs.length === 1 ? '' : 's'}`, op: 'server.start', context: { jobCount: cronJobs.length } });
+}
+
+async function stopApp(ctx: AppContext): Promise<void> {
+  ctx.logger.log({ msg: 'Shutting down...', op: 'server.stop' });
+  ctx.claudeRuntime.cleanup();
+  if (ctx.reindexTimer) { clearInterval(ctx.reindexTimer); ctx.reindexTimer = null; }
+  ctx.heartbeatService.stopScheduler();
+  await ctx.cronService.stopScheduler();
+  ctx.bonjourService?.stop?.();
+  ctx.bonjour?.destroy();
+  await ctx.fileWatcher.stop();
+  await ctx.wsGateway?.stop();
+  await ctx.transport.stop();
+  ctx.logger.log({ msg: 'Server stopped', op: 'server.stop' });
+}
+
 /**
- * Composition root: wires all services together and returns an App
- * with start/stop lifecycle control.
+ * Composition root: wires all services together and returns an App.
  */
 export function createApp(config: AppConfig): App {
   const { port, serviceType = 'claudehistory' } = config;
   const dbPath = config.dbPath ?? DB_PATH;
   const logPath = config.logPath ?? LOG_PATH;
 
-  // --- Logger with error ring buffer ---
   const errorBuffer = new ErrorRingBuffer(50);
   const logger = createLogger(logPath, { errorBuffer });
-
-  // --- Database ---
   const db = createDatabase(dbPath, logger);
-
-  // --- Repositories ---
   const sessionRepo = createSessionRepository(db);
   const heartbeatRepo = createHeartbeatRepository(db);
   const cronRepo = createCronRepository(db);
-
-  // --- File system adapter ---
   const fs = new NodeFileSystem();
 
-  // --- Services ---
   const configService = new ConfigService(fs);
   const securityConfig = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
   const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
-  // --- CLI runtimes ---
   const claudeRuntime = new ClaudeRuntime(process.env);
   const copilotRuntime = new CopilotRuntime(process.env);
-  const runtimes = new Map<string, CliRuntime>([
-    [claudeRuntime.name, claudeRuntime],
-    [copilotRuntime.name, copilotRuntime],
-  ]);
+  const runtimes = new Map<string, CliRuntime>([[claudeRuntime.name, claudeRuntime], [copilotRuntime.name, copilotRuntime]]);
 
-  // --- Heartbeat env overrides (SEC-INV-5: env reads only in app.ts) ---
-  const heartbeatEnvOverrides = resolveHeartbeatEnvOverrides();
   const commandExecutor = createNodeCommandExecutor();
-  const heartbeatService = new HeartbeatService(fs, commandExecutor, undefined, heartbeatRepo, logger, claudeRuntime, heartbeatEnvOverrides);
-
-  // --- Cron service ---
-  const cronService = new CronService(
-    cronRepo,
-    (opts) => claudeRuntime.runHeadless(opts, logger),
-    logger,
-  );
+  const heartbeatService = new HeartbeatService(fs, commandExecutor, undefined, heartbeatRepo, logger, claudeRuntime, resolveHeartbeatEnvOverrides());
+  const cronService = new CronService(cronRepo, (opts) => claudeRuntime.runHeadless(opts, logger), logger);
   const cronMcpServer = createCronMcpTools(cronService);
 
-  // --- Session sources (multi-agent) ---
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
   const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger, fs);
-  const agentStore = new AgentStore(logger, (id, source, log) => {
-    const runtime = runtimes.get(source) ?? claudeRuntime;
-    return runtime.startSession(id, log);
-  });
+  const agentStore = new AgentStore(logger, (id, source, log) => (runtimes.get(source) ?? claudeRuntime).startSession(id, log));
 
-  // --- Diagnostics ---
-  const startedAt = new Date();
-  let wsGateway: WebSocketGateway | null = null;
   const diagnosticsService = new DiagnosticsService({
-    repo: sessionRepo,
-    errorBuffer,
-    fileWatcher,
-    heartbeatService,
-    getWsClientCount: () => wsGateway?.getClientCount() ?? 0,
+    repo: sessionRepo, errorBuffer, fileWatcher, heartbeatService,
+    getWsClientCount: () => ctx.wsGateway?.getClientCount() ?? 0, // deferred closure — ctx assigned below before any call
     getActiveSessionCount: () => agentStore.getAll().length,
-    startedAt,
-    dbPath,
+    startedAt: new Date(), dbPath,
   });
 
-  // --- Request logging ---
   const loggingConfig = configService.getSection('logging') as { requestLogLevel?: string } | null;
-  const requestLoggerOptions: RequestLoggerOptions = {
-    level: (loggingConfig?.requestLogLevel as RequestLogLevel) ?? 'all',
-    logger,
-  };
-
-  // --- HTTP Transport (middleware order matters: logger → auth → routes) ---
+  const requestLoggerOptions: RequestLoggerOptions = { level: (loggingConfig?.requestLogLevel as RequestLogLevel) ?? 'all', logger };
   const transport = new HttpTransport({ port });
   transport.use(createRequestLogger(requestLoggerOptions));
   transport.use(authMiddleware);
 
-  let bonjour: Bonjour | null = null;
-  let service: ReturnType<Bonjour['publish']> | null = null;
-  let reindexTimer: NodeJS.Timeout | null = null;
-
-  // --- Config hot-reload ---
   const onConfigChanged = (section: string): void => {
     if (section === 'heartbeat') {
-      const updatedSection = configService.getSection('heartbeat');
-      if (updatedSection) {
-        heartbeatService.updateConfig(updatedSection as Partial<HeartbeatConfig>);
-      }
+      const s = configService.getSection('heartbeat');
+      if (s) heartbeatService.updateConfig(s as Partial<HeartbeatConfig>);
       heartbeatService.startScheduler();
     }
     if (section === 'logging') {
-      const updatedLogging = configService.getSection('logging') as { requestLogLevel?: string } | null;
-      requestLoggerOptions.level = (updatedLogging?.requestLogLevel as RequestLogLevel) ?? 'all';
+      const s = configService.getSection('logging') as { requestLogLevel?: string } | null;
+      requestLoggerOptions.level = (s?.requestLogLevel as RequestLogLevel) ?? 'all';
       logger.log({ msg: `Request log level updated: ${requestLoggerOptions.level}`, op: 'server.config' });
     }
     if (section === 'security') {
-      const updatedSecurity = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
-      const updatedDirs = updatedSecurity?.allowedWorkingDirs ?? [];
-      workingDirValidator.setAllowedDirs(updatedDirs);
-      logger.log({ msg: `Security config updated: ${updatedDirs.length} allowed working director${updatedDirs.length === 1 ? 'y' : 'ies'}`, op: 'server.config', context: { allowedDirs: updatedDirs.length } });
+      const s = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
+      const dirs = s?.allowedWorkingDirs ?? [];
+      workingDirValidator.setAllowedDirs(dirs);
+      logger.log({ msg: `Security config updated: ${dirs.length} allowed dirs`, op: 'server.config' });
     }
   };
 
-  // --- HTTP Validation Middleware (gateway layer validates before features handle) ---
-  const validationRouter = Router();
-  validationRouter.get('/search', validateQuery(SearchQuerySchema));
-  validationRouter.get('/sessions', validateQuery(SessionsQuerySchema));
-  validationRouter.put('/api/config/:section', validateBody(ConfigUpdateBodySchema));
-  transport.use('/', validationRouter);
+  const ctx: AppContext = {
+    config, serviceType, dbPath, logger, sessionRepo, sessionSources, fs, transport,
+    fileWatcher, agentStore, diagnosticsService, heartbeatService, cronService, cronMcpServer,
+    claudeRuntime, workingDirValidator, allowedDirs,
+    wsGateway: null, bonjour: null, bonjourService: null, reindexTimer: null,
+  };
 
-  // --- HTTP Routes ---
-  const router = Router();
-  registerSearchRoutes(router, {
-    repo: sessionRepo,
-    logger,
-    indexFn: (force, repo, logger) => indexAllSessions(force, repo, logger, sessionSources, fs),
-  });
-  registerSchedulerRoutes(router, { heartbeatService, logger });
-  registerCronRoutes(router, { cronService, logger });
-  // Load admin HTML (I/O in composition root, not in feature code)
-  const __filename = fileURLToPath(import.meta.url);
-  const adminHtmlPath = join(dirname(__filename), 'features', 'admin', 'admin.html');
-  const adminHtml = fs.exists(adminHtmlPath) ? fs.readFile(adminHtmlPath) : undefined;
-  registerAdminRoutes(router, { diagnosticsService, configService, onConfigChanged, logger, adminHtml });
-  transport.use('/', router);
-
-  // --- Lifecycle ---
-  async function start(): Promise<void> {
-    // Security logging
-    if (allowedDirs.length === 0) {
-      logger.log({ msg: 'WARNING: No allowed working directories configured. All session.start/resume requests will be denied.', op: 'server.start' });
-      logger.log({ msg: 'Configure allowed directories via the admin UI at /admin', op: 'server.start' });
-    } else {
-      logger.log({ msg: `Security: ${allowedDirs.length} allowed working director${allowedDirs.length === 1 ? 'y' : 'ies'} configured`, op: 'server.start', context: { allowedDirs: allowedDirs.length } });
-    }
-
-    // Start HTTP server (router is fully wired before accepting requests)
-    await transport.start();
-
-    const boundPort = transport.getPort();
-    logger.log({ msg: `Claude History Server running on http://0.0.0.0:${boundPort}`, op: 'server.start', context: { port: boundPort } });
-    logger.log({ msg: `Database: ${dbPath}`, op: 'server.start', context: { dbPath } });
-
-    // Initialize WebSocket gateway (attached to HTTP server AFTER it's listening)
-    const httpServer = transport.getServer();
-    if (httpServer) {
-      wsGateway = new WebSocketGateway({
-        server: httpServer,
-        path: '/ws',
-        pingInterval: 30000,
-        logger,
-      });
-
-      // Register feature handlers with gateway
-      registerLiveHandlers(wsGateway, {
-        agentStore,
-        validator: workingDirValidator,
-        logger,
-      });
-
-      // Register assistant handlers
-      const assistantBackend = new SdkAssistantBackend(logger, {
-        cron: cronMcpServer,
-        'work-iq': {
-          command: '/opt/homebrew/bin/node',
-          args: ['/opt/homebrew/bin/workiq', 'mcp'],
-        },
-      });
-      const assistantService = new AssistantService(assistantBackend, logger);
-      registerAssistantHandlers(wsGateway, { assistantService, logger });
-
-      // Connection logging
-      wsGateway.onConnect((client: AuthenticatedClient) => {
-        logger.log({ msg: `Client connected: ${client.clientId} (${wsGateway?.getClientCount()} total)`, op: 'ws.connect', context: { clientId: client.clientId, total: wsGateway?.getClientCount() } });
-      });
-      wsGateway.onDisconnect((client: AuthenticatedClient) => {
-        logger.log({ msg: `Client disconnected: ${client.clientId} (${wsGateway?.getClientCount()} total)`, op: 'ws.disconnect', context: { clientId: client.clientId, total: wsGateway?.getClientCount() } });
-      });
-
-      // Fallback handler for 'message' type (echo)
-      wsGateway.on('message', (client, payload, id) => {
-        logger.log({ msg: `Message from ${client.clientId}`, op: 'ws.message', context: { clientId: client.clientId } });
-        client.send({
-          type: 'message',
-          payload: { echo: payload },
-          id,
-        });
-      });
-
-      wsGateway.start();
-      logger.log({ msg: `WebSocket server available at ws://0.0.0.0:${boundPort}/ws`, op: 'server.start', context: { port: boundPort } });
-    }
-
-    // API key status
-    if (hasApiKey()) {
-      logger.log({ msg: 'Authentication: API key required', op: 'server.start' });
-    } else {
-      logger.log({ msg: 'Authentication: No API key configured (run "npm run key:generate" to secure the server)', op: 'server.start' });
-    }
-
-    // Initial indexing
-    logger.log({ msg: 'Starting initial index...', op: 'server.start' });
-    const result = await indexAllSessions(false, sessionRepo, logger, sessionSources, fs);
-    diagnosticsService.setLastIndexResult(result);
-    logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
-
-    // Bonjour advertisement (auto-disabled if stealth mode is on or skipBonjour is set)
-    if (config.skipBonjour) {
-      logger.log({ msg: 'Bonjour advertisement skipped (skipBonjour option)', op: 'server.start' });
-    } else {
-      const stealthMode = isStealthModeEnabled();
-      if (stealthMode) {
-        logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
-      } else {
-        bonjour = new Bonjour();
-        service = bonjour.publish({
-          name: 'Claude History Server',
-          type: serviceType,
-          port: boundPort,
-          txt: { version: '1.0.0' }
-        });
-        logger.log({ msg: `Bonjour service advertised as _${serviceType}._tcp on port ${boundPort}`, op: 'server.start', context: { serviceType, port: boundPort } });
-      }
-    }
-
-    // File watcher
-    fileWatcher.start();
-
-    // Periodic reindex
-    const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
-    reindexTimer = setInterval(async () => {
-      logger.log({ msg: 'Running periodic reindex...', op: 'server.reindex' });
-      const reindexResult = await indexAllSessions(false, sessionRepo, logger, sessionSources, fs);
-      diagnosticsService.setLastIndexResult(reindexResult);
-      if (reindexResult.indexed > 0) {
-        logger.log({ msg: `Periodic reindex: ${reindexResult.indexed} new sessions indexed`, op: 'server.reindex', context: { indexed: reindexResult.indexed } });
-      } else {
-        logger.log({ msg: 'Periodic reindex: no new sessions', op: 'server.reindex' });
-      }
-    }, REINDEX_INTERVAL);
-    logger.log({ msg: `Periodic reindex scheduled every ${REINDEX_INTERVAL / 1000 / 60} minutes`, op: 'server.start', context: { intervalMinutes: REINDEX_INTERVAL / 1000 / 60 } });
-
-    // Heartbeat scheduler
-    const heartbeatConfig = heartbeatService.getConfig();
-    if (heartbeatConfig.enabled) {
-      heartbeatService.startScheduler();
-      logger.log({ msg: `Heartbeat working directory: ${heartbeatConfig.workingDirectory}`, op: 'server.start', context: { workingDirectory: heartbeatConfig.workingDirectory } });
-    } else {
-      logger.log({ msg: 'Heartbeat: disabled', op: 'server.start' });
-    }
-
-    // Cron scheduler
-    cronService.startScheduler();
-    const cronJobs = cronService.listJobs();
-    logger.log({ msg: `Cron scheduler started: ${cronJobs.length} job${cronJobs.length === 1 ? '' : 's'}`, op: 'server.start', context: { jobCount: cronJobs.length } });
-  }
-
-  async function stop(): Promise<void> {
-    logger.log({ msg: 'Shutting down...', op: 'server.stop' });
-    claudeRuntime.cleanup();
-    if (reindexTimer) {
-      clearInterval(reindexTimer);
-      reindexTimer = null;
-    }
-    heartbeatService.stopScheduler();
-    await cronService.stopScheduler();
-    service?.stop?.();
-    bonjour?.destroy();
-    await fileWatcher.stop();
-    await wsGateway?.stop();
-    await transport.stop();
-    logger.log({ msg: 'Server stopped', op: 'server.stop' });
-  }
+  wireHttpRoutes(ctx, configService, onConfigChanged);
 
   return {
-    start,
-    stop,
+    start: () => startApp(ctx),
+    stop: () => stopApp(ctx),
     getPort: () => transport.getPort(),
     getHttpTransport: () => transport,
   };

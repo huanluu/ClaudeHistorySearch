@@ -11,57 +11,70 @@ export interface AdminRouteDeps {
   adminHtml?: string;
 }
 
+function handleGetConfigSection(
+  configService: ConfigService, req: Request, res: Response, logger: Logger,
+): void {
+  try {
+    const sectionName = req.params.section as string;
+    const section = configService.getSection(sectionName);
+    if (section === null) {
+      res.status(404).json({ error: `Unknown section: ${sectionName}` });
+      return;
+    }
+    res.json(section);
+  } catch (error) {
+    logger.error({ msg: 'Error reading config section', op: 'server.config', err: error, errType: 'internal_error' });
+    res.status(500).json({ error: 'Failed to read config section' });
+  }
+}
+
+function handlePutConfigSection(
+  configService: ConfigService, req: Request, res: Response,
+  onConfigChanged: ((section: string) => void) | undefined, logger: Logger,
+): void {
+  try {
+    const sectionName = req.params.section as string;
+    const validationError = configService.updateSection(sectionName, req.body);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
+      return;
+    }
+    if (onConfigChanged) onConfigChanged(sectionName);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ msg: 'Error updating config section', op: 'server.config', err: error, errType: 'internal_error' });
+    res.status(500).json({ error: 'Failed to update config section' });
+  }
+}
+
 export function registerAdminRoutes(router: Router, deps: AdminRouteDeps): void {
   const { diagnosticsService, configService, onConfigChanged, logger, adminHtml } = deps;
 
-  /**
-   * GET /health
-   */
   router.get('/health', (_req: Request, res: Response) => {
     if (diagnosticsService) {
-      const health = diagnosticsService.getHealth();
-      res.json(health);
+      res.json(diagnosticsService.getHealth());
     } else {
-      res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-      });
+      res.json({ status: 'healthy', timestamp: new Date().toISOString() });
     }
   });
 
-  /**
-   * GET /diagnostics
-   */
   router.get('/diagnostics', (_req: Request, res: Response) => {
     if (!diagnosticsService) {
       res.status(503).json({ error: 'Diagnostics service not initialized' });
       return;
     }
     const diagnostics = diagnosticsService.getDiagnostics();
-    const statusCode = diagnostics.status === 'unhealthy' ? 503 : 200;
-    res.status(statusCode).json(diagnostics);
+    res.status(diagnostics.status === 'unhealthy' ? 503 : 200).json(diagnostics);
   });
 
-  /**
-   * GET /admin
-   */
   router.get('/admin', (_req: Request, res: Response) => {
-    if (adminHtml) {
-      res.type('html').send(adminHtml);
-    } else {
-      res.status(503).send('Admin UI not available');
-    }
+    if (adminHtml) res.type('html').send(adminHtml);
+    else res.status(503).send('Admin UI not available');
   });
 
-  /**
-   * GET /api/config
-   */
   router.get('/api/config', (_req: Request, res: Response) => {
     try {
-      if (!configService) {
-        res.status(503).json({ error: 'Config service not initialized' });
-        return;
-      }
+      if (!configService) { res.status(503).json({ error: 'Config service not initialized' }); return; }
       res.json(configService.getAllEditableSections());
     } catch (error) {
       logger.error({ msg: 'Error reading config', op: 'server.config', err: error, errType: 'internal_error' });
@@ -69,53 +82,13 @@ export function registerAdminRoutes(router: Router, deps: AdminRouteDeps): void 
     }
   });
 
-  /**
-   * GET /api/config/:section
-   */
   router.get('/api/config/:section', (req: Request, res: Response) => {
-    try {
-      if (!configService) {
-        res.status(503).json({ error: 'Config service not initialized' });
-        return;
-      }
-      const sectionName = req.params.section as string;
-      const section = configService.getSection(sectionName);
-      if (section === null) {
-        res.status(404).json({ error: `Unknown section: ${sectionName}` });
-        return;
-      }
-      res.json(section);
-    } catch (error) {
-      logger.error({ msg: 'Error reading config section', op: 'server.config', err: error, errType: 'internal_error' });
-      res.status(500).json({ error: 'Failed to read config section' });
-    }
+    if (!configService) { res.status(503).json({ error: 'Config service not initialized' }); return; }
+    handleGetConfigSection(configService, req, res, logger);
   });
 
-  /**
-   * PUT /api/config/:section
-   */
   router.put('/api/config/:section', (req: Request, res: Response) => {
-    try {
-      if (!configService) {
-        res.status(503).json({ error: 'Config service not initialized' });
-        return;
-      }
-
-      const sectionName = req.params.section as string;
-      const validationError = configService.updateSection(sectionName, req.body);
-      if (validationError) {
-        res.status(400).json({ error: validationError });
-        return;
-      }
-
-      if (onConfigChanged) {
-        onConfigChanged(sectionName);
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      logger.error({ msg: 'Error updating config section', op: 'server.config', err: error, errType: 'internal_error' });
-      res.status(500).json({ error: 'Failed to update config section' });
-    }
+    if (!configService) { res.status(503).json({ error: 'Config service not initialized' }); return; }
+    handlePutConfigSection(configService, req, res, onConfigChanged, logger);
   });
 }

@@ -164,82 +164,28 @@ async function indexAllFromSources(
  * - `*.json` → flat directory
  * - `* /events.jsonl` → one level deep (Copilot: <uuid>/events.jsonl)
  */
-async function indexSourceDirectory(
-  forceReindex: boolean,
-  source: SessionSource,
-  repo: SessionRepository,
-  logger: Logger,
-  fs: FileSystem,
+async function indexDeeplyNestedFiles(
+  source: SessionSource, forceReindex: boolean,
+  repo: SessionRepository, logger: Logger, fs: FileSystem,
 ): Promise<IndexAllResult> {
   let indexed = 0;
   let skipped = 0;
+  const extension = source.filePattern.includes('.jsonl') ? '.jsonl' : '.json';
+  const projectDirs = fs.listDirectory(source.sessionDir);
 
-  const pattern = source.filePattern;
+  for (const projectDir of projectDirs) {
+    const projectPath = join(source.sessionDir, projectDir);
+    const stat = fs.stat(projectPath);
+    if (!stat.isDirectory) continue;
 
-  if (pattern.startsWith('**')) {
-    // Deeply nested (Claude: projects/<path>/*.jsonl)
-    const extension = pattern.includes('.jsonl') ? '.jsonl' : '.json';
-    const projectDirs = fs.listDirectory(source.sessionDir);
-
-    for (const projectDir of projectDirs) {
-      const projectPath = join(source.sessionDir, projectDir);
-      const stat = fs.stat(projectPath);
-      if (!stat.isDirectory) continue;
-
-      const titleMap = source.loadTitleMap?.(projectPath) ?? new Map<string, string>();
-      const files = fs.listDirectory(projectPath);
-
-      for (const file of files) {
-        if (!file.endsWith(extension)) continue;
-        const filePath = join(projectPath, file);
-        try {
-          const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs, titleMap);
-          if (result) indexed++;
-          else skipped++;
-        } catch (e) {
-          const error = e as Error;
-          logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
-          skipped++;
-        }
-      }
-    }
-  } else if (pattern.includes('/')) {
-    // One level deep (Copilot: <uuid>/events.jsonl)
-    const targetFile = pattern.split('/').pop() || '';
-    const subdirs = fs.listDirectory(source.sessionDir);
-
-    for (const subdir of subdirs) {
-      const subdirPath = join(source.sessionDir, subdir);
-      try {
-        const stat = fs.stat(subdirPath);
-        if (!stat.isDirectory) continue;
-      } catch {
-        continue;
-      }
-
-      const filePath = join(subdirPath, targetFile);
-      if (!fs.exists(filePath)) continue;
-
-      try {
-        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs);
-        if (result) indexed++;
-        else skipped++;
-      } catch (e) {
-        const error = e as Error;
-        logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
-        skipped++;
-      }
-    }
-  } else {
-    // Flat directory (e.g., *.json)
-    const extension = pattern.replace('*', '');
-    const files = fs.listDirectory(source.sessionDir);
+    const titleMap = source.loadTitleMap?.(projectPath) ?? new Map<string, string>();
+    const files = fs.listDirectory(projectPath);
 
     for (const file of files) {
       if (!file.endsWith(extension)) continue;
-      const filePath = join(source.sessionDir, file);
+      const filePath = join(projectPath, file);
       try {
-        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs);
+        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs, titleMap);
         if (result) indexed++;
         else skipped++;
       } catch (e) {
@@ -249,8 +195,82 @@ async function indexSourceDirectory(
       }
     }
   }
-
   return { indexed, skipped };
+}
+
+async function indexOneLevelDeepFiles(
+  source: SessionSource, forceReindex: boolean,
+  repo: SessionRepository, logger: Logger, fs: FileSystem,
+): Promise<IndexAllResult> {
+  let indexed = 0;
+  let skipped = 0;
+  const targetFile = source.filePattern.split('/').pop() || '';
+  const subdirs = fs.listDirectory(source.sessionDir);
+
+  for (const subdir of subdirs) {
+    const subdirPath = join(source.sessionDir, subdir);
+    try {
+      const stat = fs.stat(subdirPath);
+      if (!stat.isDirectory) continue;
+    } catch { continue; }
+
+    const filePath = join(subdirPath, targetFile);
+    if (!fs.exists(filePath)) continue;
+
+    try {
+      const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs);
+      if (result) indexed++;
+      else skipped++;
+    } catch (e) {
+      const error = e as Error;
+      logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
+      skipped++;
+    }
+  }
+  return { indexed, skipped };
+}
+
+async function indexFlatDirectoryFiles(
+  source: SessionSource, forceReindex: boolean,
+  repo: SessionRepository, logger: Logger, fs: FileSystem,
+): Promise<IndexAllResult> {
+  let indexed = 0;
+  let skipped = 0;
+  const extension = source.filePattern.replace('*', '');
+  const files = fs.listDirectory(source.sessionDir);
+
+  for (const file of files) {
+    if (!file.endsWith(extension)) continue;
+    const filePath = join(source.sessionDir, file);
+    try {
+      const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs);
+      if (result) indexed++;
+      else skipped++;
+    } catch (e) {
+      const error = e as Error;
+      logger.error({ msg: `Error indexing ${filePath}: ${error.message}`, op: 'indexer.error', err: error, context: { filePath } });
+      skipped++;
+    }
+  }
+  return { indexed, skipped };
+}
+
+async function indexSourceDirectory(
+  forceReindex: boolean,
+  source: SessionSource,
+  repo: SessionRepository,
+  logger: Logger,
+  fs: FileSystem,
+): Promise<IndexAllResult> {
+  const pattern = source.filePattern;
+
+  if (pattern.startsWith('**')) {
+    return indexDeeplyNestedFiles(source, forceReindex, repo, logger, fs);
+  } else if (pattern.includes('/')) {
+    return indexOneLevelDeepFiles(source, forceReindex, repo, logger, fs);
+  } else {
+    return indexFlatDirectoryFiles(source, forceReindex, repo, logger, fs);
+  }
 }
 
 /**
