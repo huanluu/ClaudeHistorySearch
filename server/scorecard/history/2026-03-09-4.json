@@ -1,0 +1,67 @@
+{
+  "timestamp": "2026-03-09T00:00:00Z",
+  "note": "CQ-INV-7 added and fixed: TypeScript typecheck now passes with zero errors. Score improved from 14/18 to 15/19.",
+  "invariants": {
+    "ARCH-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Blocks 3-7" },
+    "ARCH-INV-2":  { "status": "pass", "enforcedBy": "eslint + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-3":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-4":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-7":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-8":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-9":  { "status": "fail", "enforcedBy": "eslint.config.js Block 7c + scorecard/tests/architecture.test.ts", "violations": [
+      "features/admin/ConfigService.ts -> fs",
+      "features/admin/routes.ts -> fs",
+      "features/scheduler/HeartbeatService.ts -> fs, child_process",
+      "features/search/indexer.ts -> fs"
+    ]},
+    "ARCH-INV-10": { "status": "pass", "enforcedBy": "eslint.config.js Blocks 4, 5, 5b + scorecard/tests/architecture.test.ts" },
+    "CQ-INV-1":   { "status": "pass", "enforcedBy": "eslint.config.js Block 9/9b" },
+    "CQ-INV-3":   { "status": "pass", "enforcedBy": "eslint + scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-4":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "violations": [
+      "features/scheduler/HeartbeatService.ts: 554 lines"
+    ]},
+    "CQ-INV-5":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "violations": [
+      "app.ts: createApp() 251 lines, start() 118 lines",
+      "features/admin/routes.ts: registerAdminRoutes() 104 lines",
+      "features/assistant/handlers.ts: registerAssistantHandlers() 108 lines",
+      "features/search/indexer.ts: indexSourceDirectory() 87 lines",
+      "features/search/routes.ts: registerSearchRoutes() 214 lines",
+      "shared/infra/database/SqliteSessionRepository.ts: constructor() 115 lines",
+      "shared/infra/database/connection.ts: createDatabase() 117 lines",
+      "shared/infra/parsers/ClaudeSessionSource.ts: parseClaudeSessionFile() 82 lines",
+      "shared/infra/parsers/CopilotSessionSource.ts: parseCopilotEventsFile() 90 lines",
+      "shared/provider/logger/logger.ts: createLogger() 84 lines"
+    ]},
+    "CQ-INV-6":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-7":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts + pre-commit hook" },
+    "OBS-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Block 10" },
+    "SEC-INV-1":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-5":  { "status": "fail", "enforcedBy": "scorecard/tests/security.test.ts", "violations": [
+      "features/scheduler/HeartbeatService.ts: 10 process.env reads (lines 274-293)",
+      "shared/infra/runtime/CopilotRuntime.ts: 2 process.env reads (lines 12-13)"
+    ]},
+    "REL-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/reliability.test.ts" }
+  },
+  "summary": {
+    "passing": 15,
+    "total": 19,
+    "passRate": "79%"
+  },
+  "delta": {
+    "since": "2026-03-09-3",
+    "changed": [
+      "CQ-INV-7: NEW — TypeScript typecheck now enforced (tsc --noEmit passes, pre-commit hook added, scorecard test added)"
+    ],
+    "passRateChange": "+1% (14/18 78% → 15/19 79%)"
+  },
+  "testExecution": {
+    "scorecardTestFiles": 4,
+    "scorecardTests": 23,
+    "scorecardDuration": "1170ms",
+    "fullSuiteTestFiles": 46,
+    "fullSuiteTests": 556,
+    "fullSuiteDuration": "2.03s",
+    "allPassing": true
+  }
+}
