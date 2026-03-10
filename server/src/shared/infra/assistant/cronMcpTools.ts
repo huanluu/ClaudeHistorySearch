@@ -15,11 +15,12 @@ export function createCronMcpTools(service: CronToolService) {
     tools: [
       tool(
         'cron_add',
-        'Create a new scheduled cron job. Use kind "at" for one-shot (ISO timestamp) or "every" for recurring (interval in ms, e.g. "3600000" for 1 hour).',
+        'Create a new scheduled cron job. Use kind "at" for one-shot (ISO timestamp), "every" for interval-based (ms), or "cron" for cron expressions (e.g. "0 8 * * *" for daily at 8 AM).',
         {
           name: z.string().describe('Human-readable job name'),
-          schedule_kind: z.enum(['at', 'every']).describe('"at" for one-shot, "every" for recurring'),
-          schedule_value: z.string().describe('ISO timestamp for "at", or interval in milliseconds for "every"'),
+          schedule_kind: z.enum(['at', 'every', 'cron']).describe('"at" for one-shot, "every" for interval, "cron" for cron expression'),
+          schedule_value: z.string().describe('ISO timestamp for "at", interval in ms for "every", or cron expression for "cron" (e.g. "0 8 * * *")'),
+          timezone: z.string().optional().describe('IANA timezone for cron expressions (e.g. "America/Los_Angeles"). Defaults to host timezone.'),
           prompt: z.string().describe('The prompt to send to the Claude CLI session'),
           workingDir: z.string().describe('Working directory for the CLI session'),
         },
@@ -27,7 +28,7 @@ export function createCronMcpTools(service: CronToolService) {
           try {
             const job = service.addJob({
               name: args.name,
-              schedule: { kind: args.schedule_kind, value: args.schedule_value },
+              schedule: { kind: args.schedule_kind, value: args.schedule_value, timezone: args.timezone },
               prompt: args.prompt,
               workingDir: args.workingDir,
             });
@@ -104,17 +105,19 @@ export function createCronMcpTools(service: CronToolService) {
           jobId: z.string().describe('The job ID to update'),
           name: z.string().optional().describe('New name'),
           enabled: z.boolean().optional().describe('Enable or disable the job'),
-          schedule_kind: z.enum(['at', 'every']).optional().describe('New schedule kind'),
+          schedule_kind: z.enum(['at', 'every', 'cron']).optional().describe('New schedule kind'),
           schedule_value: z.string().optional().describe('New schedule value'),
+          timezone: z.string().optional().describe('IANA timezone for cron expressions'),
           prompt: z.string().optional().describe('New prompt'),
           workingDir: z.string().optional().describe('New working directory'),
         },
         async (args) => {
           try {
-            const { jobId, enabled, workingDir, ...rest } = args;
+            const { jobId, enabled, workingDir, timezone, ...rest } = args;
             const fields: Record<string, unknown> = { ...rest };
             if (enabled !== undefined) fields.enabled = enabled ? 1 : 0;
             if (workingDir !== undefined) fields.working_dir = workingDir;
+            if (timezone !== undefined) fields.schedule_timezone = timezone;
             const job = service.updateJob(jobId, fields);
             return { content: [{ type: 'text' as const, text: `Updated job "${job.name}" (${job.id}).` }] };
           } catch (err: unknown) {

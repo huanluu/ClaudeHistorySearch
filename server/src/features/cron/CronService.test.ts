@@ -68,9 +68,29 @@ describe('CronService', () => {
       expect(result).toBe(2000 + 3600000);
     });
 
+    it('returns future timestamp for valid cron expression', () => {
+      const now = Date.now();
+      const result = CronService.computeNextRun('cron', '0 8 * * *', now, null, 'UTC');
+      expect(result).not.toBeNull();
+      expect(result!).toBeGreaterThan(now);
+    });
+
+    it('respects timezone for cron expression', () => {
+      const now = Date.now();
+      const utcResult = CronService.computeNextRun('cron', '0 8 * * *', now, null, 'UTC');
+      const tokyoResult = CronService.computeNextRun('cron', '0 8 * * *', now, null, 'Asia/Tokyo');
+      // Different timezones should produce different next-run times
+      expect(utcResult).not.toBe(tokyoResult);
+    });
+
+    it('throws for invalid cron expression', () => {
+      expect(() => CronService.computeNextRun('cron', 'not valid', 0, null, 'UTC'))
+        .toThrow("Invalid cron expression");
+    });
+
     it('throws for unsupported schedule kind', () => {
-      expect(() => CronService.computeNextRun('cron', '* * * * *', 0, null))
-        .toThrow('Unsupported schedule kind: cron');
+      expect(() => CronService.computeNextRun('bogus', '* * * * *', 0, null))
+        .toThrow('Unsupported schedule kind: bogus');
     });
 
     it('throws for invalid "at" value', () => {
@@ -111,9 +131,21 @@ describe('CronService', () => {
         .toThrow('Working directory cannot be empty');
     });
 
+    it('accepts cron expression schedule', () => {
+      const job = service.addJob({
+        name: 'Daily',
+        schedule: { kind: 'cron', value: '0 8 * * *', timezone: 'UTC' },
+        prompt: 'Good morning',
+        workingDir: '/tmp',
+      });
+      expect(job.schedule_kind).toBe('cron');
+      expect(job.schedule_timezone).toBe('UTC');
+      expect(job.next_run_at_ms).toBeGreaterThan(Date.now() - 1000);
+    });
+
     it('rejects unsupported schedule kind', () => {
-      expect(() => service.addJob({ name: 'X', schedule: { kind: 'cron', value: '* * *' }, prompt: 'Do', workingDir: '/tmp' }))
-        .toThrow("Unsupported schedule kind: cron");
+      expect(() => service.addJob({ name: 'X', schedule: { kind: 'bogus', value: '* * *' }, prompt: 'Do', workingDir: '/tmp' }))
+        .toThrow("Unsupported schedule kind: bogus");
     });
   });
 

@@ -11,6 +11,7 @@ function makeJob(overrides: Partial<CronJobRecord> = {}): CronJobRecord {
     enabled: 1,
     schedule_kind: 'every',
     schedule_value: '3600000',
+    schedule_timezone: null,
     prompt: 'Do something',
     working_dir: '/tmp',
     runtime: 'claude',

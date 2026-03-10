@@ -18,8 +18,8 @@ export class SqliteCronRepository implements CronRepository {
         'SELECT * FROM cron_jobs WHERE enabled = 1 AND next_run_at_ms IS NOT NULL AND next_run_at_ms <= ?',
       ),
       insert: db.prepare(`
-        INSERT INTO cron_jobs (id, name, enabled, schedule_kind, schedule_value, prompt, working_dir, runtime, next_run_at_ms, last_run_at_ms, last_run_status, last_session_id, consecutive_errors, created_at_ms)
-        VALUES (@id, @name, @enabled, @schedule_kind, @schedule_value, @prompt, @working_dir, @runtime, @next_run_at_ms, @last_run_at_ms, @last_run_status, @last_session_id, @consecutive_errors, @created_at_ms)
+        INSERT INTO cron_jobs (id, name, enabled, schedule_kind, schedule_value, schedule_timezone, prompt, working_dir, runtime, next_run_at_ms, last_run_at_ms, last_run_status, last_session_id, consecutive_errors, created_at_ms)
+        VALUES (@id, @name, @enabled, @schedule_kind, @schedule_value, @schedule_timezone, @prompt, @working_dir, @runtime, @next_run_at_ms, @last_run_at_ms, @last_run_status, @last_session_id, @consecutive_errors, @created_at_ms)
       `),
       remove: db.prepare('DELETE FROM cron_jobs WHERE id = ?'),
     };
@@ -42,7 +42,7 @@ export class SqliteCronRepository implements CronRepository {
   }
 
   private static readonly MUTABLE_COLUMNS = new Set([
-    'name', 'enabled', 'schedule_kind', 'schedule_value', 'prompt', 'working_dir',
+    'name', 'enabled', 'schedule_kind', 'schedule_value', 'schedule_timezone', 'prompt', 'working_dir',
     'runtime', 'next_run_at_ms', 'last_run_at_ms', 'last_run_status', 'last_session_id',
     'consecutive_errors',
   ]);

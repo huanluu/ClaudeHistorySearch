@@ -109,8 +109,9 @@ export interface CronJobRecord {
   id: string;
   name: string;
   enabled: number;                // SQLite boolean (0/1)
-  schedule_kind: string;          // 'at' | 'every'
-  schedule_value: string;         // ISO timestamp or intervalMs as string
+  schedule_kind: string;          // 'at' | 'every' | 'cron'
+  schedule_value: string;         // ISO timestamp, intervalMs, or cron expression
+  schedule_timezone: string | null; // IANA timezone for cron expressions (e.g., 'America/Los_Angeles')
   prompt: string;
   working_dir: string;
   runtime: string;                // 'claude'
@@ -132,7 +133,7 @@ export interface CronRepository {
 }
 
 export interface CronToolService {
-  addJob(opts: { name: string; schedule: { kind: string; value: string }; prompt: string; workingDir: string }): CronJobRecord;
+  addJob(opts: { name: string; schedule: { kind: string; value: string; timezone?: string }; prompt: string; workingDir: string }): CronJobRecord;
   listJobs(): CronJobRecord[];
   getJobStatus(id: string): CronJobRecord;
   updateJob(id: string, fields: Partial<CronJobRecord>): CronJobRecord;

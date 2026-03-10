@@ -56,12 +56,13 @@ export function registerCronRoutes(router: Router, deps: CronRouteDeps): void {
 
   router.put('/cron/jobs/:id', (req: Request, res: Response) => {
     try {
-      const { name, enabled, schedule_kind, schedule_value, prompt, working_dir } = req.body;
+      const { name, enabled, schedule_kind, schedule_value, schedule_timezone, prompt, working_dir } = req.body;
       const fields: Record<string, unknown> = {};
       if (name !== undefined) fields.name = name;
       if (enabled !== undefined) fields.enabled = enabled;
       if (schedule_kind !== undefined) fields.schedule_kind = schedule_kind;
       if (schedule_value !== undefined) fields.schedule_value = schedule_value;
+      if (schedule_timezone !== undefined) fields.schedule_timezone = schedule_timezone;
       if (prompt !== undefined) fields.prompt = prompt;
       if (working_dir !== undefined) fields.working_dir = working_dir;
       const updated = cronService.updateJob(String(req.params.id), fields);

@@ -114,6 +114,7 @@ export function createDatabase(dbPath: string, logger: Logger): DatabaseType {
       enabled INTEGER DEFAULT 1,
       schedule_kind TEXT NOT NULL,
       schedule_value TEXT NOT NULL,
+      schedule_timezone TEXT,
       prompt TEXT NOT NULL,
       working_dir TEXT NOT NULL,
       runtime TEXT NOT NULL DEFAULT 'claude',
@@ -126,6 +127,14 @@ export function createDatabase(dbPath: string, logger: Logger): DatabaseType {
     );
     CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs(next_run_at_ms);
   `);
+
+  // Migration: add schedule_timezone column to cron_jobs
+  try {
+    db.exec(`ALTER TABLE cron_jobs ADD COLUMN schedule_timezone TEXT`);
+    logger.log({ msg: 'Added schedule_timezone column to cron_jobs table', op: 'db.migrate' });
+  } catch {
+    // Column already exists, ignore
+  }
 
   // Migration: rebuild FTS table if it still uses porter tokenizer.
   // Porter stemmer causes false positives for short/acronym queries (e.g. "pps" matches "ppt").

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { Cron } from 'croner';
 import type { CronJobRecord, CronRepository, CronToolService } from '../../shared/provider/index';
 import type { Logger } from '../../shared/provider/index';
 
@@ -30,15 +31,16 @@ export class CronService implements CronToolService {
 
   // ── CRUD ────────────────────────────────────────────────────────────
 
-  addJob(opts: { name: string; schedule: { kind: string; value: string }; prompt: string; workingDir: string }): CronJobRecord {
+  addJob(opts: { name: string; schedule: { kind: string; value: string; timezone?: string }; prompt: string; workingDir: string }): CronJobRecord {
     if (!opts.prompt.trim()) throw new Error('Prompt cannot be empty');
     if (!opts.workingDir.trim()) throw new Error('Working directory cannot be empty');
 
     const kind = opts.schedule.kind;
-    if (kind !== 'at' && kind !== 'every') {
-      throw new Error(`Unsupported schedule kind: ${kind}. Supported: 'at', 'every'`);
+    if (kind !== 'at' && kind !== 'every' && kind !== 'cron') {
+      throw new Error(`Unsupported schedule kind: ${kind}. Supported: 'at', 'every', 'cron'`);
     }
 
+    const tz = opts.schedule.timezone ?? null;
     const now = Date.now();
     const record: CronJobRecord = {
       id: randomUUID(),
@@ -46,10 +48,11 @@ export class CronService implements CronToolService {
       enabled: 1,
       schedule_kind: kind,
       schedule_value: opts.schedule.value,
+      schedule_timezone: tz,
       prompt: opts.prompt,
       working_dir: opts.workingDir,
       runtime: 'claude',
-      next_run_at_ms: CronService.computeNextRun(kind, opts.schedule.value, now, null),
+      next_run_at_ms: CronService.computeNextRun(kind, opts.schedule.value, now, null, tz),
       last_run_at_ms: null,
       last_run_status: null,
       last_session_id: null,
@@ -76,11 +79,12 @@ export class CronService implements CronToolService {
     if (!existing) throw new Error(`Cron job not found: ${id}`);
 
     // Recalculate nextRunAtMs if schedule changed
-    const scheduleChanged = fields.schedule_kind !== undefined || fields.schedule_value !== undefined;
+    const scheduleChanged = fields.schedule_kind !== undefined || fields.schedule_value !== undefined || fields.schedule_timezone !== undefined;
     if (scheduleChanged) {
       const kind = fields.schedule_kind ?? existing.schedule_kind;
       const value = fields.schedule_value ?? existing.schedule_value;
-      fields.next_run_at_ms = CronService.computeNextRun(kind, value, Date.now(), existing.last_run_at_ms);
+      const tz = fields.schedule_timezone !== undefined ? fields.schedule_timezone : existing.schedule_timezone;
+      fields.next_run_at_ms = CronService.computeNextRun(kind, value, Date.now(), existing.last_run_at_ms, tz);
     }
 
     this.repo.update(id, fields);
@@ -169,7 +173,7 @@ export class CronService implements CronToolService {
         last_run_status: 'success',
         last_session_id: result.sessionId,
         consecutive_errors: 0,
-        next_run_at_ms: CronService.computeNextRun(job.schedule_kind, job.schedule_value, now, now),
+        next_run_at_ms: CronService.computeNextRun(job.schedule_kind, job.schedule_value, now, now, job.schedule_timezone),
         ...(job.schedule_kind === 'at' ? { enabled: 0 } : {}),
       });
       this.logger.log({ msg: `Cron job succeeded: ${job.name}`, op: 'cron.execute', context: { jobId: job.id, sessionId: result.sessionId } });
@@ -181,7 +185,7 @@ export class CronService implements CronToolService {
         last_run_at_ms: now,
         last_run_status: 'error',
         consecutive_errors: errors,
-        next_run_at_ms: disabled ? null : CronService.computeNextRun(job.schedule_kind, job.schedule_value, now, now),
+        next_run_at_ms: disabled ? null : CronService.computeNextRun(job.schedule_kind, job.schedule_value, now, now, job.schedule_timezone),
         ...(disabled ? { enabled: 0 } : {}),
       });
       if (disabled) {
@@ -191,8 +195,8 @@ export class CronService implements CronToolService {
     }
   }
 
-  /** Compute the next run time for a schedule. Pure function. */
-  static computeNextRun(kind: string, value: string, nowMs: number, lastRunMs: number | null): number | null {
+  /** Compute the next run time for a schedule. */
+  static computeNextRun(kind: string, value: string, nowMs: number, lastRunMs: number | null, timezone?: string | null): number | null {
     if (kind === 'at') {
       const targetMs = new Date(value).getTime();
       if (isNaN(targetMs)) throw new Error(`Invalid 'at' schedule value: ${value}`);
@@ -203,6 +207,23 @@ export class CronService implements CronToolService {
       if (isNaN(intervalMs) || intervalMs <= 0) throw new Error(`Invalid 'every' schedule value: ${value}`);
       const base = lastRunMs ?? nowMs;
       return base + intervalMs;
+    }
+    if (kind === 'cron') {
+      const tz = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      try {
+        const cron = new Cron(value, { timezone: tz });
+        const next = cron.nextRun(new Date(nowMs));
+        if (!next) return null;
+        // Workaround for croner year-rollback bug (same as OpenClaw):
+        // If nextRun returns a past time, retry from the next second
+        if (next.getTime() <= nowMs) {
+          const retry = cron.nextRun(new Date(nowMs + 1000));
+          return retry ? retry.getTime() : null;
+        }
+        return next.getTime();
+      } catch (err: unknown) {
+        throw new Error(`Invalid cron expression '${value}': ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
     throw new Error(`Unsupported schedule kind: ${kind}`);
   }
