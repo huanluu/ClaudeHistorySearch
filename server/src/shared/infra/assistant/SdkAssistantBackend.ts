@@ -211,9 +211,22 @@ export class SdkAssistantBackend {
     const q = query({
       prompt: channel.generator,
       options: {
+        model: 'claude-opus-4-6',
+        effort: 'max',
         includePartialMessages: true,
         abortController,
-        allowedTools: [],
+        tools: [
+          'Read', 'Glob', 'Grep', 'Bash',
+          'Edit', 'Write',
+          'WebSearch', 'WebFetch',
+          'Agent', 'Mcp',
+        ],
+        allowedTools: [
+          'Read', 'Glob', 'Grep', 'Bash',
+          'Edit', 'Write',
+          'WebSearch', 'WebFetch',
+          'Agent', 'Mcp',
+        ],
         maxTurns: 50, // Per-session limit; streaming mode reuses one subprocess across turns
         ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
       },
