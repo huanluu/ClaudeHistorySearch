@@ -1,8 +1,8 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { indexSessionFile } from './indexer';
-import type { SessionRepository, Logger, SessionSource } from '../../shared/provider/index';
+import type { SessionRepository, Logger, SessionSource, FileSystem } from '../../shared/provider/index';
 
-export type IndexFn = (filePath: string, forceReindex: boolean, source: SessionSource, repo: SessionRepository, logger: Logger) => Promise<void>;
+export type IndexFn = (filePath: string, forceReindex: boolean, source: SessionSource, repo: SessionRepository, logger: Logger, fs: FileSystem) => Promise<void>;
 export type WatchFn = typeof watch;
 
 /**
@@ -21,8 +21,9 @@ export class FileWatcher {
     private readonly sources: SessionSource[],
     private readonly repo: SessionRepository,
     private readonly logger: Logger,
-    private readonly indexFn: IndexFn = (filePath, forceReindex, source, repo, logger) =>
-      indexSessionFile(filePath, forceReindex, source, repo, logger).then(() => {}),
+    private readonly fs: FileSystem,
+    private readonly indexFn: IndexFn = (filePath, forceReindex, source, repo, logger, fs) =>
+      indexSessionFile(filePath, forceReindex, source, repo, logger, fs).then(() => {}),
     private readonly watchFn: WatchFn = watch,
   ) {}
 
@@ -52,12 +53,12 @@ export class FileWatcher {
 
       watcher.on('change', async (path: string) => {
         this.logger.log({ msg: `File changed: ${path}`, op: 'filewatcher.change', context: { path, source: source.name } });
-        await this.indexFn(path, true, source, this.repo, this.logger);
+        await this.indexFn(path, true, source, this.repo, this.logger, this.fs);
       });
 
       watcher.on('add', async (path: string) => {
         this.logger.log({ msg: `New file: ${path}`, op: 'filewatcher.add', context: { path, source: source.name } });
-        await this.indexFn(path, false, source, this.repo, this.logger);
+        await this.indexFn(path, false, source, this.repo, this.logger, this.fs);
       });
 
       this.watchers.push(watcher);

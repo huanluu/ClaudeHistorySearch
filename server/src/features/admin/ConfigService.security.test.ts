@@ -2,6 +2,9 @@ import { mkdirSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigService } from './ConfigService';
+import { NodeFileSystem } from '../../shared/infra/filesystem/NodeFileSystem';
+
+const fs = new NodeFileSystem();
 
 describe('ConfigService security section', () => {
   let configDir: string;
@@ -12,7 +15,7 @@ describe('ConfigService security section', () => {
     configDir = join(tmpdir(), `config-sec-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(configDir, { recursive: true });
     configPath = join(configDir, 'config.json');
-    service = new ConfigService(configDir);
+    service = new ConfigService(fs, configDir);
   });
 
   afterEach(() => {

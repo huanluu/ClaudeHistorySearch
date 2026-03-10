@@ -3,6 +3,7 @@ export type {
   SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord,
   IndexSessionParams, SessionRepository, DatabaseStats, HeartbeatRepository,
   ParsedMessage, ParsedSession, SessionSource,
+  FileStat, FileSystem,
   SessionStartOptions, HeadlessRunOptions, AgentSession, CliRuntime,
   CronJobRecord, CronRepository, CronToolService,
 } from './types';

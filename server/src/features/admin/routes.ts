@@ -1,30 +1,18 @@
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { type Router, type Request, type Response } from 'express';
 import type { Logger } from '../../shared/provider/index';
 import type { DiagnosticsService } from './DiagnosticsService';
 import type { ConfigService } from './ConfigService';
-
-let adminHtml: string | null = null;
-function getAdminHtml(): string {
-  if (!adminHtml) {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    adminHtml = readFileSync(join(__dirname, 'admin.html'), 'utf-8');
-  }
-  return adminHtml;
-}
 
 export interface AdminRouteDeps {
   diagnosticsService?: DiagnosticsService;
   configService?: ConfigService;
   onConfigChanged?: (section: string) => void;
   logger: Logger;
+  adminHtml?: string;
 }
 
 export function registerAdminRoutes(router: Router, deps: AdminRouteDeps): void {
-  const { diagnosticsService, configService, onConfigChanged, logger } = deps;
+  const { diagnosticsService, configService, onConfigChanged, logger, adminHtml } = deps;
 
   /**
    * GET /health
@@ -58,7 +46,11 @@ export function registerAdminRoutes(router: Router, deps: AdminRouteDeps): void 
    * GET /admin
    */
   router.get('/admin', (_req: Request, res: Response) => {
-    res.type('html').send(getAdminHtml());
+    if (adminHtml) {
+      res.type('html').send(adminHtml);
+    } else {
+      res.status(503).send('Admin UI not available');
+    }
   });
 
   /**

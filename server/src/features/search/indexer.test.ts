@@ -7,6 +7,7 @@ import { createDatabase, createSessionRepository } from '../../shared/infra/data
 import type { SessionRepository } from '../../shared/provider/index';
 import { ClaudeSessionSource } from '../../shared/infra/parsers/index';
 import { noopLogger } from '../../../tests/__helpers/index';
+import { NodeFileSystem } from '../../shared/infra/filesystem/NodeFileSystem';
 
 // ES module path resolution
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -277,6 +278,7 @@ describe('indexSessionFile', () => {
   let tmpDir: string;
   let repo: SessionRepository;
   const source = new ClaudeSessionSource();
+  const testFs = new NodeFileSystem();
 
   beforeEach(() => {
     tmpDir = join(tmpdir(), `indexer-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -294,7 +296,7 @@ describe('indexSessionFile', () => {
     const testFile = join(tmpDir, 'test-session.jsonl');
     copyFileSync(fixturePath, testFile);
 
-    const result = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    const result = await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
 
     expect(result).not.toBeNull();
     expect(result!.sessionId).toBe('test-session-001');
@@ -312,7 +314,7 @@ describe('indexSessionFile', () => {
     const testFile = join(tmpDir, 'agent-something.jsonl');
     copyFileSync(fixturePath, testFile);
 
-    const result = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    const result = await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
 
     expect(result).toBeNull();
   });
@@ -327,11 +329,11 @@ describe('indexSessionFile', () => {
     utimesSync(testFile, pastTime, pastTime);
 
     // First index — stores session with last_indexed = Date.now()
-    const first = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    const first = await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
     expect(first).not.toBeNull();
 
     // Second index without force — should skip (last_indexed >= file mtime)
-    const second = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    const second = await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
     expect(second).toBeNull();
   });
 
@@ -341,11 +343,11 @@ describe('indexSessionFile', () => {
     copyFileSync(fixturePath, testFile);
 
     // First index
-    const first = await indexSessionFile(testFile, true, source, repo, noopLogger);
+    const first = await indexSessionFile(testFile, true, source, repo, noopLogger, testFs);
     expect(first).not.toBeNull();
 
     // Second index with force — should re-index
-    const second = await indexSessionFile(testFile, true, source, repo, noopLogger);
+    const second = await indexSessionFile(testFile, true, source, repo, noopLogger, testFs);
     expect(second).not.toBeNull();
     expect(second!.sessionId).toBe('test-session-001');
   });
@@ -356,7 +358,7 @@ describe('indexSessionFile', () => {
     copyFileSync(fixturePath, testFile);
 
     const titleMap = new Map([['test-session-001', 'My Custom Title']]);
-    await indexSessionFile(testFile, false, source, repo, noopLogger, titleMap);
+    await indexSessionFile(testFile, false, source, repo, noopLogger, testFs, titleMap);
 
     const stored = repo.getSessionById('test-session-001');
     expect(stored).toBeDefined();
@@ -368,7 +370,7 @@ describe('indexSessionFile', () => {
     const testFile = join(tmpDir, 'heartbeat-session.jsonl');
     copyFileSync(fixturePath, testFile);
 
-    await indexSessionFile(testFile, false, source, repo, noopLogger);
+    await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
 
     const stored = repo.getSessionById('heartbeat-session-001');
     expect(stored).toBeDefined();
@@ -380,7 +382,7 @@ describe('indexSessionFile', () => {
     const testFile = join(tmpDir, 'empty-session.jsonl');
     copyFileSync(fixturePath, testFile);
 
-    const result = await indexSessionFile(testFile, false, source, repo, noopLogger);
+    const result = await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
 
     expect(result).toBeNull();
   });
@@ -390,7 +392,7 @@ describe('indexSessionFile', () => {
     const testFile = join(tmpDir, 'test-session.jsonl');
     copyFileSync(fixturePath, testFile);
 
-    await indexSessionFile(testFile, false, source, repo, noopLogger);
+    await indexSessionFile(testFile, false, source, repo, noopLogger, testFs);
 
     const stored = repo.getSessionById('test-session-001');
     expect(stored).toBeDefined();
