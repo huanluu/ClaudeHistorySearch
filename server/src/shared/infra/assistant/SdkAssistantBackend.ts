@@ -212,7 +212,18 @@ export class SdkAssistantBackend {
       options: {
         includePartialMessages: true,
         abortController,
-        allowedTools: [],
+        tools: [
+          'Read', 'Glob', 'Grep', 'Bash',
+          'Edit', 'Write',
+          'WebSearch', 'WebFetch',
+          'Agent', 'Mcp',
+        ],
+        allowedTools: [
+          'Read', 'Glob', 'Grep', 'Bash',
+          'Edit', 'Write',
+          'WebSearch', 'WebFetch',
+          'Agent', 'Mcp',
+        ],
         maxTurns: 50, // Per-session limit; streaming mode reuses one subprocess across turns
         ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
       },
