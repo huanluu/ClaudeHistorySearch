@@ -107,7 +107,7 @@ export class SdkAssistantBackend {
 
   constructor(
     private readonly logger: Logger,
-    private readonly mcpServers?: Record<string, McpServerConfig>,
+    private readonly mcpServerFactory?: () => Record<string, McpServerConfig>,
   ) {}
 
   async *run(prompt: string, options: SdkRunOptions): AsyncGenerator<SdkAssistantEvent> {
@@ -232,7 +232,7 @@ export class SdkAssistantBackend {
         allowDangerouslySkipPermissions: true,
         maxTurns: 50, // Per-session limit; streaming mode reuses one subprocess across turns
         ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
-        ...(this.mcpServers && { mcpServers: this.mcpServers }),
+        ...(this.mcpServerFactory && { mcpServers: this.mcpServerFactory() }),
       },
     });
 

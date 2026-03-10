@@ -91,7 +91,7 @@ interface AppContext {
   diagnosticsService: DiagnosticsService;
   heartbeatService: HeartbeatService;
   cronService: CronService;
-  cronMcpServer: ReturnType<typeof createCronMcpTools>;
+  cronMcpServerFactory: () => ReturnType<typeof createCronMcpTools>;
   claudeRuntime: ClaudeRuntime;
   workingDirValidator: WorkingDirValidator;
   allowedDirs: string[];
@@ -110,10 +110,10 @@ function initializeWebSocketGateway(ctx: AppContext): void {
 
   registerLiveHandlers(gw, { agentStore: ctx.agentStore, validator: ctx.workingDirValidator, logger: ctx.logger });
 
-  const assistantBackend = new SdkAssistantBackend(ctx.logger, {
-    cron: ctx.cronMcpServer,
+  const assistantBackend = new SdkAssistantBackend(ctx.logger, () => ({
+    cron: ctx.cronMcpServerFactory(),
     'work-iq': { command: '/opt/homebrew/bin/node', args: ['/opt/homebrew/bin/workiq', 'mcp'] },
-  });
+  }));
   const assistantService = new AssistantService(assistantBackend, ctx.logger);
   registerAssistantHandlers(gw, { assistantService, logger: ctx.logger });
 
@@ -260,7 +260,7 @@ export function createApp(config: AppConfig): App {
   const commandExecutor = createNodeCommandExecutor();
   const heartbeatService = new HeartbeatService(fs, commandExecutor, undefined, heartbeatRepo, logger, claudeRuntime, resolveHeartbeatEnvOverrides());
   const cronService = new CronService(cronRepo, (opts) => claudeRuntime.runHeadless(opts, logger), logger);
-  const cronMcpServer = createCronMcpTools(cronService);
+  const cronMcpServerFactory = () => createCronMcpTools(cronService);
 
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
   const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger, fs);
@@ -300,7 +300,7 @@ export function createApp(config: AppConfig): App {
 
   const ctx: AppContext = {
     config, serviceType, dbPath, logger, sessionRepo, sessionSources, fs, transport,
-    fileWatcher, agentStore, diagnosticsService, heartbeatService, cronService, cronMcpServer,
+    fileWatcher, agentStore, diagnosticsService, heartbeatService, cronService, cronMcpServerFactory,
     claudeRuntime, workingDirValidator, allowedDirs,
     wsGateway: null, bonjour: null, bonjourService: null, reindexTimer: null,
   };
