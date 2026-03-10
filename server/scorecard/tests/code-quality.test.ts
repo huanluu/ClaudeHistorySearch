@@ -113,7 +113,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   });
 
   // ─── CQ-INV-6: Test Existence Floor ─────────────────────────────
-  it.fails('CQ-INV-6: Every source module with exported logic has a co-located test', () => {
+  it('CQ-INV-6: Every source module with exported logic has a co-located test', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);
     const allTestBasenames = collectAllTestFiles().map(f => basename(f));
     const missingTests: string[] = [];
