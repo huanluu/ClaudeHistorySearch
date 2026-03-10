@@ -211,6 +211,8 @@ export class SdkAssistantBackend {
     const q = query({
       prompt: channel.generator,
       options: {
+        model: 'claude-opus-4-6',
+        effort: 'max',
         includePartialMessages: true,
         abortController,
         tools: [
