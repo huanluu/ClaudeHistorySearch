@@ -106,6 +106,27 @@ export function createDatabase(dbPath: string, logger: Logger): DatabaseType {
     );
   `);
 
+  // Create cron_jobs table for scheduled task management
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cron_jobs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      schedule_kind TEXT NOT NULL,
+      schedule_value TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      working_dir TEXT NOT NULL,
+      runtime TEXT NOT NULL DEFAULT 'claude',
+      next_run_at_ms INTEGER,
+      last_run_at_ms INTEGER,
+      last_run_status TEXT,
+      last_session_id TEXT,
+      consecutive_errors INTEGER DEFAULT 0,
+      created_at_ms INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs(next_run_at_ms);
+  `);
+
   // Migration: rebuild FTS table if it still uses porter tokenizer.
   // Porter stemmer causes false positives for short/acronym queries (e.g. "pps" matches "ppt").
   const ftsSchema = db.prepare(

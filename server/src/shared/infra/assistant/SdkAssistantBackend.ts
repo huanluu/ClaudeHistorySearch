@@ -15,6 +15,7 @@
  * Must run outside Claude Code (CLAUDECODE env var blocks subprocess spawning).
  */
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import type { Logger } from '../../provider/index';
 import { translateSdkEvent, type SdkMessage, type TranslationState } from './translateSdkEvent';
 
@@ -104,7 +105,10 @@ interface SdkRunOptions {
 export class SdkAssistantBackend {
   private readonly sessions = new Map<string, SdkSession>();
 
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly mcpServers?: Record<string, McpServerConfig>,
+  ) {}
 
   async *run(prompt: string, options: SdkRunOptions): AsyncGenerator<SdkAssistantEvent> {
     let session = this.sessions.get(options.conversationId);
@@ -208,6 +212,13 @@ export class SdkAssistantBackend {
     const channel = createMessageChannel();
     const abortController = new AbortController();
 
+    const baseTools = [
+      'Read', 'Glob', 'Grep', 'Bash',
+      'Edit', 'Write',
+      'WebSearch', 'WebFetch',
+      'Agent', 'Mcp',
+    ];
+
     const q = query({
       prompt: channel.generator,
       options: {
@@ -215,20 +226,11 @@ export class SdkAssistantBackend {
         effort: 'max',
         includePartialMessages: true,
         abortController,
-        tools: [
-          'Read', 'Glob', 'Grep', 'Bash',
-          'Edit', 'Write',
-          'WebSearch', 'WebFetch',
-          'Agent', 'Mcp',
-        ],
-        allowedTools: [
-          'Read', 'Glob', 'Grep', 'Bash',
-          'Edit', 'Write',
-          'WebSearch', 'WebFetch',
-          'Agent', 'Mcp',
-        ],
+        tools: baseTools,
+        allowedTools: baseTools,
         maxTurns: 50, // Per-session limit; streaming mode reuses one subprocess across turns
         ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
+        ...(this.mcpServers && { mcpServers: this.mcpServers }),
       },
     });
 

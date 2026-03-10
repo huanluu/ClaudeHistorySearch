@@ -1,18 +1,19 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
 import { Router } from 'express';
-import { createDatabase, createSessionRepository, createHeartbeatRepository, DB_PATH } from './shared/infra/database/index';
+import { createDatabase, createSessionRepository, createHeartbeatRepository, createCronRepository, DB_PATH } from './shared/infra/database/index';
 import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions, type SessionSource } from './shared/provider/index';
 import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQuerySchema, SessionsQuerySchema, ConfigUpdateBodySchema } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AssistantService, registerAssistantHandlers } from './features/assistant/index';
-import { SdkAssistantBackend } from './shared/infra/assistant/index';
+import { SdkAssistantBackend, createCronMcpTools } from './shared/infra/assistant/index';
 import { ClaudeRuntime, CopilotRuntime } from './shared/infra/runtime/index';
 import type { CliRuntime } from './shared/provider/index';
 import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { ClaudeSessionSource, CopilotSessionSource } from './shared/infra/parsers/index';
 import { HeartbeatService, type HeartbeatConfig, registerSchedulerRoutes } from './features/scheduler/index';
+import { CronService, registerCronRoutes } from './features/cron/index';
 import { ConfigService, DiagnosticsService, registerAdminRoutes } from './features/admin/index';
 
 export interface AppConfig {
@@ -91,6 +92,7 @@ export function createApp(config: AppConfig): App {
   // --- Repositories ---
   const sessionRepo = createSessionRepository(db);
   const heartbeatRepo = createHeartbeatRepository(db);
+  const cronRepo = createCronRepository(db);
 
   // --- Services ---
   const configService = new ConfigService();
@@ -108,6 +110,14 @@ export function createApp(config: AppConfig): App {
   // --- Heartbeat env overrides (SEC-INV-5: env reads only in app.ts) ---
   const heartbeatEnvOverrides = resolveHeartbeatEnvOverrides();
   const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger, claudeRuntime, heartbeatEnvOverrides);
+
+  // --- Cron service ---
+  const cronService = new CronService(
+    cronRepo,
+    (opts) => claudeRuntime.runHeadless(opts, logger),
+    logger,
+  );
+  const cronMcpServer = createCronMcpTools(cronService);
 
   // --- Session sources (multi-agent) ---
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
@@ -184,6 +194,7 @@ export function createApp(config: AppConfig): App {
     indexFn: (force, repo, logger) => indexAllSessions(force, repo, logger, sessionSources),
   });
   registerSchedulerRoutes(router, { heartbeatService, logger });
+  registerCronRoutes(router, { cronService, logger });
   registerAdminRoutes(router, { diagnosticsService, configService, onConfigChanged, logger });
   transport.use('/', router);
 
@@ -222,7 +233,7 @@ export function createApp(config: AppConfig): App {
       });
 
       // Register assistant handlers
-      const assistantBackend = new SdkAssistantBackend(logger);
+      const assistantBackend = new SdkAssistantBackend(logger, { cron: cronMcpServer });
       const assistantService = new AssistantService(assistantBackend, logger);
       registerAssistantHandlers(wsGateway, { assistantService, logger });
 
@@ -305,6 +316,11 @@ export function createApp(config: AppConfig): App {
     } else {
       logger.log({ msg: 'Heartbeat: disabled', op: 'server.start' });
     }
+
+    // Cron scheduler
+    cronService.startScheduler();
+    const cronJobs = cronService.listJobs();
+    logger.log({ msg: `Cron scheduler started: ${cronJobs.length} job${cronJobs.length === 1 ? '' : 's'}`, op: 'server.start', context: { jobCount: cronJobs.length } });
   }
 
   async function stop(): Promise<void> {
@@ -315,6 +331,7 @@ export function createApp(config: AppConfig): App {
       reindexTimer = null;
     }
     heartbeatService.stopScheduler();
+    await cronService.stopScheduler();
     service?.stop?.();
     bonjour?.destroy();
     await fileWatcher.stop();

@@ -103,6 +103,43 @@ export interface HeartbeatRepository {
   getAllState(): HeartbeatStateRecord[];
 }
 
+// ── Cron job types ────────────────────────────────────────────────────
+
+export interface CronJobRecord {
+  id: string;
+  name: string;
+  enabled: number;                // SQLite boolean (0/1)
+  schedule_kind: string;          // 'at' | 'every'
+  schedule_value: string;         // ISO timestamp or intervalMs as string
+  prompt: string;
+  working_dir: string;
+  runtime: string;                // 'claude'
+  next_run_at_ms: number | null;
+  last_run_at_ms: number | null;
+  last_run_status: string | null; // 'success' | 'error' | null
+  last_session_id: string | null;
+  consecutive_errors: number;
+  created_at_ms: number;
+}
+
+export interface CronRepository {
+  getAll(): CronJobRecord[];
+  getById(id: string): CronJobRecord | undefined;
+  getDueJobs(nowMs: number): CronJobRecord[];
+  insert(record: CronJobRecord): void;
+  update(id: string, fields: Partial<CronJobRecord>): void;
+  remove(id: string): void;
+}
+
+export interface CronToolService {
+  addJob(opts: { name: string; schedule: { kind: string; value: string }; prompt: string; workingDir: string }): CronJobRecord;
+  listJobs(): CronJobRecord[];
+  getJobStatus(id: string): CronJobRecord;
+  updateJob(id: string, fields: Partial<CronJobRecord>): CronJobRecord;
+  removeJob(id: string): void;
+  runJobNow(id: string): Promise<{ sessionId: string | null }>;
+}
+
 // ── Parsed types (anti-corruption layer output) ─────────────────────
 
 export interface ParsedMessage {

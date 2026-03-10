@@ -24,6 +24,7 @@ const moduleBoundaries = [
   { name: 'features/scheduler',    message: "Import from 'features/scheduler/index' instead." },
   { name: 'features/admin',        message: "Import from 'features/admin/index' instead." },
   { name: 'features/assistant',    message: "Import from 'features/assistant/index' instead." },
+  { name: 'features/cron',         message: "Import from 'features/cron/index' instead." },
   { name: 'shared/infra/assistant', message: "Import from 'shared/infra/assistant/index' instead." },
 ];
 
@@ -83,6 +84,7 @@ export default tseslint.config(
       'src/features/scheduler/index.ts',
       'src/features/admin/index.ts',
       'src/features/assistant/index.ts',
+      'src/features/cron/index.ts',
       'src/shared/infra/assistant/index.ts',
     ],
     rules: {
@@ -204,6 +206,7 @@ export default tseslint.config(
           { group: ['**/features/scheduler/*', '!**/features/scheduler/index*'], allowTypeImports: true, message: "Import from 'features/scheduler/index' instead." },
           { group: ['**/features/admin/*', '!**/features/admin/index*'], allowTypeImports: true, message: "Import from 'features/admin/index' instead." },
           { group: ['**/features/assistant/*', '!**/features/assistant/index*'], allowTypeImports: true, message: "Import from 'features/assistant/index' instead." },
+          { group: ['**/features/cron/*', '!**/features/cron/index*'], allowTypeImports: true, message: "Import from 'features/cron/index' instead." },
         ],
       }],
     },

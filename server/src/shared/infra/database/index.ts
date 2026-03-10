@@ -1,12 +1,14 @@
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { SqliteSessionRepository } from './SqliteSessionRepository';
 import { SqliteHeartbeatRepository } from './SqliteHeartbeatRepository';
-import type { SessionRepository, HeartbeatRepository } from '../../provider/index';
+import { SqliteCronRepository } from './SqliteCronRepository';
+import type { SessionRepository, HeartbeatRepository, CronRepository } from '../../provider/index';
 
 // Re-export domain types (so consumers can import from here during migration)
 export type {
   SessionRecord, MessageRecord, SearchResultRecord, SortOption, LastIndexedRecord, HeartbeatStateRecord,
   SessionRepository, IndexSessionParams, HeartbeatRepository, DatabaseStats,
+  CronJobRecord, CronRepository,
 } from '../../provider/index';
 
 // Config
@@ -19,4 +21,8 @@ export function createSessionRepository(db: DatabaseType): SessionRepository {
 
 export function createHeartbeatRepository(db: DatabaseType): HeartbeatRepository {
   return new SqliteHeartbeatRepository(db);
+}
+
+export function createCronRepository(db: DatabaseType): CronRepository {
+  return new SqliteCronRepository(db);
 }
