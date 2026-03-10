@@ -254,6 +254,7 @@
   .card:nth-child(2) { animation-delay: 0.1s; }
   .card:nth-child(3) { animation-delay: 0.15s; }
   .card:nth-child(4) { animation-delay: 0.2s; }
+  .card:nth-child(5) { animation-delay: 0.25s; }
   @keyframes card-in {
     to { opacity: 1; transform: translateY(0); }
   }
@@ -559,6 +560,106 @@
     to { opacity: 0; transform: translateX(20px); }
   }
 
+  /* ── Cron jobs ── */
+  .cron-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .cron-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .cron-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .cron-table tr:last-child td { border-bottom: none; }
+  .cron-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+  .cron-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 0.15rem 0.55rem;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .cron-status.enabled { color: var(--success); background: rgba(74, 222, 128, 0.1); }
+  .cron-status.disabled { color: var(--text-dim); background: rgba(255, 255, 255, 0.04); }
+  .cron-status.error { color: var(--error); background: rgba(248, 113, 113, 0.1); }
+
+  .cron-schedule {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .cron-actions {
+    display: flex;
+    gap: 0.35rem;
+  }
+  .cron-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.3rem 0.55rem;
+    border-radius: var(--radius-xs);
+    font-size: 0.72rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+    white-space: nowrap;
+  }
+  .cron-btn:hover { border-color: var(--border-hover); color: var(--text); background: rgba(255, 255, 255, 0.04); }
+  .cron-btn.danger:hover { border-color: rgba(248, 113, 113, 0.4); color: var(--error); }
+  .cron-btn.run:hover { border-color: rgba(74, 222, 128, 0.4); color: var(--success); }
+
+  .cron-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+
+  .cron-form {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 1.25rem 1.5rem;
+  }
+  .cron-form.open { display: block; }
+  .cron-form .field-grid { grid-template-columns: 1fr 1fr; }
+
+  .cron-header-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .cron-prompt {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+  }
+
+  .cron-time {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+
   /* ── Responsive ── */
   @media (max-width: 860px) {
     :root { --sidebar-w: 220px; }
@@ -618,6 +719,14 @@
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
       Security
+    </a>
+
+    <div class="nav-section">Automation</div>
+    <a class="nav-item" href="#cron-card" data-nav="cron-card" style="--nav-color: #a78bfa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      Scheduled Jobs
     </a>
   </nav>
 
@@ -767,6 +876,66 @@
       </div>
       <div class="card-footer">
         <button class="btn-save" id="sec-save">Save Changes</button>
+      </div>
+    </section>
+    <!-- Scheduled Jobs -->
+    <section class="card" id="cron-card" style="--card-accent: #a78bfa; --card-accent-soft: rgba(167, 139, 250, 0.12)">
+      <div class="card-header">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div>
+          <h2>Scheduled Jobs</h2>
+          <p class="card-desc">Automated tasks that run on a schedule</p>
+        </div>
+        <div class="cron-header-actions">
+          <button class="cron-btn" id="cron-refresh" title="Refresh">Refresh</button>
+          <button class="cron-btn" id="cron-add-btn" style="border-color: rgba(167, 139, 250, 0.4); color: #a78bfa;">+ New Job</button>
+        </div>
+      </div>
+
+      <!-- Create form (hidden by default) -->
+      <div class="cron-form" id="cron-form">
+        <div class="field-grid">
+          <div class="field">
+            <label for="cron-name">Name</label>
+            <input type="text" id="cron-name" placeholder="e.g. Nightly dead code sweep">
+          </div>
+          <div class="field">
+            <label for="cron-schedule-kind">Schedule Type</label>
+            <select id="cron-schedule-kind">
+              <option value="every">Recurring interval</option>
+              <option value="at">One-shot (at time)</option>
+              <option value="cron">Cron expression</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="cron-schedule-value" id="cron-schedule-label">Interval (minutes)</label>
+            <input type="text" id="cron-schedule-value" class="mono-input" placeholder="60">
+            <div class="hint" id="cron-schedule-hint">How often to run, in minutes.</div>
+          </div>
+          <div class="field">
+            <label for="cron-workdir">Working Directory</label>
+            <input type="text" id="cron-workdir" class="mono-input" placeholder="/Users/you/project">
+          </div>
+        </div>
+        <div class="field">
+          <label for="cron-prompt">Prompt</label>
+          <textarea id="cron-prompt" rows="3" placeholder="What should the agent do?"></textarea>
+        </div>
+        <div class="card-footer" style="padding: 1rem 0 0;">
+          <button class="cron-btn" id="cron-cancel">Cancel</button>
+          <button class="btn-save" id="cron-save" style="--card-accent: #a78bfa;">Create Job</button>
+        </div>
+      </div>
+
+      <!-- Job list -->
+      <div class="card-body" style="padding: 0;">
+        <div id="cron-list"></div>
       </div>
     </section>
   </div>
@@ -989,8 +1158,224 @@
     }
   });
 
+  /* ── Cron Jobs ── */
+  var cronList       = document.getElementById('cron-list');
+  var cronForm       = document.getElementById('cron-form');
+  var cronAddBtn     = document.getElementById('cron-add-btn');
+  var cronCancelBtn  = document.getElementById('cron-cancel');
+  var cronRefreshBtn = document.getElementById('cron-refresh');
+  var cronSaveBtn    = document.getElementById('cron-save');
+  var cronNameInput  = document.getElementById('cron-name');
+  var cronKindSelect = document.getElementById('cron-schedule-kind');
+  var cronValueInput = document.getElementById('cron-schedule-value');
+  var cronWorkdir    = document.getElementById('cron-workdir');
+  var cronPromptInput= document.getElementById('cron-prompt');
+  var cronSchedLabel = document.getElementById('cron-schedule-label');
+  var cronSchedHint  = document.getElementById('cron-schedule-hint');
+
+  cronAddBtn.addEventListener('click', function() {
+    cronForm.classList.toggle('open');
+    cronAddBtn.textContent = cronForm.classList.contains('open') ? 'Cancel' : '+ New Job';
+  });
+  cronCancelBtn.addEventListener('click', function() {
+    cronForm.classList.remove('open');
+    cronAddBtn.textContent = '+ New Job';
+  });
+
+  /* Update schedule field labels based on kind */
+  cronKindSelect.addEventListener('change', function() {
+    var kind = cronKindSelect.value;
+    if (kind === 'every') {
+      cronSchedLabel.textContent = 'Interval (minutes)';
+      cronValueInput.placeholder = '60';
+      cronSchedHint.textContent = 'How often to run, in minutes.';
+    } else if (kind === 'at') {
+      cronSchedLabel.textContent = 'Run At (ISO timestamp)';
+      cronValueInput.placeholder = new Date(Date.now() + 3600000).toISOString().slice(0, 16);
+      cronSchedHint.textContent = 'One-shot execution at this time. Auto-disables after running.';
+    } else {
+      cronSchedLabel.textContent = 'Cron Expression';
+      cronValueInput.placeholder = '0 2 * * *';
+      cronSchedHint.textContent = 'Standard cron syntax, e.g. "0 2 * * *" for 2am daily.';
+    }
+  });
+
+  function formatSchedule(job) {
+    if (job.schedule_kind === 'every') {
+      var mins = parseInt(job.schedule_value) / 60000;
+      if (mins >= 1440) return 'every ' + (mins / 1440) + 'd';
+      if (mins >= 60) return 'every ' + (mins / 60) + 'h';
+      return 'every ' + mins + 'm';
+    }
+    if (job.schedule_kind === 'at') {
+      return 'at ' + new Date(job.schedule_value).toLocaleString();
+    }
+    return job.schedule_value;
+  }
+
+  function formatTime(ms) {
+    if (!ms) return '—';
+    var d = new Date(ms);
+    var now = Date.now();
+    var diff = now - ms;
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return d.toLocaleDateString();
+  }
+
+  function formatNextRun(ms) {
+    if (!ms) return '—';
+    var diff = ms - Date.now();
+    if (diff < 0) return 'overdue';
+    if (diff < 60000) return 'in <1m';
+    if (diff < 3600000) return 'in ' + Math.floor(diff / 60000) + 'm';
+    if (diff < 86400000) return 'in ' + Math.floor(diff / 3600000) + 'h';
+    return new Date(ms).toLocaleDateString();
+  }
+
+  function jobStatusClass(job) {
+    if (!job.enabled) return 'disabled';
+    if (job.consecutive_errors >= 5) return 'error';
+    return 'enabled';
+  }
+
+  function jobStatusLabel(job) {
+    if (!job.enabled) return 'Disabled';
+    if (job.consecutive_errors >= 5) return 'Tripped';
+    return 'Active';
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function renderCronJobs(jobs) {
+    if (!jobs || jobs.length === 0) {
+      cronList.innerHTML = '<div class="cron-empty">No scheduled jobs. Create one with the assistant chat or the form above.</div>';
+      return;
+    }
+    var html = '<table class="cron-table"><thead><tr>'
+      + '<th>Name</th><th>Schedule</th><th>Status</th><th>Last Run</th><th>Next Run</th><th>Prompt</th><th></th>'
+      + '</tr></thead><tbody>';
+    jobs.forEach(function(job) {
+      var sc = jobStatusClass(job);
+      html += '<tr>'
+        + '<td style="font-weight: 500;">' + escapeHtml(job.name) + '</td>'
+        + '<td><span class="cron-schedule">' + escapeHtml(formatSchedule(job)) + '</span></td>'
+        + '<td><span class="cron-status ' + sc + '">' + jobStatusLabel(job) + '</span></td>'
+        + '<td><span class="cron-time">' + formatTime(job.last_run_at_ms) + (job.last_run_status === 'error' ? ' <span style="color:var(--error)">err</span>' : '') + '</span></td>'
+        + '<td><span class="cron-time">' + formatNextRun(job.next_run_at_ms) + '</span></td>'
+        + '<td><span class="cron-prompt" title="' + escapeHtml(job.prompt) + '">' + escapeHtml(job.prompt) + '</span></td>'
+        + '<td><div class="cron-actions">'
+        + '<button class="cron-btn run" data-action="run" data-id="' + escapeHtml(job.id) + '" title="Run now">Run</button>'
+        + '<button class="cron-btn" data-action="toggle" data-id="' + escapeHtml(job.id) + '" data-enabled="' + (job.enabled ? 0 : 1) + '">' + (job.enabled ? 'Disable' : 'Enable') + '</button>'
+        + '<button class="cron-btn danger" data-action="delete" data-id="' + escapeHtml(job.id) + '">Delete</button>'
+        + '</div></td>'
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+    cronList.innerHTML = html;
+  }
+
+  async function loadCronJobs() {
+    try {
+      var res = await fetch('/cron/jobs', { headers: headers() });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var jobs = await res.json();
+      renderCronJobs(jobs);
+    } catch (err) {
+      cronList.innerHTML = '<div class="cron-empty" style="color: var(--error)">Failed to load jobs: ' + escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  /* Event delegation for cron action buttons */
+  cronList.addEventListener('click', async function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var id = btn.dataset.id;
+    try {
+      if (action === 'run') {
+        var res = await fetch('/cron/jobs/' + id + '/run', { method: 'POST', headers: headers() });
+        if (!res.ok) { var d = await res.json(); throw new Error(d.error || 'HTTP ' + res.status); }
+        toast('Job triggered', 'success');
+      } else if (action === 'toggle') {
+        var enabled = Number(btn.dataset.enabled);
+        var res = await fetch('/cron/jobs/' + id, { method: 'PUT', headers: headers(), body: JSON.stringify({ enabled: enabled }) });
+        if (!res.ok) { var d = await res.json(); throw new Error(d.error || 'HTTP ' + res.status); }
+        toast(enabled ? 'Job enabled' : 'Job disabled', 'success');
+      } else if (action === 'delete') {
+        if (!confirm('Delete this scheduled job?')) return;
+        var res = await fetch('/cron/jobs/' + id, { method: 'DELETE', headers: headers() });
+        if (!res.ok) { var d = await res.json(); throw new Error(d.error || 'HTTP ' + res.status); }
+        toast('Job deleted', 'success');
+      }
+      loadCronJobs();
+    } catch (err) {
+      toast('Failed: ' + err.message, 'error');
+    }
+  });
+
+  cronRefreshBtn.addEventListener('click', loadCronJobs);
+
+  /* Create job */
+  cronSaveBtn.addEventListener('click', async function() {
+    var kind = cronKindSelect.value;
+    var rawValue = cronValueInput.value.trim();
+    if (!cronNameInput.value.trim() || !rawValue || !cronWorkdir.value.trim() || !cronPromptInput.value.trim()) {
+      toast('All fields are required', 'error');
+      return;
+    }
+
+    var scheduleValue = rawValue;
+    if (kind === 'every') {
+      var minutes = parseFloat(rawValue);
+      if (isNaN(minutes) || minutes <= 0) {
+        toast('Interval must be a positive number (minutes)', 'error');
+        return;
+      }
+      scheduleValue = String(minutes * 60000);
+    } else if (kind === 'at') {
+      var d = new Date(rawValue);
+      if (isNaN(d.getTime())) {
+        toast('Invalid date/time format', 'error');
+        return;
+      }
+      scheduleValue = d.toISOString();
+    }
+
+    btnLoading(cronSaveBtn, true);
+    try {
+      var body = {
+        name: cronNameInput.value.trim(),
+        schedule: { kind: kind, value: scheduleValue },
+        prompt: cronPromptInput.value.trim(),
+        workingDir: cronWorkdir.value.trim(),
+      };
+      var res = await fetch('/cron/jobs', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+      toast('Job created: ' + data.name, 'success');
+      cronForm.classList.remove('open');
+      cronAddBtn.textContent = '+ New Job';
+      cronNameInput.value = '';
+      cronValueInput.value = '';
+      cronWorkdir.value = '';
+      cronPromptInput.value = '';
+      loadCronJobs();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btnLoading(cronSaveBtn, false);
+    }
+  });
+
   /* ── Init ── */
   loadConfig();
+  loadCronJobs();
 })();
 </script>
 </body>
