@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-03-10T22:52:00Z",
+  "note": "CQ-INV-5 fixed: all 13 oversized functions decomposed into private helpers. Score: 19/19 (100%). Zero known violations remain.",
+  "invariants": {
+    "ARCH-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Blocks 3-7" },
+    "ARCH-INV-2":  { "status": "pass", "enforcedBy": "eslint + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-3":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-4":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-7":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-8":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-9":  { "status": "pass", "enforcedBy": "eslint.config.js Block 7c (error) + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-10": { "status": "pass", "enforcedBy": "eslint.config.js Blocks 4, 5, 5b, 5c, 5d + scorecard/tests/architecture.test.ts" },
+    "CQ-INV-1":   { "status": "pass", "enforcedBy": "eslint.config.js Block 9/9b" },
+    "CQ-INV-3":   { "status": "pass", "enforcedBy": "eslint + scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-4":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-5":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-6":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-7":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts + pre-commit hook" },
+    "OBS-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Block 10" },
+    "SEC-INV-1":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-5":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "REL-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/reliability.test.ts" }
+  },
+  "summary": {
+    "passing": 19,
+    "total": 19,
+    "passRate": "100%"
+  },
+  "delta": {
+    "since": "2026-03-10-3",
+    "changed": [
+      "CQ-INV-5: FIXED — decomposed 13 functions over 80 lines across 12 files into private helpers. it.fails() promoted to it()."
+    ],
+    "passRateChange": "+5% (18/19 95% → 19/19 100%)"
+  },
+  "testExecution": {
+    "scorecardTestFiles": 4,
+    "scorecardTests": 23,
+    "scorecardDuration": "1330ms",
+    "fullSuiteTestFiles": 54,
+    "fullSuiteTests": 633,
+    "fullSuiteDuration": "2.35s",
+    "allPassing": true
+  }
+}
