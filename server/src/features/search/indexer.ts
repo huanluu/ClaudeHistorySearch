@@ -1,7 +1,6 @@
-import { readdirSync, statSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import type { SessionRepository, Logger, ParsedSession, SessionSource } from '../../shared/provider/index';
+import type { SessionRepository, Logger, ParsedSession, SessionSource, FileSystem } from '../../shared/provider/index';
 
 export const CLAUDE_DIR = join(homedir(), '.claude');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
@@ -54,6 +53,7 @@ export async function indexSessionFile(
   source: SessionSource,
   repo: SessionRepository,
   logger: Logger,
+  fs: FileSystem,
   titleMap: Map<string, string> = new Map(),
 ): Promise<IndexResult | null> {
   // Extract base name (works for both .jsonl and .json extensions)
@@ -75,7 +75,7 @@ export async function indexSessionFile(
   }
 
   // Check if we need to reindex (using parsed sessionId, not filename)
-  const fileStat = statSync(filePath);
+  const fileStat = fs.stat(filePath);
   const fileModTime = fileStat.mtimeMs;
 
   if (!forceReindex) {
@@ -121,8 +121,9 @@ export async function indexAllSessions(
   repo: SessionRepository,
   logger: Logger,
   sources: SessionSource[],
+  fs: FileSystem,
 ): Promise<IndexAllResult> {
-  return indexAllFromSources(forceReindex, sources, repo, logger);
+  return indexAllFromSources(forceReindex, sources, repo, logger, fs);
 }
 
 /**
@@ -133,6 +134,7 @@ async function indexAllFromSources(
   sources: SessionSource[],
   repo: SessionRepository,
   logger: Logger,
+  fs: FileSystem,
 ): Promise<IndexAllResult> {
   let indexed = 0;
   let skipped = 0;
@@ -140,12 +142,12 @@ async function indexAllFromSources(
   for (const source of sources) {
     logger.log({ msg: `Indexing ${source.name} sessions from ${source.sessionDir}`, op: 'indexer.run', context: { source: source.name } });
 
-    if (!existsSync(source.sessionDir)) {
+    if (!fs.exists(source.sessionDir)) {
       logger.log({ msg: `Source directory not found: ${source.sessionDir}`, op: 'indexer.run', context: { source: source.name, dir: source.sessionDir } });
       continue;
     }
 
-    const result = await indexSourceDirectory(forceReindex, source, repo, logger);
+    const result = await indexSourceDirectory(forceReindex, source, repo, logger, fs);
     indexed += result.indexed;
     skipped += result.skipped;
   }
@@ -167,6 +169,7 @@ async function indexSourceDirectory(
   source: SessionSource,
   repo: SessionRepository,
   logger: Logger,
+  fs: FileSystem,
 ): Promise<IndexAllResult> {
   let indexed = 0;
   let skipped = 0;
@@ -176,21 +179,21 @@ async function indexSourceDirectory(
   if (pattern.startsWith('**')) {
     // Deeply nested (Claude: projects/<path>/*.jsonl)
     const extension = pattern.includes('.jsonl') ? '.jsonl' : '.json';
-    const projectDirs = readdirSync(source.sessionDir);
+    const projectDirs = fs.listDirectory(source.sessionDir);
 
     for (const projectDir of projectDirs) {
       const projectPath = join(source.sessionDir, projectDir);
-      const stat = statSync(projectPath);
-      if (!stat.isDirectory()) continue;
+      const stat = fs.stat(projectPath);
+      if (!stat.isDirectory) continue;
 
       const titleMap = source.loadTitleMap?.(projectPath) ?? new Map<string, string>();
-      const files = readdirSync(projectPath);
+      const files = fs.listDirectory(projectPath);
 
       for (const file of files) {
         if (!file.endsWith(extension)) continue;
         const filePath = join(projectPath, file);
         try {
-          const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, titleMap);
+          const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs, titleMap);
           if (result) indexed++;
           else skipped++;
         } catch (e) {
@@ -203,22 +206,22 @@ async function indexSourceDirectory(
   } else if (pattern.includes('/')) {
     // One level deep (Copilot: <uuid>/events.jsonl)
     const targetFile = pattern.split('/').pop() || '';
-    const subdirs = readdirSync(source.sessionDir);
+    const subdirs = fs.listDirectory(source.sessionDir);
 
     for (const subdir of subdirs) {
       const subdirPath = join(source.sessionDir, subdir);
       try {
-        const stat = statSync(subdirPath);
-        if (!stat.isDirectory()) continue;
+        const stat = fs.stat(subdirPath);
+        if (!stat.isDirectory) continue;
       } catch {
         continue;
       }
 
       const filePath = join(subdirPath, targetFile);
-      if (!existsSync(filePath)) continue;
+      if (!fs.exists(filePath)) continue;
 
       try {
-        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger);
+        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs);
         if (result) indexed++;
         else skipped++;
       } catch (e) {
@@ -230,13 +233,13 @@ async function indexSourceDirectory(
   } else {
     // Flat directory (e.g., *.json)
     const extension = pattern.replace('*', '');
-    const files = readdirSync(source.sessionDir);
+    const files = fs.listDirectory(source.sessionDir);
 
     for (const file of files) {
       if (!file.endsWith(extension)) continue;
       const filePath = join(source.sessionDir, file);
       try {
-        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger);
+        const result = await indexSessionFile(filePath, forceReindex, source, repo, logger, fs);
         if (result) indexed++;
         else skipped++;
       } catch (e) {

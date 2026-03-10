@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { getConfigDir } from '../../shared/provider/index';
+import type { FileSystem } from '../../shared/provider/index';
 
 /**
  * Field schema for validation
@@ -54,8 +54,10 @@ const EDITABLE_SECTIONS: Record<string, SectionDefinition> = {
  */
 export class ConfigService {
   private configDir: string;
+  private fs: FileSystem;
 
-  constructor(configDir?: string) {
+  constructor(fs: FileSystem, configDir?: string) {
+    this.fs = fs;
     this.configDir = configDir || getConfigDir();
   }
 
@@ -71,11 +73,11 @@ export class ConfigService {
    */
   private readConfig(): Record<string, unknown> {
     const configPath = this.getConfigPath();
-    if (!existsSync(configPath)) {
+    if (!this.fs.exists(configPath)) {
       return {};
     }
     try {
-      return JSON.parse(readFileSync(configPath, 'utf-8'));
+      return JSON.parse(this.fs.readFile(configPath));
     } catch {
       return {};
     }
@@ -85,8 +87,8 @@ export class ConfigService {
    * Write the full config.json to disk (preserves all keys)
    */
   private writeConfig(config: Record<string, unknown>): void {
-    mkdirSync(this.configDir, { recursive: true });
-    writeFileSync(this.getConfigPath(), JSON.stringify(config, null, 2));
+    this.fs.mkdir(this.configDir, { recursive: true });
+    this.fs.writeFile(this.getConfigPath(), JSON.stringify(config, null, 2));
   }
 
   /**

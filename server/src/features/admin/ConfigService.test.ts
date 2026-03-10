@@ -5,10 +5,13 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomBytes, createHash } from 'crypto';
 import { ConfigService } from './ConfigService';
+import { NodeFileSystem } from '../../shared/infra/filesystem/NodeFileSystem';
 
 // =============================================================================
 // ConfigService Unit Tests
 // =============================================================================
+
+const fs = new NodeFileSystem();
 
 describe('ConfigService', () => {
   let configDir: string;
@@ -19,7 +22,7 @@ describe('ConfigService', () => {
     configDir = join(tmpdir(), `config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(configDir, { recursive: true });
     configPath = join(configDir, 'config.json');
-    service = new ConfigService(configDir);
+    service = new ConfigService(fs, configDir);
   });
 
   afterEach(() => {
@@ -127,7 +130,7 @@ describe('ConfigService', () => {
 
     it('should create config dir and file if they do not exist', () => {
       const newDir = join(tmpdir(), `config-new-${Date.now()}`);
-      const newService = new ConfigService(newDir);
+      const newService = new ConfigService(fs, newDir);
       const err = newService.updateSection('heartbeat', { enabled: true });
       expect(err).toBeNull();
       expect(existsSync(join(newDir, 'config.json'))).toBe(true);
@@ -166,7 +169,7 @@ describe('Config API Routes', () => {
     }));
 
     // Create test app with real ConfigService
-    const configService = new ConfigService(configDir);
+    const configService = new ConfigService(fs, configDir);
     app = express();
     app.use(express.json());
 

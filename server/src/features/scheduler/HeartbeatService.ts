@@ -1,18 +1,9 @@
-import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
 import { getConfigDir } from '../../shared/provider/index';
-import type { Logger, CliRuntime, HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { Logger, CliRuntime, HeartbeatRepository, HeartbeatStateRecord, FileSystem } from '../../shared/provider/index';
 import type { HeartbeatConfig, HeartbeatTask, HeartbeatResult, WorkItem, ChangeSet, CommandExecutor } from './types';
 import { checkForChanges, buildWorkItemPrompt } from './workItems';
 import { parseHeartbeatConfig, parseHeartbeatContent } from './heartbeatParser';
-
-/** Default command executor using real child_process */
-const defaultExecutor: CommandExecutor = {
-  execSync: (command: string, options?: object) => {
-    return execSync(command, { encoding: 'utf-8', ...options }) as string;
-  },
-};
 
 /** Reads HEARTBEAT.md and executes enabled tasks on a schedule. */
 export class HeartbeatService {
@@ -21,6 +12,7 @@ export class HeartbeatService {
 
   private config: HeartbeatConfig;
   private configDir: string;
+  private fs: FileSystem;
   private executor: CommandExecutor;
   private runtime: CliRuntime | null;
   private repo: HeartbeatRepository | null;
@@ -35,9 +27,10 @@ export class HeartbeatService {
   private schedulerRunCount = 0;
   private initialDelayTimer: NodeJS.Timeout | null = null;
 
-  constructor(configDir: string | undefined, executor: CommandExecutor | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime, envOverrides?: Partial<HeartbeatConfig>) {
+  constructor(fs: FileSystem, executor: CommandExecutor, configDir: string | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime, envOverrides?: Partial<HeartbeatConfig>) {
+    this.fs = fs;
     this.configDir = configDir || getConfigDir();
-    this.executor = executor || defaultExecutor;
+    this.executor = executor;
     this.runtime = runtime ?? null;
     this.repo = repo ?? null;
     this.logger = logger;
@@ -151,9 +144,9 @@ export class HeartbeatService {
   private loadConfig(): HeartbeatConfig {
     const configPath = join(this.configDir, 'config.json');
     let fileConfig: Record<string, unknown> | null = null;
-    if (existsSync(configPath)) {
+    if (this.fs.exists(configPath)) {
       try {
-        fileConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+        fileConfig = JSON.parse(this.fs.readFile(configPath)) as Record<string, unknown>;
       } catch (error) {
         this.logger.warn({ msg: `Could not parse config.json: ${(error as Error).message}`, op: 'heartbeat.config', err: error });
       }
@@ -163,8 +156,8 @@ export class HeartbeatService {
 
   parseHeartbeatFile(): HeartbeatTask[] {
     const heartbeatPath = join(this.configDir, 'HEARTBEAT.md');
-    if (!existsSync(heartbeatPath)) return [];
-    return parseHeartbeatContent(readFileSync(heartbeatPath, 'utf-8'));
+    if (!this.fs.exists(heartbeatPath)) return [];
+    return parseHeartbeatContent(this.fs.readFile(heartbeatPath));
   }
 
   /**

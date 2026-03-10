@@ -26,6 +26,7 @@ const moduleBoundaries = [
   { name: 'features/assistant',    message: "Import from 'features/assistant/index' instead." },
   { name: 'features/cron',         message: "Import from 'features/cron/index' instead." },
   { name: 'shared/infra/assistant', message: "Import from 'shared/infra/assistant/index' instead." },
+  { name: 'shared/infra/filesystem', message: "Import from 'shared/infra/filesystem/index' instead." },
 ];
 
 /**
@@ -86,6 +87,7 @@ export default tseslint.config(
       'src/features/assistant/index.ts',
       'src/features/cron/index.ts',
       'src/shared/infra/assistant/index.ts',
+      'src/shared/infra/filesystem/index.ts',
     ],
     rules: {
       '@typescript-eslint/no-restricted-imports': 'off',
@@ -116,6 +118,7 @@ export default tseslint.config(
           { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/filesystem/**', '**/shared/infra/filesystem'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -133,6 +136,7 @@ export default tseslint.config(
           { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/filesystem/**', '**/shared/infra/filesystem'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -150,6 +154,7 @@ export default tseslint.config(
           { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/filesystem/**', '**/shared/infra/filesystem'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -167,6 +172,25 @@ export default tseslint.config(
           { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/filesystem/**', '**/shared/infra/filesystem'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
+          { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
+        ],
+      }],
+    },
+  },
+
+  // ── Block 5d: shared/infra/filesystem — imports shared/provider only, no sibling infra ──
+  {
+    files: ['src/shared/infra/filesystem/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [
+          ...strictBarrelPatterns('shared/provider'),
+          { group: ['**/shared/infra/database/**', '**/shared/infra/database'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/runtime/**', '**/shared/infra/runtime'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/parsers/**', '**/shared/infra/parsers'], message: 'Infra modules cannot depend on sibling infra modules.' },
+          { group: ['**/shared/infra/assistant/**', '**/shared/infra/assistant'], message: 'Infra modules cannot depend on sibling infra modules.' },
           { group: ['**/gateway/**', '**/gateway'], message: 'shared/infra/ cannot depend on gateway/.' },
           { group: ['**/features/**'], message: 'shared/infra/ cannot depend on features/.' },
         ],
@@ -223,12 +247,11 @@ export default tseslint.config(
 
   // ── Block 7c: ARCH-INV-9 — Features must be effectless (no I/O imports) ──
   // Features define ports for effects; adapters in shared/infra/ implement them.
-  // TODO: Promote to 'error' once existing violations are migrated to shared/infra/
   {
     files: ['src/features/**/*.ts'],
     ignores: ['src/features/**/*.test.ts'],
     rules: {
-      'no-restricted-imports': ['warn',
+      'no-restricted-imports': ['error',
         { name: 'fs', message: 'Features must be effectless. Define a port interface and implement in shared/infra/<technology>/.' },
         { name: 'fs/promises', message: 'Features must be effectless. Define a port interface and implement in shared/infra/<technology>/.' },
         { name: 'child_process', message: 'Features must be effectless. Define a port interface and implement in shared/infra/<technology>/.' },

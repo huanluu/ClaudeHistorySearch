@@ -175,7 +175,7 @@ describe('Scorecard: Architecture Invariants', () => {
   });
 
   // ─── ARCH-INV-9: Features Must Be Effectless ──────────────────
-  it.fails('ARCH-INV-9: Feature files do not import I/O modules', () => {
+  it('ARCH-INV-9: Feature files do not import I/O modules', () => {
     const featureDir = join(SRC_DIR, 'features');
     const featureFiles = collectSrcFiles(featureDir);
     const ioModules = [

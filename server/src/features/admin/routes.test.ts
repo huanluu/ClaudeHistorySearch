@@ -10,6 +10,7 @@ function createAdminApp(deps: {
   diagnosticsService?: AdminRouteDeps['diagnosticsService'];
   configService?: AdminRouteDeps['configService'];
   onConfigChanged?: (section: string) => void;
+  adminHtml?: string;
 }): Application {
   const app = express();
   app.use(express.json());
@@ -20,6 +21,7 @@ function createAdminApp(deps: {
     configService: deps.configService,
     onConfigChanged: deps.onConfigChanged,
     logger: noopLogger,
+    adminHtml: deps.adminHtml,
   });
   app.use('/', router);
 
@@ -126,7 +128,7 @@ describe('GET /diagnostics', () => {
 
 describe('GET /admin', () => {
   it('should return HTML content type', async () => {
-    const app = createAdminApp({});
+    const app = createAdminApp({ adminHtml: '<!DOCTYPE html><html></html>' });
 
     const res = await request(app).get('/admin');
 
@@ -135,11 +137,19 @@ describe('GET /admin', () => {
   });
 
   it('should return valid HTML document', async () => {
-    const app = createAdminApp({});
+    const app = createAdminApp({ adminHtml: '<!DOCTYPE html><html><body>Admin</body></html>' });
 
     const res = await request(app).get('/admin');
 
     expect(res.text).toContain('<!DOCTYPE html>');
+  });
+
+  it('should return 503 when adminHtml not provided', async () => {
+    const app = createAdminApp({});
+
+    const res = await request(app).get('/admin');
+
+    expect(res.status).toBe(503);
   });
 });
 

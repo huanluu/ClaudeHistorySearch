@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { createLogger } from '../index';
 import type { Logger } from '../index';
 import { FileWatcher } from '../../../features/search/index';
+import { NodeFileSystem } from '../../../shared/infra/filesystem/NodeFileSystem';
 import type { SessionRepository } from '../index';
 
 let testDir: string;
@@ -128,7 +129,7 @@ describe('Global error handlers', () => {
 
     it('logs chokidar errors instead of crashing', async () => {
       const mockSource = { name: 'claude', sessionDir: watchDir, filePattern: '**/*.jsonl', parse: vi.fn() };
-      const fileWatcher = new FileWatcher([mockSource], repo, logger);
+      const fileWatcher = new FileWatcher([mockSource], repo, logger, new NodeFileSystem());
       fileWatcher.start();
 
       // Emit an error on the internal chokidar watcher

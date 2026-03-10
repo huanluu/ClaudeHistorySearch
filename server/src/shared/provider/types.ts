@@ -171,6 +171,23 @@ export interface SessionSource {
   loadTitleMap?(projectDir: string): Map<string, string>;
 }
 
+// ── File system port ────────────────────────────────────────────────
+
+export interface FileStat {
+  isDirectory: boolean;
+  mtimeMs: number;
+  size: number;
+}
+
+export interface FileSystem {
+  readFile(path: string): string;
+  writeFile(path: string, content: string): void;
+  exists(path: string): boolean;
+  listDirectory(path: string): string[];
+  stat(path: string): FileStat;
+  mkdir(path: string, options?: { recursive: boolean }): void;
+}
+
 // ── CLI runtime interfaces (write-side abstraction) ─────────────────
 
 export interface SessionStartOptions {

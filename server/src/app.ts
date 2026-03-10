@@ -1,14 +1,17 @@
 import Bonjour from 'bonjour-service';
 import { execSync } from 'child_process';
 import { Router } from 'express';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { createDatabase, createSessionRepository, createHeartbeatRepository, createCronRepository, DB_PATH } from './shared/infra/database/index';
+import { NodeFileSystem } from './shared/infra/filesystem/index';
 import { authMiddleware, hasApiKey, WorkingDirValidator, createLogger, LOG_PATH, ErrorRingBuffer, createRequestLogger, type RequestLogLevel, type RequestLoggerOptions, type SessionSource } from './shared/provider/index';
 import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQuerySchema, SessionsQuerySchema, ConfigUpdateBodySchema } from './gateway/index';
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AssistantService, registerAssistantHandlers } from './features/assistant/index';
 import { SdkAssistantBackend, createCronMcpTools } from './shared/infra/assistant/index';
-import { ClaudeRuntime, CopilotRuntime } from './shared/infra/runtime/index';
+import { ClaudeRuntime, CopilotRuntime, createNodeCommandExecutor } from './shared/infra/runtime/index';
 import type { CliRuntime } from './shared/provider/index';
 import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { ClaudeSessionSource, CopilotSessionSource } from './shared/infra/parsers/index';
@@ -94,8 +97,11 @@ export function createApp(config: AppConfig): App {
   const heartbeatRepo = createHeartbeatRepository(db);
   const cronRepo = createCronRepository(db);
 
+  // --- File system adapter ---
+  const fs = new NodeFileSystem();
+
   // --- Services ---
-  const configService = new ConfigService();
+  const configService = new ConfigService(fs);
   const securityConfig = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
   const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
@@ -109,7 +115,8 @@ export function createApp(config: AppConfig): App {
 
   // --- Heartbeat env overrides (SEC-INV-5: env reads only in app.ts) ---
   const heartbeatEnvOverrides = resolveHeartbeatEnvOverrides();
-  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger, claudeRuntime, heartbeatEnvOverrides);
+  const commandExecutor = createNodeCommandExecutor();
+  const heartbeatService = new HeartbeatService(fs, commandExecutor, undefined, heartbeatRepo, logger, claudeRuntime, heartbeatEnvOverrides);
 
   // --- Cron service ---
   const cronService = new CronService(
@@ -121,7 +128,7 @@ export function createApp(config: AppConfig): App {
 
   // --- Session sources (multi-agent) ---
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
-  const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger);
+  const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger, fs);
   const agentStore = new AgentStore(logger, (id, source, log) => {
     const runtime = runtimes.get(source) ?? claudeRuntime;
     return runtime.startSession(id, log);
@@ -191,11 +198,15 @@ export function createApp(config: AppConfig): App {
   registerSearchRoutes(router, {
     repo: sessionRepo,
     logger,
-    indexFn: (force, repo, logger) => indexAllSessions(force, repo, logger, sessionSources),
+    indexFn: (force, repo, logger) => indexAllSessions(force, repo, logger, sessionSources, fs),
   });
   registerSchedulerRoutes(router, { heartbeatService, logger });
   registerCronRoutes(router, { cronService, logger });
-  registerAdminRoutes(router, { diagnosticsService, configService, onConfigChanged, logger });
+  // Load admin HTML (I/O in composition root, not in feature code)
+  const __filename = fileURLToPath(import.meta.url);
+  const adminHtmlPath = join(dirname(__filename), 'features', 'admin', 'admin.html');
+  const adminHtml = fs.exists(adminHtmlPath) ? fs.readFile(adminHtmlPath) : undefined;
+  registerAdminRoutes(router, { diagnosticsService, configService, onConfigChanged, logger, adminHtml });
   transport.use('/', router);
 
   // --- Lifecycle ---
@@ -274,7 +285,7 @@ export function createApp(config: AppConfig): App {
 
     // Initial indexing
     logger.log({ msg: 'Starting initial index...', op: 'server.start' });
-    const result = await indexAllSessions(false, sessionRepo, logger, sessionSources);
+    const result = await indexAllSessions(false, sessionRepo, logger, sessionSources, fs);
     diagnosticsService.setLastIndexResult(result);
     logger.log({ msg: `Initial index complete: ${result.indexed} sessions indexed`, op: 'server.start', context: { indexed: result.indexed } });
 
@@ -304,7 +315,7 @@ export function createApp(config: AppConfig): App {
     const REINDEX_INTERVAL = 5 * 60 * 1000; // 5 minutes
     reindexTimer = setInterval(async () => {
       logger.log({ msg: 'Running periodic reindex...', op: 'server.reindex' });
-      const reindexResult = await indexAllSessions(false, sessionRepo, logger, sessionSources);
+      const reindexResult = await indexAllSessions(false, sessionRepo, logger, sessionSources, fs);
       diagnosticsService.setLastIndexResult(reindexResult);
       if (reindexResult.indexed > 0) {
         logger.log({ msg: `Periodic reindex: ${reindexResult.indexed} new sessions indexed`, op: 'server.reindex', context: { indexed: reindexResult.indexed } });

@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-03-10T14:15:00Z",
+  "note": "ARCH-INV-9 fixed: all feature files now effectless. FileSystem port + NodeFileSystem adapter introduced. ESLint Block 7c promoted to error. Score improved from 17/19 to 18/19.",
+  "invariants": {
+    "ARCH-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Blocks 3-7" },
+    "ARCH-INV-2":  { "status": "pass", "enforcedBy": "eslint + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-3":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-4":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-7":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-8":  { "status": "pass", "enforcedBy": "scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-9":  { "status": "pass", "enforcedBy": "eslint.config.js Block 7c (error) + scorecard/tests/architecture.test.ts" },
+    "ARCH-INV-10": { "status": "pass", "enforcedBy": "eslint.config.js Blocks 4, 5, 5b, 5c, 5d + scorecard/tests/architecture.test.ts" },
+    "CQ-INV-1":   { "status": "pass", "enforcedBy": "eslint.config.js Block 9/9b" },
+    "CQ-INV-3":   { "status": "pass", "enforcedBy": "eslint + scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-4":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-5":   { "status": "fail", "enforcedBy": "scorecard/tests/code-quality.test.ts", "violations": [
+      "app.ts: createApp() ~260 lines, start() ~118 lines",
+      "features/admin/routes.ts: registerAdminRoutes() ~104 lines",
+      "features/assistant/handlers.ts: registerAssistantHandlers() 108 lines",
+      "features/search/indexer.ts: indexSourceDirectory() 87 lines",
+      "features/search/routes.ts: registerSearchRoutes() 214 lines",
+      "shared/infra/database/SqliteSessionRepository.ts: constructor() 115 lines",
+      "shared/infra/database/connection.ts: createDatabase() 117 lines",
+      "shared/infra/parsers/ClaudeSessionSource.ts: parseClaudeSessionFile() 82 lines",
+      "shared/infra/parsers/CopilotSessionSource.ts: parseCopilotEventsFile() 90 lines",
+      "shared/provider/logger/logger.ts: createLogger() 84 lines"
+    ]},
+    "CQ-INV-6":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts" },
+    "CQ-INV-7":   { "status": "pass", "enforcedBy": "scorecard/tests/code-quality.test.ts + pre-commit hook" },
+    "OBS-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Block 10" },
+    "SEC-INV-1":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "SEC-INV-5":  { "status": "pass", "enforcedBy": "scorecard/tests/security.test.ts" },
+    "REL-INV-2":  { "status": "pass", "enforcedBy": "scorecard/tests/reliability.test.ts" }
+  },
+  "summary": {
+    "passing": 18,
+    "total": 19,
+    "passRate": "95%"
+  },
+  "delta": {
+    "since": "2026-03-10-2",
+    "changed": [
+      "ARCH-INV-9: FIXED — extracted fs/child_process imports from 4 feature files into FileSystem port + NodeFileSystem adapter. ESLint Block 7c promoted from warn to error."
+    ],
+    "passRateChange": "+6% (17/19 89% → 18/19 95%)"
+  },
+  "testExecution": {
+    "scorecardTestFiles": 4,
+    "scorecardTests": 23,
+    "scorecardDuration": "1450ms",
+    "fullSuiteTestFiles": 54,
+    "fullSuiteTests": 633,
+    "fullSuiteDuration": "2.26s",
+    "allPassing": true
+  }
+}
