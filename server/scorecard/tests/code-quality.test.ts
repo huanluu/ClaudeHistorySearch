@@ -39,7 +39,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   });
 
   // ─── CQ-INV-4: No File Over 400 Lines ──────────────────────────
-  it.fails('CQ-INV-4: No source file exceeds 400 lines', () => {
+  it('CQ-INV-4: No source file exceeds 400 lines', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; lines: number }> = [];
 

@@ -2,100 +2,19 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import { getConfigDir } from '../../shared/provider/index';
-import type { Logger, CliRuntime } from '../../shared/provider/index';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { Logger, CliRuntime, HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { HeartbeatConfig, HeartbeatTask, HeartbeatResult, WorkItem, ChangeSet, CommandExecutor } from './types';
+import { checkForChanges, buildWorkItemPrompt } from './workItems';
+import { parseHeartbeatConfig, parseHeartbeatContent } from './heartbeatParser';
 
-/**
- * Configuration for the heartbeat service
- */
-export interface HeartbeatConfig {
-  enabled: boolean;
-  intervalMs: number;
-  workingDirectory: string;
-  maxItems: number;  // Maximum work items to process per heartbeat (0 = unlimited)
-  maxRuns: number;   // Maximum scheduled heartbeat runs (0 = unlimited)
-}
-
-/**
- * A task parsed from HEARTBEAT.md
- */
-export interface HeartbeatTask {
-  section: string;
-  description: string;
-  enabled: boolean;
-}
-
-/**
- * Result of a heartbeat run
- */
-export interface HeartbeatResult {
-  tasksProcessed: number;
-  sessionsCreated: number;
-  sessionIds: string[];
-  errors: string[];
-}
-
-/**
- * Azure DevOps work item structure (from az boards CLI)
- */
-export interface WorkItem {
-  id: number;
-  fields: {
-    'System.Title': string;
-    'System.State': string;
-    'System.ChangedDate': string;
-    'System.AssignedTo'?: {
-      uniqueName: string;
-    };
-    'System.Description'?: string;
-    'System.WorkItemType'?: string;
-  };
-}
-
-/**
- * Result of change detection
- */
-export interface ChangeSet {
-  newItems: WorkItem[];
-  updatedItems: WorkItem[];
-  errors: string[];
-}
-
-/**
- * Interface for external command execution (allows mocking in tests).
- * Only covers execSync for az CLI queries — CLI runtime spawning is
- * handled by the CliRuntime abstraction.
- */
-export interface CommandExecutor {
-  execSync: (command: string, options?: object) => string;
-}
-
-/**
- * Default command executor using real child_process
- */
+/** Default command executor using real child_process */
 const defaultExecutor: CommandExecutor = {
   execSync: (command: string, options?: object) => {
     return execSync(command, { encoding: 'utf-8', ...options }) as string;
   },
 };
 
-/**
- * HeartbeatService reads HEARTBEAT.md and executes enabled tasks periodically.
- *
- * Configuration is loaded from:
- * 1. Default values
- * 2. ~/.claude-history-server/config.json (overrides defaults)
- * 3. Environment overrides passed via constructor (resolved in app.ts)
- *
- * HEARTBEAT.md format:
- * ```markdown
- * # HEARTBEAT.md
- *
- * ## Work Items
- * - [x] Enabled task (checked)
- * - [ ] Disabled task (unchecked)
- * ```
- */
+/** Reads HEARTBEAT.md and executes enabled tasks on a schedule. */
 export class HeartbeatService {
   /** Maximum number of Claude sessions to spawn per heartbeat run */
   static readonly MAX_SESSIONS_PER_HEARTBEAT = 3;
@@ -229,100 +148,23 @@ export class HeartbeatService {
     this.schedulerRunCount = 0;
   }
 
-  /**
-   * Load configuration from config.json with env overrides (injected via constructor)
-   */
   private loadConfig(): HeartbeatConfig {
-    // Start with defaults
-    const config: HeartbeatConfig = {
-      enabled: true,
-      intervalMs: 3600000, // 1 hour
-      workingDirectory: process.cwd(),
-      maxItems: 0,  // 0 = unlimited
-      maxRuns: 0    // 0 = unlimited
-    };
-
-    // Load from config file if it exists
     const configPath = join(this.configDir, 'config.json');
+    let fileConfig: Record<string, unknown> | null = null;
     if (existsSync(configPath)) {
       try {
-        const fileContent = readFileSync(configPath, 'utf-8');
-        const fileConfig = JSON.parse(fileContent);
-
-        if (fileConfig.heartbeat) {
-          if (typeof fileConfig.heartbeat.enabled === 'boolean') {
-            config.enabled = fileConfig.heartbeat.enabled;
-          }
-          if (typeof fileConfig.heartbeat.intervalMs === 'number') {
-            config.intervalMs = fileConfig.heartbeat.intervalMs;
-          }
-          if (typeof fileConfig.heartbeat.workingDirectory === 'string') {
-            config.workingDirectory = fileConfig.heartbeat.workingDirectory;
-          }
-          if (typeof fileConfig.heartbeat.maxItems === 'number') {
-            config.maxItems = fileConfig.heartbeat.maxItems;
-          }
-          if (typeof fileConfig.heartbeat.maxRuns === 'number') {
-            config.maxRuns = fileConfig.heartbeat.maxRuns;
-          }
-        }
+        fileConfig = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
       } catch (error) {
-        // Malformed config file - use defaults
-        this.logger.warn({ msg: `Warning: Could not parse config.json: ${(error as Error).message}`, op: 'heartbeat.config', err: error });
+        this.logger.warn({ msg: `Could not parse config.json: ${(error as Error).message}`, op: 'heartbeat.config', err: error });
       }
     }
-
-    // Apply env overrides (resolved in app.ts, injected via constructor)
-    return { ...config, ...this.envOverrides };
+    return parseHeartbeatConfig(fileConfig, this.envOverrides);
   }
 
-  /**
-   * Parse HEARTBEAT.md and return enabled tasks
-   */
   parseHeartbeatFile(): HeartbeatTask[] {
     const heartbeatPath = join(this.configDir, 'HEARTBEAT.md');
-
-    if (!existsSync(heartbeatPath)) {
-      return [];
-    }
-
-    const content = readFileSync(heartbeatPath, 'utf-8');
-    if (!content.trim()) {
-      return [];
-    }
-
-    const tasks: HeartbeatTask[] = [];
-    let currentSection = 'Default';
-
-    const lines = content.split('\n');
-
-    for (const line of lines) {
-      // Check for section headers (## Section Name)
-      const sectionMatch = line.match(/^##\s+(.+)$/);
-      if (sectionMatch) {
-        currentSection = sectionMatch[1].trim();
-        continue;
-      }
-
-      // Check for checklist items
-      // - [x] Enabled task
-      // - [ ] Disabled task
-      const checklistMatch = line.match(/^-\s+\[([ xX])\]\s+(.+)$/);
-      if (checklistMatch) {
-        const isChecked = checklistMatch[1].toLowerCase() === 'x';
-        const description = checklistMatch[2].trim();
-
-        if (isChecked) {
-          tasks.push({
-            section: currentSection,
-            description,
-            enabled: true
-          });
-        }
-      }
-    }
-
-    return tasks;
+    if (!existsSync(heartbeatPath)) return [];
+    return parseHeartbeatContent(readFileSync(heartbeatPath, 'utf-8'));
   }
 
   /**
@@ -357,75 +199,10 @@ export class HeartbeatService {
   }
 
   /**
-   * Fetch work items from Azure DevOps using az CLI with WIQL query
-   */
-  private fetchWorkItems(): WorkItem[] {
-    try {
-      const wiql = "SELECT [System.Id], [System.Title], [System.State], [System.ChangedDate], [System.AssignedTo], [System.Description], [System.WorkItemType] FROM WorkItems WHERE [System.AssignedTo] = @me AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.State] <> 'Resolved' ORDER BY [System.ChangedDate] DESC";
-      const output = this.executor.execSync(
-        `az boards query --wiql "${wiql}" -o json`,
-        { encoding: 'utf-8' }
-      );
-      return JSON.parse(output) as WorkItem[];
-    } catch (error) {
-      throw new Error(`Failed to fetch work items: ${(error as Error).message}`);
-    }
-  }
-
-  /**
    * Check for new or updated work items
    */
   async checkForChanges(): Promise<ChangeSet> {
-    const result: ChangeSet = {
-      newItems: [],
-      updatedItems: [],
-      errors: []
-    };
-
-    try {
-      const workItems = this.fetchWorkItems();
-
-      for (const item of workItems) {
-        const key = `workitem:${item.id}`;
-        const changedDate = item.fields['System.ChangedDate'];
-        const lastProcessed = this.getProcessedItemState(key);
-
-        if (!lastProcessed) {
-          // New item - never processed
-          result.newItems.push(item);
-        } else if (lastProcessed !== changedDate) {
-          // Updated item - changed date differs
-          result.updatedItems.push(item);
-        }
-        // If lastProcessed === changedDate, skip (unchanged)
-      }
-    } catch (error) {
-      result.errors.push((error as Error).message);
-    }
-
-    return result;
-  }
-
-  /**
-   * Build the prompt for Claude analysis
-   */
-  private buildPrompt(workItem: WorkItem): string {
-    return `<!-- HEARTBEAT_SESSION -->
-[Heartbeat] Analyze Work Item #${workItem.id}
-
-Work Item Details:
-- ID: ${workItem.id}
-- Title: ${workItem.fields['System.Title']}
-- State: ${workItem.fields['System.State']}
-- Type: ${workItem.fields['System.WorkItemType'] || 'Unknown'}
-
-${workItem.fields['System.Description'] ? `Description:\n${workItem.fields['System.Description']}` : ''}
-
-Please analyze this work item in the context of the codebase:
-1. Identify relevant code files and modules
-2. Assess complexity and effort required
-3. Suggest an implementation approach
-4. Note any potential risks or dependencies`;
+    return checkForChanges(this.executor, (key) => this.getProcessedItemState(key));
   }
 
   /**
@@ -438,7 +215,7 @@ Please analyze this work item in the context of the codebase:
       throw new Error('No CLI runtime configured for HeartbeatService');
     }
 
-    const prompt = this.buildPrompt(workItem);
+    const prompt = buildWorkItemPrompt(workItem);
     const result = await this.runtime.runHeadless(
       { prompt, workingDir: this.config.workingDirectory },
       this.logger,
