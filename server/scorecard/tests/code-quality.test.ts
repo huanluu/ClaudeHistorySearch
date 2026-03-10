@@ -57,7 +57,7 @@ describe('Scorecard: Code Quality Invariants', () => {
   });
 
   // ─── CQ-INV-5: No Function Over 80 Lines ───────────────────────
-  it.fails('CQ-INV-5: No function or method exceeds 80 lines', () => {
+  it('CQ-INV-5: No function or method exceeds 80 lines', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; name: string; lines: number; startLine: number }> = [];
 
