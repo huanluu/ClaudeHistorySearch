@@ -3,6 +3,7 @@ import ClaudeHistoryShared
 
 enum NavigationDestination: Hashable {
     case sessionDetail(sessionId: String, highlightText: String?, scrollToMessageId: String?)
+    case assistantChat
 }
 
 struct SearchPopoverView: View {
@@ -88,6 +89,13 @@ struct SearchPopoverView: View {
                     )
                     .environmentObject(apiClient)
                     .toolbar(.hidden)
+
+                case .assistantChat:
+                    ChatView(
+                        webSocketClient: webSocketClient,
+                        onBack: { navigationPath.removeLast() }
+                    )
+                    .toolbar(.hidden)
                 }
             }
         }
@@ -129,6 +137,19 @@ struct SearchPopoverView: View {
             }
 
             Spacer()
+
+            // Assistant chat button
+            if serverDiscovery.serverURL != nil {
+                Button(action: {
+                    navigationPath.append(NavigationDestination.assistantChat)
+                }) {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
+                        .foregroundColor(webSocketClient.state == .authenticated ? .accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(webSocketClient.state != .authenticated)
+                .help("Assistant chat")
+            }
 
             // New session button
             if serverDiscovery.serverURL != nil {

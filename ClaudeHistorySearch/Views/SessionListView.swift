@@ -12,6 +12,7 @@ struct SessionListView: View {
     @State private var searchText = ""
     @State private var showSettings = false
     @State private var showNewSession = false
+    @State private var showChat = false
 
     private var sortOption: SearchSortOption {
         SearchSortOption(rawValue: sortOptionRaw) ?? .relevance
@@ -65,9 +66,16 @@ struct SessionListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    if serverDiscovery.serverURL != nil {
-                        Button(action: { showNewSession = true }) {
-                            Image(systemName: "plus.circle.fill")
+                    HStack(spacing: 12) {
+                        if serverDiscovery.serverURL != nil {
+                            Button(action: { showChat = true }) {
+                                Image(systemName: "bubble.left.and.text.bubble.right")
+                            }
+                            .disabled(webSocketClient.state != .authenticated)
+
+                            Button(action: { showNewSession = true }) {
+                                Image(systemName: "plus.circle.fill")
+                            }
                         }
                     }
                 }
@@ -76,6 +84,9 @@ struct SessionListView: View {
                         Image(systemName: "gearshape")
                     }
                 }
+            }
+            .navigationDestination(isPresented: $showChat) {
+                ChatView(webSocketClient: webSocketClient)
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)

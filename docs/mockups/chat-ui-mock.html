@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat UI Mock — Mac Popover & iOS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+  :root {
+    --blue: #007AFF;
+    --blue-light: #E8F2FF;
+    --gray-bg: #F5F5F7;
+    --gray-bubble: #E9E9EB;
+    --gray-text: #86868B;
+    --gray-light: #C7C7CC;
+    --gray-border: #E5E5EA;
+    --green: #34C759;
+    --white: #FFFFFF;
+    --black: #1D1D1F;
+    --text-secondary: #6E6E73;
+    --bg-page: #F0EDE6;
+    --unread-blue: #007AFF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: var(--bg-page);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    color: var(--black);
+  }
+
+  h1 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .devices {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .device-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .device-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-text);
+    letter-spacing: 0.3px;
+  }
+
+  /* ─── Mac Popover Frame ─── */
+  .mac-frame {
+    width: 420px;
+    height: 500px;
+    background: var(--white);
+    border-radius: 12px;
+    box-shadow:
+      0 0 0 0.5px rgba(0,0,0,0.08),
+      0 8px 40px rgba(0,0,0,0.12),
+      0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .mac-frame::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 8px;
+    background: var(--white);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    filter: drop-shadow(0 -1px 2px rgba(0,0,0,0.06));
+    z-index: 10;
+  }
+
+  /* ─── iOS Frame ─── */
+  .ios-outer {
+    width: 390px;
+    height: 760px;
+    background: #1A1A1A;
+    border-radius: 48px;
+    padding: 12px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.1) inset,
+      0 20px 60px rgba(0,0,0,0.25),
+      0 4px 12px rgba(0,0,0,0.1);
+    position: relative;
+  }
+
+  .ios-outer::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 28px;
+    background: #1A1A1A;
+    border-radius: 0 0 18px 18px;
+    z-index: 20;
+  }
+
+  .ios-frame {
+    width: 100%;
+    height: 100%;
+    background: var(--white);
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .ios-status-bar {
+    height: 50px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 28px 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--black);
+    flex-shrink: 0;
+  }
+
+  .ios-status-bar .time { font-weight: 600; }
+  .ios-status-bar .icons { display: flex; gap: 5px; font-size: 12px; }
+
+  /* ─── Shared App Styles ─── */
+  .app-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ios-frame .app-container {
+    height: calc(100% - 50px);
+  }
+
+  /* Navigation stack with sliding */
+  .nav-stack {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .nav-page {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+    transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
+                opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+    will-change: transform;
+  }
+
+  .nav-page.list-page {
+    transform: translateX(0);
+    z-index: 1;
+  }
+
+  .nav-page.chat-page {
+    transform: translateX(100%);
+    z-index: 2;
+  }
+
+  .nav-page.list-page.pushed {
+    transform: translateX(-30%);
+    opacity: 0.5;
+  }
+
+  .nav-page.chat-page.active {
+    transform: translateX(0);
+  }
+
+  /* ─── Header ─── */
+  .header {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--gray-border);
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    min-height: 44px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px rgba(52, 199, 89, 0.4);
+  }
+
+  .header-spacer { flex: 1; }
+
+  .header-btn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--blue);
+    font-size: 16px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .header-btn:hover { background: rgba(0,122,255,0.08); }
+  .header-btn:active { background: rgba(0,122,255,0.15); }
+
+  .header-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+
+  .header-btn.chat-btn {
+    margin-right: 2px;
+  }
+
+  /* ─── Search Field ─── */
+  .search-wrap {
+    padding: 8px 14px;
+    flex-shrink: 0;
+  }
+
+  .search-field {
+    display: flex;
+    align-items: center;
+    background: var(--gray-bg);
+    border-radius: 10px;
+    padding: 7px 10px;
+    gap: 6px;
+  }
+
+  .search-field svg {
+    width: 15px;
+    height: 15px;
+    fill: var(--gray-light);
+    flex-shrink: 0;
+  }
+
+  .search-field input {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+    color: var(--black);
+  }
+
+  .search-field input::placeholder { color: var(--gray-light); }
+
+  /* ─── Tab Picker ─── */
+  .tab-picker {
+    display: flex;
+    margin: 6px 14px 2px;
+    background: var(--gray-bg);
+    border-radius: 8px;
+    padding: 2px;
+    flex-shrink: 0;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 5px 0;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tab-btn.active {
+    background: var(--white);
+    color: var(--black);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  /* ─── Session List ─── */
+  .session-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+
+  .session-list::-webkit-scrollbar { width: 4px; }
+  .session-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+
+  .session-row {
+    display: flex;
+    padding: 10px 14px;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.12s;
+    align-items: flex-start;
+    border-bottom: 0.5px solid var(--gray-border);
+  }
+
+  .session-row:last-child { border-bottom: none; }
+  .session-row:hover { background: var(--gray-bg); }
+  .session-row:active { background: #E8E8ED; }
+
+  .unread-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--unread-blue);
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+
+  .unread-dot.hidden { visibility: hidden; }
+
+  .session-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .session-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--black);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  .session-row.unread .session-title { font-weight: 600; }
+
+  .session-project {
+    font-size: 11px;
+    color: var(--gray-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  .session-preview {
+    font-size: 12px;
+    color: var(--gray-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+
+  .session-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .session-time {
+    font-size: 11px;
+    color: var(--gray-text);
+  }
+
+  .msg-count {
+    font-size: 10px;
+    background: var(--gray-bg);
+    color: var(--text-secondary);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
+  /* ─── Chat Header ─── */
+  .chat-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--gray-border);
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(20px);
+    min-height: 44px;
+    gap: 8px;
+  }
+
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border: none;
+    background: transparent;
+    color: var(--blue);
+    font-size: 15px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 4px 4px 4px 0;
+    border-radius: 6px;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+
+  .back-btn:hover { opacity: 0.7; }
+  .back-btn:active { opacity: 0.5; }
+
+  .back-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  .chat-title {
+    flex: 1;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--black);
+  }
+
+  .chat-header .more-btn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--blue);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  /* ─── Messages Area ─── */
+  .messages-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .messages-area::-webkit-scrollbar { width: 4px; }
+  .messages-area::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+
+  .message-bubble {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.45;
+    word-wrap: break-word;
+    animation: bubbleIn 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  @keyframes bubbleIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .message-bubble.assistant {
+    background: var(--gray-bubble);
+    color: var(--black);
+    align-self: flex-start;
+    border-bottom-left-radius: 6px;
+  }
+
+  .message-bubble.user {
+    background: var(--blue);
+    color: var(--white);
+    align-self: flex-end;
+    border-bottom-right-radius: 6px;
+  }
+
+  .message-bubble.assistant .bubble-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    background: var(--gray-bubble);
+    border-radius: 18px;
+    border-bottom-left-radius: 6px;
+    align-self: flex-start;
+    animation: bubbleIn 0.2s ease;
+  }
+
+  .typing-indicator span {
+    width: 7px;
+    height: 7px;
+    background: #A0A0A5;
+    border-radius: 50%;
+    animation: typingBounce 1.2s ease-in-out infinite;
+  }
+
+  .typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* ─── Chat Input ─── */
+  .chat-input-wrap {
+    padding: 8px 12px 12px;
+    border-top: 0.5px solid var(--gray-border);
+    flex-shrink: 0;
+    background: var(--white);
+  }
+
+  .chat-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--gray-bg);
+    border-radius: 22px;
+    padding: 6px 6px 6px 16px;
+    border: 1px solid var(--gray-border);
+    transition: border-color 0.2s;
+  }
+
+  .chat-input-row:focus-within {
+    border-color: var(--blue);
+    background: var(--white);
+  }
+
+  .chat-input-row textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    max-height: 80px;
+    line-height: 1.4;
+    padding: 4px 0;
+    color: var(--black);
+  }
+
+  .chat-input-row textarea::placeholder { color: var(--gray-light); }
+
+  .send-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: var(--gray-light);
+    color: var(--white);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .send-btn.active {
+    background: var(--blue);
+  }
+
+  .send-btn.active:hover { background: #0066DD; }
+  .send-btn.active:active { transform: scale(0.92); }
+
+  .send-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+  }
+
+  /* ─── iOS-specific tweaks ─── */
+  .ios-frame .chat-input-wrap {
+    padding: 8px 14px 24px;
+  }
+
+  .ios-frame .session-row {
+    padding: 11px 16px;
+  }
+
+  .ios-frame .header,
+  .ios-frame .chat-header {
+    padding: 10px 16px;
+  }
+
+  .ios-frame .search-wrap {
+    padding: 8px 16px;
+  }
+
+  .ios-frame .tab-picker {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .ios-frame .messages-area {
+    padding: 16px 16px;
+  }
+
+  /* Home indicator */
+  .ios-home-indicator {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 134px;
+    height: 5px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+    z-index: 30;
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 900px) {
+    .devices { flex-direction: column; gap: 40px; }
+  }
+
+  /* Message content formatting */
+  .message-bubble ul {
+    margin: 6px 0 2px 4px;
+    padding: 0;
+    list-style: none;
+  }
+  .message-bubble li::before {
+    content: '•';
+    margin-right: 6px;
+    color: var(--text-secondary);
+  }
+  .message-bubble li {
+    margin: 2px 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>Chat UI Mock — Session List → Assistant Chat</h1>
+
+<div class="devices">
+  <!-- ═══════ MAC POPOVER ═══════ -->
+  <div class="device-wrapper">
+    <div class="device-label">Mac Menu Bar Popover (420 × 500)</div>
+    <div class="mac-frame" id="mac">
+      <div class="app-container">
+        <div class="nav-stack">
+          <!-- List Page -->
+          <div class="nav-page list-page" id="mac-list">
+            <div class="header">
+              <div class="status-dot"></div>
+              <div class="header-spacer"></div>
+              <button class="header-btn chat-btn" title="Assistant Chat" onclick="navigateToChat('mac')">
+                <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+              </button>
+              <button class="header-btn" title="New Session">
+                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              </button>
+              <button class="header-btn" title="Settings">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/></svg>
+              </button>
+            </div>
+            <div class="search-wrap">
+              <div class="search-field">
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" placeholder="Search sessions...">
+              </div>
+            </div>
+            <div class="tab-picker">
+              <button class="tab-btn active">Recent</button>
+              <button class="tab-btn">Heartbeat</button>
+            </div>
+            <div class="session-list" id="mac-sessions"></div>
+          </div>
+
+          <!-- Chat Page -->
+          <div class="nav-page chat-page" id="mac-chat">
+            <div class="chat-header">
+              <button class="back-btn" onclick="navigateBack('mac')">
+                <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+              </button>
+              <div class="chat-title">Assistant</div>
+              <button class="more-btn">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+              </button>
+            </div>
+            <div class="messages-area" id="mac-messages"></div>
+            <div class="chat-input-wrap">
+              <div class="chat-input-row">
+                <textarea rows="1" placeholder="Message..." id="mac-input" oninput="handleInput('mac')" onkeydown="handleKeyDown(event, 'mac')"></textarea>
+                <button class="send-btn" id="mac-send" onclick="sendMessage('mac')">
+                  <svg viewBox="0 0 24 24"><path d="M4.01 6.03l7.51 3.22-7.52-1 .01-2.22m7.5 8.72L4 17.97v-2.22l7.51-1.01M2.01 3L2 10l15 2-15 2 .01 7L23 12 2.01 3z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ iOS IPHONE ═══════ -->
+  <div class="device-wrapper">
+    <div class="device-label">iOS iPhone</div>
+    <div class="ios-outer">
+      <div class="ios-frame" id="ios">
+        <div class="ios-status-bar">
+          <span class="time">9:41</span>
+          <span class="icons">
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M1 7h2v5H1zM5 4h2v8H5zM9 5h2v7H9zM13 1h2v11h-2z" fill="currentColor"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 2C5.8 2 3.8 2.8 2.3 4.2l1.4 1.4C5 4.3 6.4 3.7 8 3.7s3 .6 4.3 1.9l1.4-1.4C12.2 2.8 10.2 2 8 2zm0 4c-1.3 0-2.5.5-3.4 1.4L6 8.8c.5-.6 1.2-.9 2-.9s1.5.3 2 .9l1.4-1.4C10.5 6.5 9.3 6 8 6zm0 4c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1z" fill="currentColor"/></svg>
+            <svg width="26" height="12" viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="2.5" stroke="currentColor" fill="none"/><rect x="23.5" y="3.5" width="2" height="5" rx="1" fill="currentColor" opacity="0.4"/><rect x="2" y="2" width="16" height="8" rx="1" fill="#34C759"/></svg>
+          </span>
+        </div>
+        <div class="app-container">
+          <div class="nav-stack">
+            <!-- List Page -->
+            <div class="nav-page list-page" id="ios-list">
+              <div class="header">
+                <div class="status-dot"></div>
+                <div class="header-spacer"></div>
+                <button class="header-btn chat-btn" title="Assistant Chat" onclick="navigateToChat('ios')">
+                  <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+                </button>
+                <button class="header-btn" title="New Session">
+                  <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </button>
+                <button class="header-btn" title="Settings">
+                  <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/></svg>
+                </button>
+              </div>
+              <div class="search-wrap">
+                <div class="search-field">
+                  <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                  <input type="text" placeholder="Search sessions...">
+                </div>
+              </div>
+              <div class="tab-picker">
+                <button class="tab-btn active">Recent</button>
+                <button class="tab-btn">Heartbeat</button>
+              </div>
+              <div class="session-list" id="ios-sessions"></div>
+            </div>
+
+            <!-- Chat Page -->
+            <div class="nav-page chat-page" id="ios-chat">
+              <div class="chat-header">
+                <button class="back-btn" onclick="navigateBack('ios')">
+                  <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                  <span>Back</span>
+                </button>
+                <div class="chat-title">Assistant</div>
+                <button class="more-btn">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+              </div>
+              <div class="messages-area" id="ios-messages"></div>
+              <div class="chat-input-wrap">
+                <div class="chat-input-row">
+                  <textarea rows="1" placeholder="Message..." id="ios-input" oninput="handleInput('ios')" onkeydown="handleKeyDown(event, 'ios')"></textarea>
+                  <button class="send-btn" id="ios-send" onclick="sendMessage('ios')">
+                    <svg viewBox="0 0 24 24"><path d="M4.01 6.03l7.51 3.22-7.52-1 .01-2.22m7.5 8.72L4 17.97v-2.22l7.51-1.01M2.01 3L2 10l15 2-15 2 .01 7L23 12 2.01 3z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ios-home-indicator"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ═══════ DATA ═══════
+  const sessions = [
+    { title: 'Building a local X AI topic monitor', project: '~/Developer/XMonitor', preview: 'Set up streaming API connection with keyword filtering...', count: 42, unread: true, time: '2m' },
+    { title: 'Understanding the WOPI protocol', project: '~/Developer/OfficeOnline', preview: 'WOPI defines how host applications interact with Office...', count: 28, unread: true, time: '1h' },
+    { title: 'Add caching layer to search index', project: '~/Developer/ClaudeHistorySearch', preview: 'Implemented LRU cache with TTL for FTS5 queries...', count: 15, unread: false, time: '3h' },
+    { title: 'SwiftUI NavigationSplitView debugging', project: '~/Developer/MacApp', preview: 'The sidebar selection binding wasn\'t updating...', count: 8, unread: false, time: 'Yesterday' },
+    { title: 'Refactor WebSocket message handling', project: '~/Developer/ClaudeHistorySearch', preview: 'Extracted message routing into typed handlers...', count: 34, unread: false, time: 'Yesterday' },
+    { title: 'Azure DevOps work item API integration', project: '~/Developer/WorkAssistant', preview: 'Connected to ADO REST API with PAT auth...', count: 21, unread: false, time: 'Mar 7' },
+  ];
+
+  const cannedResponses = [
+    'You have 3 PRs awaiting review and 2 new work items assigned today. Want me to summarize them?',
+    "PR #142 'Add caching layer' has 2 new comments from Sarah. The build passed. Should I pull up the details?",
+    "Your standup is in 30 minutes. Based on yesterday's commits, here's a draft update:\n\n• Completed: Assistant WebSocket protocol\n• In progress: Chat UI integration\n• Blocked: Nothing",
+    "Work item #4521 was moved to Active. It's a P1 bug in the document parser. Want me to investigate the recent changes in that area?",
+  ];
+
+  // ═══════ STATE ═══════
+  const state = {
+    mac: { chatActive: false, messages: [], responseIndex: 0, typing: false },
+    ios: { chatActive: false, messages: [], responseIndex: 0, typing: false },
+  };
+
+  // ═══════ RENDER SESSIONS ═══════
+  function renderSessions(target) {
+    const el = document.getElementById(`${target}-sessions`);
+    el.innerHTML = sessions.map(s => `
+      <div class="session-row ${s.unread ? 'unread' : ''}">
+        <div class="unread-dot ${s.unread ? '' : 'hidden'}"></div>
+        <div class="session-info">
+          <div class="session-title">${s.title}</div>
+          <div class="session-project">${s.project}</div>
+          <div class="session-preview">${s.preview}</div>
+        </div>
+        <div class="session-meta">
+          <span class="session-time">${s.time}</span>
+          <span class="msg-count">${s.count}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ═══════ NAVIGATION ═══════
+  function navigateToChat(target) {
+    const listPage = document.getElementById(`${target}-list`);
+    const chatPage = document.getElementById(`${target}-chat`);
+
+    listPage.classList.add('pushed');
+    chatPage.classList.add('active');
+    state[target].chatActive = true;
+
+    // Show welcome message if first time
+    if (state[target].messages.length === 0) {
+      state[target].messages.push({
+        role: 'assistant',
+        text: "Hi! I'm your work assistant. I can help with PRs, work items, and daily planning. What would you like to do?"
+      });
+      renderMessages(target);
+    }
+
+    // Focus input after animation
+    setTimeout(() => {
+      document.getElementById(`${target}-input`).focus();
+    }, 400);
+  }
+
+  function navigateBack(target) {
+    const listPage = document.getElementById(`${target}-list`);
+    const chatPage = document.getElementById(`${target}-chat`);
+
+    listPage.classList.remove('pushed');
+    chatPage.classList.remove('active');
+    state[target].chatActive = false;
+  }
+
+  // ═══════ MESSAGES ═══════
+  function renderMessages(target) {
+    const el = document.getElementById(`${target}-messages`);
+    let html = state[target].messages.map(m => {
+      if (m.role === 'assistant') {
+        const formatted = m.text.replace(/\n\n(•[^\n]+(\n•[^\n]+)*)/g, (match) => {
+          const items = match.trim().split('\n').map(i =>
+            `<li>${i.replace(/^•\s*/, '')}</li>`
+          ).join('');
+          return `<ul>${items}</ul>`;
+        });
+        return `<div class="message-bubble assistant"><div class="bubble-label">Assistant</div>${formatted}</div>`;
+      } else {
+        return `<div class="message-bubble user">${m.text}</div>`;
+      }
+    }).join('');
+
+    if (state[target].typing) {
+      html += `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
+    }
+
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // ═══════ INPUT HANDLING ═══════
+  function handleInput(target) {
+    const input = document.getElementById(`${target}-input`);
+    const sendBtn = document.getElementById(`${target}-send`);
+
+    // Auto-resize textarea
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 80) + 'px';
+
+    // Toggle send button state
+    if (input.value.trim()) {
+      sendBtn.classList.add('active');
+    } else {
+      sendBtn.classList.remove('active');
+    }
+  }
+
+  function handleKeyDown(e, target) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(target);
+    }
+  }
+
+  function sendMessage(target) {
+    const input = document.getElementById(`${target}-input`);
+    const text = input.value.trim();
+    if (!text || state[target].typing) return;
+
+    // Add user message
+    state[target].messages.push({ role: 'user', text });
+    input.value = '';
+    input.style.height = 'auto';
+    document.getElementById(`${target}-send`).classList.remove('active');
+    renderMessages(target);
+
+    // Show typing indicator
+    state[target].typing = true;
+    renderMessages(target);
+
+    // Simulate response after delay
+    const delay = 800 + Math.random() * 800;
+    setTimeout(() => {
+      state[target].typing = false;
+      const response = cannedResponses[state[target].responseIndex % cannedResponses.length];
+      state[target].responseIndex++;
+      state[target].messages.push({ role: 'assistant', text: response });
+      renderMessages(target);
+    }, delay);
+  }
+
+  // ═══════ TAB PICKER ═══════
+  document.querySelectorAll('.tab-picker').forEach(picker => {
+    picker.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        picker.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  });
+
+  // ═══════ INIT ═══════
+  renderSessions('mac');
+  renderSessions('ios');
+</script>
+
+</body>
+</html>

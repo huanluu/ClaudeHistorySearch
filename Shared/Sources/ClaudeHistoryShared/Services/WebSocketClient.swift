@@ -15,6 +15,12 @@ public enum WSMessageType: String, Codable {
     case sessionOutput = "session.output"
     case sessionError = "session.error"
     case sessionComplete = "session.complete"
+    // Assistant types
+    case assistantMessage = "assistant.message"
+    case assistantCancel = "assistant.cancel"
+    case assistantDelta = "assistant.delta"
+    case assistantComplete = "assistant.complete"
+    case assistantError = "assistant.error"
 }
 
 /// WebSocket message structure
