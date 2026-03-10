@@ -231,6 +231,36 @@ describe('detectAutomaticSession', () => {
     expect(isAutomatic).toBe(true);
   });
 
+  it('should detect session with [Cron:] prefix in preview', () => {
+    const session: ParsedSession = {
+      sessionId: 'cron-session',
+      project: '/test',
+      startedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      preview: '[Cron: Daily PR Review] Review all open PRs',
+      source: 'claude',
+      messages: [
+        { uuid: 'msg-1', role: 'user', content: '[Cron: Daily PR Review] Review all open PRs', timestamp: Date.now() }
+      ]
+    };
+    expect(detectAutomaticSession(session)).toBe(true);
+  });
+
+  it('should detect session with [Cron:] prefix in first message content', () => {
+    const session: ParsedSession = {
+      sessionId: 'cron-session-2',
+      project: '/test',
+      startedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      preview: null,
+      source: 'claude',
+      messages: [
+        { uuid: 'msg-1', role: 'user', content: '[Cron: Dead Code Sweep] Find unused exports', timestamp: Date.now() }
+      ]
+    };
+    expect(detectAutomaticSession(session)).toBe(true);
+  });
+
   it('should NOT detect regular sessions as automatic', async () => {
     const session = await parseSessionFile(join(FIXTURES_DIR, 'sample-session.jsonl'));
     const isAutomatic = detectAutomaticSession(session);

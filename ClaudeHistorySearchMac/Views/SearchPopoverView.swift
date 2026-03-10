@@ -358,7 +358,7 @@ struct SearchPopoverView: View {
             LazyVStack(spacing: 0) {
                 // Section header
                 HStack {
-                    Text(viewModel.selectedTab == .heartbeat ? "Heartbeat Sessions" : "Recent Sessions")
+                    Text(viewModel.selectedTab == .heartbeat ? "Scheduled Sessions" : "Recent Sessions")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.secondary)

@@ -210,7 +210,7 @@ describe('CronService', () => {
       const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '60000' }, prompt: 'Do it', workingDir: '/work' });
       const result = await service.runJobNow(job.id);
       expect(result.sessionId).toBe('sess-1');
-      expect(runFn).toHaveBeenCalledWith({ prompt: 'Do it', workingDir: '/work' });
+      expect(runFn).toHaveBeenCalledWith({ prompt: '[Cron: A] Do it', workingDir: '/work' });
       const updated = service.getJobStatus(job.id);
       expect(updated.last_run_status).toBe('success');
       expect(updated.last_session_id).toBe('sess-1');
