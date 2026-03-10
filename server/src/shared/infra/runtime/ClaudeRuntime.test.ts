@@ -32,7 +32,7 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('spawns claude with correct arguments for new session', () => {
-    const session = new ClaudeAgentSession('test-1', noopLogger);
+    const session = new ClaudeAgentSession('test-1', noopLogger, process.env);
     session.start({ prompt: 'List files', workingDir: '/tmp/test' });
 
     expect(mockSpawn).toHaveBeenCalledWith(
@@ -43,7 +43,7 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('spawns claude with --resume flag when resumeSessionId provided', () => {
-    const session = new ClaudeAgentSession('test-2', noopLogger);
+    const session = new ClaudeAgentSession('test-2', noopLogger, process.env);
     session.start({ prompt: 'continue', workingDir: '/tmp', resumeSessionId: 'abc-123' });
 
     expect(mockSpawn).toHaveBeenCalledWith(
@@ -54,7 +54,7 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('sets CI=1, TERM=dumb, NO_COLOR=1 env vars', () => {
-    const session = new ClaudeAgentSession('test-3', noopLogger);
+    const session = new ClaudeAgentSession('test-3', noopLogger, process.env);
     session.start({ prompt: 'test', workingDir: '/tmp' });
 
     const env = mockSpawn.mock.calls[0][2].env;
@@ -64,7 +64,7 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('emits message events for JSON output lines', () => {
-    const session = new ClaudeAgentSession('test-4', noopLogger);
+    const session = new ClaudeAgentSession('test-4', noopLogger, process.env);
     const messages: unknown[] = [];
     session.on('message', (msg) => messages.push(msg));
     session.start({ prompt: 'test', workingDir: '/tmp' });
@@ -77,7 +77,7 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('emits error events for stderr output', () => {
-    const session = new ClaudeAgentSession('test-5', noopLogger);
+    const session = new ClaudeAgentSession('test-5', noopLogger, process.env);
     const errors: string[] = [];
     session.on('error', (err) => errors.push(err));
     session.start({ prompt: 'test', workingDir: '/tmp' });
@@ -89,7 +89,7 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('emits complete event with exit code', async () => {
-    const session = new ClaudeAgentSession('test-6', noopLogger);
+    const session = new ClaudeAgentSession('test-6', noopLogger, process.env);
     const p = new Promise<number>((resolve) => session.on('complete', resolve));
     session.start({ prompt: 'test', workingDir: '/tmp' });
 
@@ -98,14 +98,14 @@ describe('ClaudeAgentSession', () => {
   });
 
   it('cancel sends SIGTERM', () => {
-    const session = new ClaudeAgentSession('test-7', noopLogger);
+    const session = new ClaudeAgentSession('test-7', noopLogger, process.env);
     session.start({ prompt: 'test', workingDir: '/tmp' });
     session.cancel();
     expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
   });
 
   it('getSessionId returns the session ID', () => {
-    const session = new ClaudeAgentSession('my-id', noopLogger);
+    const session = new ClaudeAgentSession('my-id', noopLogger, process.env);
     expect(session.getSessionId()).toBe('my-id');
   });
 });
@@ -118,7 +118,7 @@ describe('ClaudeRuntime', () => {
     mockSpawn.mockReset();
     mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
-    runtime = new ClaudeRuntime();
+    runtime = new ClaudeRuntime(process.env);
   });
 
   it('has name "claude"', () => {

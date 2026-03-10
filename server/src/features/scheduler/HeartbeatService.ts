@@ -85,7 +85,7 @@ const defaultExecutor: CommandExecutor = {
  * Configuration is loaded from:
  * 1. Default values
  * 2. ~/.claude-history-server/config.json (overrides defaults)
- * 3. Environment variables (overrides config file)
+ * 3. Environment overrides passed via constructor (resolved in app.ts)
  *
  * HEARTBEAT.md format:
  * ```markdown
@@ -106,6 +106,7 @@ export class HeartbeatService {
   private runtime: CliRuntime | null;
   private repo: HeartbeatRepository | null;
   private logger: Logger;
+  private envOverrides: Partial<HeartbeatConfig>;
   // In-memory fallback for tracking processed items (used when no repo is provided)
   private processedState: Map<string, string> = new Map();
   // Lock to prevent overlapping heartbeat runs
@@ -115,12 +116,13 @@ export class HeartbeatService {
   private schedulerRunCount = 0;
   private initialDelayTimer: NodeJS.Timeout | null = null;
 
-  constructor(configDir: string | undefined, executor: CommandExecutor | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime) {
+  constructor(configDir: string | undefined, executor: CommandExecutor | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime, envOverrides?: Partial<HeartbeatConfig>) {
     this.configDir = configDir || getConfigDir();
     this.executor = executor || defaultExecutor;
     this.runtime = runtime ?? null;
     this.repo = repo ?? null;
     this.logger = logger;
+    this.envOverrides = envOverrides ?? {};
     this.config = this.loadConfig();
   }
 
@@ -228,7 +230,7 @@ export class HeartbeatService {
   }
 
   /**
-   * Load configuration from config.json with environment variable overrides
+   * Load configuration from config.json with env overrides (injected via constructor)
    */
   private loadConfig(): HeartbeatConfig {
     // Start with defaults
@@ -270,33 +272,8 @@ export class HeartbeatService {
       }
     }
 
-    // Environment variable overrides
-    if (process.env.HEARTBEAT_ENABLED !== undefined) {
-      config.enabled = process.env.HEARTBEAT_ENABLED !== 'false';
-    }
-    if (process.env.HEARTBEAT_INTERVAL_MS !== undefined) {
-      const parsed = parseInt(process.env.HEARTBEAT_INTERVAL_MS, 10);
-      if (!isNaN(parsed)) {
-        config.intervalMs = parsed;
-      }
-    }
-    if (process.env.HEARTBEAT_WORKING_DIR !== undefined) {
-      config.workingDirectory = process.env.HEARTBEAT_WORKING_DIR;
-    }
-    if (process.env.HEARTBEAT_MAX_ITEMS !== undefined) {
-      const parsed = parseInt(process.env.HEARTBEAT_MAX_ITEMS, 10);
-      if (!isNaN(parsed)) {
-        config.maxItems = parsed;
-      }
-    }
-    if (process.env.HEARTBEAT_MAX_RUNS !== undefined) {
-      const parsed = parseInt(process.env.HEARTBEAT_MAX_RUNS, 10);
-      if (!isNaN(parsed)) {
-        config.maxRuns = parsed;
-      }
-    }
-
-    return config;
+    // Apply env overrides (resolved in app.ts, injected via constructor)
+    return { ...config, ...this.envOverrides };
   }
 
   /**

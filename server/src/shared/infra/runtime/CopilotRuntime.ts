@@ -5,13 +5,12 @@ import { createLineBuffer } from './lineBuffer';
 
 // ── Copilot-specific spawn configuration ────────────────────────────
 
-function buildSpawnEnv(): Record<string, string> {
+function buildSpawnEnv(parentEnv: Record<string, string | undefined>): Record<string, string> {
   const env: Record<string, string> = {};
   // Only pass safe env vars — don't leak secrets to child process
   for (const key of ['PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'TERM_PROGRAM']) {
-    if (process.env[key]) {
-      env[key] = process.env[key]!;
-    }
+    const val = parentEnv[key];
+    if (val) env[key] = val;
   }
   return env;
 }
@@ -36,6 +35,7 @@ export class CopilotAgentSession extends EventEmitter implements AgentSession {
   constructor(
     private readonly sessionId: string,
     private readonly logger: Logger,
+    private readonly parentEnv: Record<string, string | undefined>,
   ) {
     super();
   }
@@ -47,7 +47,7 @@ export class CopilotAgentSession extends EventEmitter implements AgentSession {
 
     this.process = spawn('copilot', args, {
       cwd: options.workingDir,
-      env: buildSpawnEnv(),
+      env: buildSpawnEnv(this.parentEnv),
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -98,8 +98,10 @@ export class CopilotAgentSession extends EventEmitter implements AgentSession {
 export class CopilotRuntime implements CliRuntime {
   readonly name = 'copilot';
 
+  constructor(private readonly parentEnv: Record<string, string | undefined>) {}
+
   startSession(sessionId: string, logger: Logger): AgentSession {
-    return new CopilotAgentSession(sessionId, logger);
+    return new CopilotAgentSession(sessionId, logger, this.parentEnv);
   }
 
   runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }> {
@@ -108,7 +110,7 @@ export class CopilotRuntime implements CliRuntime {
     return new Promise((resolve, reject) => {
       const child = spawn('copilot', args, {
         cwd: options.workingDir,
-        env: buildSpawnEnv(),
+        env: buildSpawnEnv(this.parentEnv),
         stdio: ['ignore', 'pipe', 'pipe']
       });
 

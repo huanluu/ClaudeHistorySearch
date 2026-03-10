@@ -47,6 +47,32 @@ function isStealthModeEnabled(): boolean {
 }
 
 /**
+ * Resolve heartbeat env var overrides (SEC-INV-5: env reads confined to app.ts)
+ */
+function resolveHeartbeatEnvOverrides(): Partial<HeartbeatConfig> {
+  const overrides: Partial<HeartbeatConfig> = {};
+  if (process.env.HEARTBEAT_ENABLED !== undefined) {
+    overrides.enabled = process.env.HEARTBEAT_ENABLED !== 'false';
+  }
+  if (process.env.HEARTBEAT_INTERVAL_MS !== undefined) {
+    const parsed = parseInt(process.env.HEARTBEAT_INTERVAL_MS, 10);
+    if (!isNaN(parsed)) overrides.intervalMs = parsed;
+  }
+  if (process.env.HEARTBEAT_WORKING_DIR !== undefined) {
+    overrides.workingDirectory = process.env.HEARTBEAT_WORKING_DIR;
+  }
+  if (process.env.HEARTBEAT_MAX_ITEMS !== undefined) {
+    const parsed = parseInt(process.env.HEARTBEAT_MAX_ITEMS, 10);
+    if (!isNaN(parsed)) overrides.maxItems = parsed;
+  }
+  if (process.env.HEARTBEAT_MAX_RUNS !== undefined) {
+    const parsed = parseInt(process.env.HEARTBEAT_MAX_RUNS, 10);
+    if (!isNaN(parsed)) overrides.maxRuns = parsed;
+  }
+  return overrides;
+}
+
+/**
  * Composition root: wires all services together and returns an App
  * with start/stop lifecycle control.
  */
@@ -72,14 +98,16 @@ export function createApp(config: AppConfig): App {
   const allowedDirs = securityConfig?.allowedWorkingDirs ?? [];
   const workingDirValidator = new WorkingDirValidator(allowedDirs);
   // --- CLI runtimes ---
-  const claudeRuntime = new ClaudeRuntime();
-  const copilotRuntime = new CopilotRuntime();
+  const claudeRuntime = new ClaudeRuntime(process.env);
+  const copilotRuntime = new CopilotRuntime(process.env);
   const runtimes = new Map<string, CliRuntime>([
     [claudeRuntime.name, claudeRuntime],
     [copilotRuntime.name, copilotRuntime],
   ]);
 
-  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger, claudeRuntime);
+  // --- Heartbeat env overrides (SEC-INV-5: env reads only in app.ts) ---
+  const heartbeatEnvOverrides = resolveHeartbeatEnvOverrides();
+  const heartbeatService = new HeartbeatService(undefined, undefined, heartbeatRepo, logger, claudeRuntime, heartbeatEnvOverrides);
 
   // --- Session sources (multi-agent) ---
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];

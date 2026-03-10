@@ -5,13 +5,12 @@ import { createLineBuffer } from './lineBuffer';
 
 // ── Claude-specific spawn configuration ─────────────────────────────
 
-function buildSpawnEnv(): Record<string, string> {
-  return {
-    ...process.env as Record<string, string>,
-    CI: '1',
-    TERM: 'dumb',
-    NO_COLOR: '1'
-  };
+function buildSpawnEnv(parentEnv: Record<string, string | undefined>): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, val] of Object.entries(parentEnv)) {
+    if (val !== undefined) env[key] = val;
+  }
+  return { ...env, CI: '1', TERM: 'dumb', NO_COLOR: '1' };
 }
 
 function buildClaudeArgs(options: SessionStartOptions): string[] {
@@ -34,6 +33,7 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
   constructor(
     private readonly sessionId: string,
     private readonly logger: Logger,
+    private readonly parentEnv: Record<string, string | undefined>,
   ) {
     super();
   }
@@ -45,7 +45,7 @@ export class ClaudeAgentSession extends EventEmitter implements AgentSession {
 
     this.process = spawn('claude', args, {
       cwd: options.workingDir,
-      env: buildSpawnEnv(),
+      env: buildSpawnEnv(this.parentEnv),
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -97,8 +97,10 @@ export class ClaudeRuntime implements CliRuntime {
   readonly name = 'claude';
   readonly trackedProcesses = new Set<ChildProcess>();
 
+  constructor(private readonly parentEnv: Record<string, string | undefined>) {}
+
   startSession(sessionId: string, logger: Logger): AgentSession {
-    return new ClaudeAgentSession(sessionId, logger);
+    return new ClaudeAgentSession(sessionId, logger, this.parentEnv);
   }
 
   cleanup(): void {
@@ -114,7 +116,7 @@ export class ClaudeRuntime implements CliRuntime {
     return new Promise((resolve, reject) => {
       const child = spawn('claude', args, {
         cwd: options.workingDir,
-        env: buildSpawnEnv(),
+        env: buildSpawnEnv(this.parentEnv),
         stdio: ['ignore', 'pipe', 'pipe']
       });
 

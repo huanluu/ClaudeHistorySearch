@@ -31,7 +31,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('spawns copilot with correct arguments for new session', () => {
-    const session = new CopilotAgentSession('test-1', noopLogger);
+    const session = new CopilotAgentSession('test-1', noopLogger, process.env);
     session.start({ prompt: 'List files', workingDir: '/tmp/test' });
 
     expect(mockSpawn).toHaveBeenCalledWith(
@@ -42,7 +42,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('does not include --verbose or --dangerously-skip-permissions', () => {
-    const session = new CopilotAgentSession('test-2', noopLogger);
+    const session = new CopilotAgentSession('test-2', noopLogger, process.env);
     session.start({ prompt: 'test', workingDir: '/tmp' });
 
     const args = mockSpawn.mock.calls[0][1] as string[];
@@ -51,7 +51,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('spawns with --resume flag when resumeSessionId provided', () => {
-    const session = new CopilotAgentSession('test-3', noopLogger);
+    const session = new CopilotAgentSession('test-3', noopLogger, process.env);
     session.start({ prompt: 'continue', workingDir: '/tmp', resumeSessionId: 'abc-123' });
 
     expect(mockSpawn).toHaveBeenCalledWith(
@@ -62,7 +62,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('passes only safe env vars (no CI/TERM/NO_COLOR, no secrets)', () => {
-    const session = new CopilotAgentSession('test-4', noopLogger);
+    const session = new CopilotAgentSession('test-4', noopLogger, process.env);
     session.start({ prompt: 'test', workingDir: '/tmp' });
 
     const env = mockSpawn.mock.calls[0][2].env;
@@ -78,7 +78,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('emits message events for JSON output lines', () => {
-    const session = new CopilotAgentSession('test-5', noopLogger);
+    const session = new CopilotAgentSession('test-5', noopLogger, process.env);
     const messages: unknown[] = [];
     session.on('message', (msg) => messages.push(msg));
     session.start({ prompt: 'test', workingDir: '/tmp' });
@@ -90,7 +90,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('emits error events for stderr output', () => {
-    const session = new CopilotAgentSession('test-6', noopLogger);
+    const session = new CopilotAgentSession('test-6', noopLogger, process.env);
     const errors: string[] = [];
     session.on('error', (err) => errors.push(err));
     session.start({ prompt: 'test', workingDir: '/tmp' });
@@ -102,7 +102,7 @@ describe('CopilotAgentSession', () => {
   });
 
   it('emits complete event with exit code', async () => {
-    const session = new CopilotAgentSession('test-7', noopLogger);
+    const session = new CopilotAgentSession('test-7', noopLogger, process.env);
     const p = new Promise<number>((resolve) => session.on('complete', resolve));
     session.start({ prompt: 'test', workingDir: '/tmp' });
 
@@ -111,21 +111,21 @@ describe('CopilotAgentSession', () => {
   });
 
   it('cancel sends SIGTERM', () => {
-    const session = new CopilotAgentSession('test-8', noopLogger);
+    const session = new CopilotAgentSession('test-8', noopLogger, process.env);
     session.start({ prompt: 'test', workingDir: '/tmp' });
     session.cancel();
     expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
   });
 
   it('getSessionId returns the session ID', () => {
-    const session = new CopilotAgentSession('my-id', noopLogger);
+    const session = new CopilotAgentSession('my-id', noopLogger, process.env);
     expect(session.getSessionId()).toBe('my-id');
   });
 });
 
 describe('CopilotRuntime', () => {
   let mockProcess: ReturnType<typeof createMockProcess>;
-  const runtime = new CopilotRuntime();
+  const runtime = new CopilotRuntime(process.env);
 
   beforeEach(() => {
     mockSpawn.mockReset();

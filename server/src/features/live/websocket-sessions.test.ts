@@ -57,7 +57,7 @@ describe('WebSocket Session Integration', () => {
     const resolvedConfigDir = realpathSync(TEST_CONFIG_DIR);
     const resolvedTmp = realpathSync('/tmp');
     const validator = new WorkingDirValidator([resolvedConfigDir, resolvedTmp]);
-    const agentStore = new AgentStore(noopLogger, (id, _source, log) => new ClaudeAgentSession(id, log));
+    const agentStore = new AgentStore(noopLogger, (id, _source, log) => new ClaudeAgentSession(id, log, process.env));
     wsGateway = new WebSocketGateway({ server, path: '/ws', logger: noopLogger });
     registerLiveHandlers(wsGateway, { agentStore, validator, logger: noopLogger });
     wsGateway.start();

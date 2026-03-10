@@ -90,7 +90,7 @@ describe('Scorecard: Security Invariants', () => {
   });
 
   // ─── SEC-INV-5: Environment Variable Containment ─────────────────
-  it.fails('SEC-INV-5: process.env reads only in allowed files', () => {
+  it('SEC-INV-5: process.env reads only in allowed files', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);
     const violations: Array<{ file: string; line: number; text: string }> = [];
 

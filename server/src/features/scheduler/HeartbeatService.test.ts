@@ -328,7 +328,6 @@ describe('Production Database Module (Heartbeat Schema)', () => {
 
 describe('HeartbeatService', () => {
   const TEST_CONFIG_DIR = join(tmpdir(), `claude-heartbeat-config-test-${Date.now()}`);
-  const originalEnv = { ...process.env };
 
   beforeAll(() => {
     mkdirSync(TEST_CONFIG_DIR, { recursive: true });
@@ -336,11 +335,6 @@ describe('HeartbeatService', () => {
 
   afterAll(() => {
     rmSync(TEST_CONFIG_DIR, { recursive: true, force: true });
-  });
-
-  afterEach(() => {
-    // Restore original environment
-    process.env = { ...originalEnv };
   });
 
   describe('config loading', () => {
@@ -374,7 +368,7 @@ describe('HeartbeatService', () => {
       rmSync(configPath);
     });
 
-    it('should override config with environment variables', () => {
+    it('should override config with envOverrides', () => {
       const configPath = join(TEST_CONFIG_DIR, 'config.json');
       writeFileSync(configPath, JSON.stringify({
         heartbeat: {
@@ -384,12 +378,14 @@ describe('HeartbeatService', () => {
         }
       }));
 
-      // Environment variables should override config file
-      process.env.HEARTBEAT_ENABLED = 'false';
-      process.env.HEARTBEAT_INTERVAL_MS = '30000';
-      process.env.HEARTBEAT_WORKING_DIR = '/from/env';
+      // envOverrides (resolved from env vars in app.ts) should override config file
+      const envOverrides = {
+        enabled: false,
+        intervalMs: 30000,
+        workingDirectory: '/from/env',
+      };
 
-      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger);
+      const service = new HeartbeatService(TEST_CONFIG_DIR, undefined, undefined, noopLogger, undefined, envOverrides);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(false);
