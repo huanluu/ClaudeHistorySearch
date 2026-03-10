@@ -6,7 +6,7 @@ import Foundation
 public class SessionListViewModel: ObservableObject {
     public enum Tab: String, CaseIterable {
         case sessions = "Sessions"
-        case heartbeat = "Heartbeat"
+        case heartbeat = "Scheduled"
     }
 
     // MARK: - Published State
