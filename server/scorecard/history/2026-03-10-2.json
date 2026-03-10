@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-03-10T11:22:00Z",
-  "note": "CQ-INV-4 fixed: HeartbeatService.ts reduced from 530 to 399 lines by extracting types and work-item logic. Score improved from 16/19 to 17/19.",
+  "timestamp": "2026-03-10T11:32:00Z",
+  "note": "CQ-INV-4 fixed: HeartbeatService.ts reduced from 530 to 307 lines by extracting types, work-item logic, and parsing. Score improved from 16/19 to 17/19.",
   "invariants": {
     "ARCH-INV-1":  { "status": "pass", "enforcedBy": "eslint.config.js Blocks 3-7" },
     "ARCH-INV-2":  { "status": "pass", "enforcedBy": "eslint + scorecard/tests/architecture.test.ts" },
@@ -46,7 +46,7 @@
   "delta": {
     "since": "2026-03-10",
     "changed": [
-      "CQ-INV-4: FIXED — HeartbeatService.ts reduced from 530 to 399 lines by extracting types.ts (6 interfaces) and workItems.ts (change detection + prompt building)"
+      "CQ-INV-4: FIXED — HeartbeatService.ts reduced from 530 to 307 lines by extracting types.ts (interfaces), workItems.ts (change detection), heartbeatParser.ts (config + markdown parsing)"
     ],
     "passRateChange": "+5% (16/19 84% → 17/19 89%)"
   },
@@ -54,9 +54,9 @@
     "scorecardTestFiles": 4,
     "scorecardTests": 23,
     "scorecardDuration": "1270ms",
-    "fullSuiteTestFiles": 51,
-    "fullSuiteTests": 614,
-    "fullSuiteDuration": "1.97s",
+    "fullSuiteTestFiles": 52,
+    "fullSuiteTests": 622,
+    "fullSuiteDuration": "1.77s",
     "allPassing": true
   }
 }
