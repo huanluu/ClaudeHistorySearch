@@ -20,25 +20,24 @@ export interface IndexAllResult {
 }
 
 /**
- * Detect if a session was created by the heartbeat service (automatic)
+ * Detect if a session was created by an automated service (heartbeat or cron).
  * Detection criteria:
- * 1. Preview/first message starts with "[Heartbeat]"
+ * 1. Preview/first message starts with "[Heartbeat]" or "[Cron:"
  * 2. First message contains "<!-- HEARTBEAT_SESSION -->"
  */
 export function detectAutomaticSession(session: ParsedSession): boolean {
-  // Check preview for [Heartbeat] prefix
-  if (session.preview?.startsWith('[Heartbeat]')) {
+  // Check preview for automated session prefixes
+  if (session.preview?.startsWith('[Heartbeat]') || session.preview?.startsWith('[Cron:')) {
     return true;
   }
 
-  // Check first message for HEARTBEAT_SESSION marker
+  // Check first message for markers
   if (session.messages.length > 0) {
     const firstMessage = session.messages[0];
     if (firstMessage.content.includes('<!-- HEARTBEAT_SESSION -->')) {
       return true;
     }
-    // Also check if first message starts with [Heartbeat]
-    if (firstMessage.content.startsWith('[Heartbeat]')) {
+    if (firstMessage.content.startsWith('[Heartbeat]') || firstMessage.content.startsWith('[Cron:')) {
       return true;
     }
   }

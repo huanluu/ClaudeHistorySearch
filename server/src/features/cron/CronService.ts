@@ -167,7 +167,8 @@ export class CronService implements CronToolService {
   private async executeJob(job: CronJobRecord): Promise<{ sessionId: string | null }> {
     const now = Date.now();
     try {
-      const result = await this.runFn({ prompt: job.prompt, workingDir: job.working_dir });
+      const taggedPrompt = `[Cron: ${job.name}] ${job.prompt}`;
+      const result = await this.runFn({ prompt: taggedPrompt, workingDir: job.working_dir });
       this.repo.update(job.id, {
         last_run_at_ms: now,
         last_run_status: 'success',
