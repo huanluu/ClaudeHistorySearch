@@ -2,77 +2,11 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import { getConfigDir } from '../../shared/provider/index';
-import type { Logger, CliRuntime } from '../../shared/provider/index';
-import type { HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { Logger, CliRuntime, HeartbeatRepository, HeartbeatStateRecord } from '../../shared/provider/index';
+import type { HeartbeatConfig, HeartbeatTask, HeartbeatResult, WorkItem, ChangeSet, CommandExecutor } from './types';
+import { checkForChanges, buildWorkItemPrompt } from './workItems';
 
-/**
- * Configuration for the heartbeat service
- */
-export interface HeartbeatConfig {
-  enabled: boolean;
-  intervalMs: number;
-  workingDirectory: string;
-  maxItems: number;  // Maximum work items to process per heartbeat (0 = unlimited)
-  maxRuns: number;   // Maximum scheduled heartbeat runs (0 = unlimited)
-}
-
-/**
- * A task parsed from HEARTBEAT.md
- */
-export interface HeartbeatTask {
-  section: string;
-  description: string;
-  enabled: boolean;
-}
-
-/**
- * Result of a heartbeat run
- */
-export interface HeartbeatResult {
-  tasksProcessed: number;
-  sessionsCreated: number;
-  sessionIds: string[];
-  errors: string[];
-}
-
-/**
- * Azure DevOps work item structure (from az boards CLI)
- */
-export interface WorkItem {
-  id: number;
-  fields: {
-    'System.Title': string;
-    'System.State': string;
-    'System.ChangedDate': string;
-    'System.AssignedTo'?: {
-      uniqueName: string;
-    };
-    'System.Description'?: string;
-    'System.WorkItemType'?: string;
-  };
-}
-
-/**
- * Result of change detection
- */
-export interface ChangeSet {
-  newItems: WorkItem[];
-  updatedItems: WorkItem[];
-  errors: string[];
-}
-
-/**
- * Interface for external command execution (allows mocking in tests).
- * Only covers execSync for az CLI queries — CLI runtime spawning is
- * handled by the CliRuntime abstraction.
- */
-export interface CommandExecutor {
-  execSync: (command: string, options?: object) => string;
-}
-
-/**
- * Default command executor using real child_process
- */
+/** Default command executor using real child_process */
 const defaultExecutor: CommandExecutor = {
   execSync: (command: string, options?: object) => {
     return execSync(command, { encoding: 'utf-8', ...options }) as string;
@@ -357,75 +291,10 @@ export class HeartbeatService {
   }
 
   /**
-   * Fetch work items from Azure DevOps using az CLI with WIQL query
-   */
-  private fetchWorkItems(): WorkItem[] {
-    try {
-      const wiql = "SELECT [System.Id], [System.Title], [System.State], [System.ChangedDate], [System.AssignedTo], [System.Description], [System.WorkItemType] FROM WorkItems WHERE [System.AssignedTo] = @me AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.State] <> 'Resolved' ORDER BY [System.ChangedDate] DESC";
-      const output = this.executor.execSync(
-        `az boards query --wiql "${wiql}" -o json`,
-        { encoding: 'utf-8' }
-      );
-      return JSON.parse(output) as WorkItem[];
-    } catch (error) {
-      throw new Error(`Failed to fetch work items: ${(error as Error).message}`);
-    }
-  }
-
-  /**
    * Check for new or updated work items
    */
   async checkForChanges(): Promise<ChangeSet> {
-    const result: ChangeSet = {
-      newItems: [],
-      updatedItems: [],
-      errors: []
-    };
-
-    try {
-      const workItems = this.fetchWorkItems();
-
-      for (const item of workItems) {
-        const key = `workitem:${item.id}`;
-        const changedDate = item.fields['System.ChangedDate'];
-        const lastProcessed = this.getProcessedItemState(key);
-
-        if (!lastProcessed) {
-          // New item - never processed
-          result.newItems.push(item);
-        } else if (lastProcessed !== changedDate) {
-          // Updated item - changed date differs
-          result.updatedItems.push(item);
-        }
-        // If lastProcessed === changedDate, skip (unchanged)
-      }
-    } catch (error) {
-      result.errors.push((error as Error).message);
-    }
-
-    return result;
-  }
-
-  /**
-   * Build the prompt for Claude analysis
-   */
-  private buildPrompt(workItem: WorkItem): string {
-    return `<!-- HEARTBEAT_SESSION -->
-[Heartbeat] Analyze Work Item #${workItem.id}
-
-Work Item Details:
-- ID: ${workItem.id}
-- Title: ${workItem.fields['System.Title']}
-- State: ${workItem.fields['System.State']}
-- Type: ${workItem.fields['System.WorkItemType'] || 'Unknown'}
-
-${workItem.fields['System.Description'] ? `Description:\n${workItem.fields['System.Description']}` : ''}
-
-Please analyze this work item in the context of the codebase:
-1. Identify relevant code files and modules
-2. Assess complexity and effort required
-3. Suggest an implementation approach
-4. Note any potential risks or dependencies`;
+    return checkForChanges(this.executor, (key) => this.getProcessedItemState(key));
   }
 
   /**
@@ -438,7 +307,7 @@ Please analyze this work item in the context of the codebase:
       throw new Error('No CLI runtime configured for HeartbeatService');
     }
 
-    const prompt = this.buildPrompt(workItem);
+    const prompt = buildWorkItemPrompt(workItem);
     const result = await this.runtime.runHeadless(
       { prompt, workingDir: this.config.workingDirectory },
       this.logger,

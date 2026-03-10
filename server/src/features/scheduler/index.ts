@@ -6,6 +6,6 @@ export type {
   WorkItem,
   ChangeSet,
   CommandExecutor,
-} from './HeartbeatService';
+} from './types';
 export { registerSchedulerRoutes } from './routes';
 export type { SchedulerRouteDeps } from './routes';

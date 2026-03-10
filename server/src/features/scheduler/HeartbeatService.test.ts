@@ -2,11 +2,8 @@ import Database from 'better-sqlite3';
 import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import {
-  HeartbeatService,
-  type WorkItem,
-  type CommandExecutor
-} from './HeartbeatService';
+import { HeartbeatService } from './HeartbeatService';
+import type { WorkItem, CommandExecutor } from './types';
 import type { HeartbeatRepository, HeartbeatStateRecord, CliRuntime } from '../../shared/provider/index';
 import { noopLogger } from '../../../tests/__helpers/index';
 
