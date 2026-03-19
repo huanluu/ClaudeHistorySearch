@@ -176,7 +176,7 @@ public struct SettingsView: View {
                 }
                 .disabled(apiKeyInput.isEmpty)
 
-                if KeychainHelper.shared.hasAPIKey() {
+                if apiClient.getAPIKey() != nil {
                     Button("Clear Key") {
                         clearAPIKey()
                     }

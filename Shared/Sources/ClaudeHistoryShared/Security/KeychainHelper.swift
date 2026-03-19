@@ -1,6 +1,14 @@
 import Foundation
 import Security
 
+/// Protocol for keychain operations — allows injection of test doubles
+public protocol KeychainService: Sendable {
+    func saveAPIKey(_ key: String) throws
+    func getAPIKey() -> String?
+    func deleteAPIKey() throws
+    func hasAPIKey() -> Bool
+}
+
 public enum KeychainError: LocalizedError {
     case duplicateItem
     case itemNotFound
@@ -21,7 +29,7 @@ public enum KeychainError: LocalizedError {
     }
 }
 
-public class KeychainHelper {
+public class KeychainHelper: KeychainService {
     public static let shared = KeychainHelper()
 
     private let service = "com.claudehistorysearch.apikey"

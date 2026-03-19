@@ -34,20 +34,23 @@ public class APIClient: ObservableObject, NetworkService {
 
     // Use a URLSession with no caching to always get fresh data
     private let session: URLSession
+    private let keychain: KeychainService
 
-    public init() {
+    public init(keychain: KeychainService = KeychainHelper.shared) {
+        self.keychain = keychain
         // Load API key from keychain immediately so it's available when views start making requests
         // This prevents race conditions where views try to fetch before the App's .task loads the key
-        self.apiKey = KeychainHelper.shared.getAPIKey()
+        self.apiKey = keychain.getAPIKey()
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.urlCache = nil
         self.session = URLSession(configuration: config)
     }
 
-    /// Test initializer that allows injecting a custom URLSession
-    public init(session: URLSession) {
-        self.apiKey = nil
+    /// Test initializer that allows injecting a custom URLSession and keychain
+    public init(session: URLSession, keychain: KeychainService = KeychainHelper.shared) {
+        self.keychain = keychain
+        self.apiKey = keychain.getAPIKey()
         self.session = session
     }
 
@@ -70,19 +73,19 @@ public class APIClient: ObservableObject, NetworkService {
 
     /// Load API key from Keychain
     public func loadAPIKeyFromKeychain() {
-        apiKey = KeychainHelper.shared.getAPIKey()
+        apiKey = keychain.getAPIKey()
     }
 
     /// Save API key to Keychain
     public func saveAPIKeyToKeychain(_ key: String) throws {
-        try KeychainHelper.shared.saveAPIKey(key)
+        try keychain.saveAPIKey(key)
         apiKey = key
         isAuthenticated = true
     }
 
     /// Clear API key from memory and Keychain
     public func clearAPIKey() throws {
-        try KeychainHelper.shared.deleteAPIKey()
+        try keychain.deleteAPIKey()
         apiKey = nil
     }
 

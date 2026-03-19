@@ -181,10 +181,10 @@ final class APIClientTests: XCTestCase {
 
     @MainActor
     func testAPIClientInitialState() {
-        let client = APIClient()
+        let client = APIClient(keychain: MockKeychainService())
 
         XCTAssertNil(client.getBaseURL())
-        // apiKey may be non-nil if a key is stored in Keychain from prior usage
+        XCTAssertNil(client.getAPIKey())
         XCTAssertFalse(client.isLoading)
         XCTAssertNil(client.error)
         XCTAssertTrue(client.isAuthenticated)
@@ -249,7 +249,7 @@ final class APIClientTests: XCTestCase {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
         let session = URLSession(configuration: config)
-        let client = APIClient(session: session)
+        let client = APIClient(session: session, keychain: MockKeychainService())
         client.setBaseURL(URL(string: "http://localhost:3847")!)
         return client
     }

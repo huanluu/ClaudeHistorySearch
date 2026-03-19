@@ -44,14 +44,12 @@ if [ $? -ne 0 ]; then
   exit 2
 fi
 
-# --- Swift tests (only if .swift files are staged) ---
-if git diff --cached --name-only | grep -q '\.swift$'; then
-  SWIFT_OUTPUT=$(cd Shared && swift test 2>&1)
-  if [ $? -ne 0 ]; then
-    echo "Swift tests failed — fix failing tests before committing:" >&2
-    echo "$SWIFT_OUTPUT" >&2
-    exit 2
-  fi
+# --- Swift tests (always — runs in <1s with mocked Keychain) ---
+SWIFT_OUTPUT=$(cd Shared && swift test 2>&1)
+if [ $? -ne 0 ]; then
+  echo "Swift tests failed — fix failing tests before committing:" >&2
+  echo "$SWIFT_OUTPUT" >&2
+  exit 2
 fi
 
 exit 0

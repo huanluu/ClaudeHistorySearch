@@ -122,10 +122,12 @@ final class NetworkServiceTests: XCTestCase {
 
     @MainActor
     func testGetAPIKeySignature() {
-        let client = APIClient()
+        let client = APIClient(keychain: MockKeychainService())
         let service: NetworkService = client
 
-        // apiKey may be non-nil if a key is stored in Keychain from prior usage
+        let key: String? = service.getAPIKey()
+        XCTAssertNil(key)
+
         service.setAPIKey("test-key")
         let key2: String? = service.getAPIKey()
         XCTAssertEqual(key2, "test-key")
