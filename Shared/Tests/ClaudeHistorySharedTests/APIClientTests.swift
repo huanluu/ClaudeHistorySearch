@@ -184,7 +184,7 @@ final class APIClientTests: XCTestCase {
         let client = APIClient()
 
         XCTAssertNil(client.getBaseURL())
-        XCTAssertNil(client.getAPIKey())
+        // apiKey may be non-nil if a key is stored in Keychain from prior usage
         XCTAssertFalse(client.isLoading)
         XCTAssertNil(client.error)
         XCTAssertTrue(client.isAuthenticated)

@@ -72,17 +72,54 @@ class TerminalService {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: iTermBundleId) != nil
     }
 
+    /// Smart iTerm2 layout: 3 vertical splits, then horizontal splits to fill a 3×2 grid, then new tab.
     private func executeInITerm2(command: String) throws {
-        // Use osascript via Process - this triggers the permission dialog more reliably
         let escaped = command.replacingOccurrences(of: "\\", with: "\\\\")
                             .replacingOccurrences(of: "\"", with: "\\\"")
+                            .replacingOccurrences(of: "\n", with: "\\n")
+                            .replacingOccurrences(of: "\r", with: "\\r")
+        // Layout strategy per tab:
+        //   Sessions 1-3: split vertically (add columns)
+        //   Sessions 4-6: split horizontally right-to-left (add rows)
+        //   Session 7+:   new tab, repeat
+        // Splitting right-to-left keeps unsplit session indices stable.
         let script = """
         tell application "iTerm2"
             activate
-            create window with default profile
-            tell current session of current window
-                write text "\(escaped)"
-            end tell
+            if (count of windows) = 0 then
+                create window with default profile
+                tell current session of current window
+                    write text "\(escaped)"
+                end tell
+            else
+                set tabSessions to sessions of current tab of current window
+                set n to count of tabSessions
+                if n < 3 then
+                    tell last item of tabSessions
+                        set newSession to (split vertically with default profile)
+                    end tell
+                    tell newSession
+                        select
+                        write text "\(escaped)"
+                    end tell
+                else if n < 6 then
+                    set targetIdx to 6 - n
+                    tell item targetIdx of tabSessions
+                        set newSession to (split horizontally with default profile)
+                    end tell
+                    tell newSession
+                        select
+                        write text "\(escaped)"
+                    end tell
+                else
+                    tell current window
+                        create tab with default profile
+                    end tell
+                    tell current session of current window
+                        write text "\(escaped)"
+                    end tell
+                end if
+            end if
         end tell
         """
 
@@ -111,6 +148,8 @@ class TerminalService {
         // Use osascript via Process
         let escaped = command.replacingOccurrences(of: "\\", with: "\\\\")
                             .replacingOccurrences(of: "\"", with: "\\\"")
+                            .replacingOccurrences(of: "\n", with: "\\n")
+                            .replacingOccurrences(of: "\r", with: "\\r")
         let script = """
         tell application "Terminal"
             activate

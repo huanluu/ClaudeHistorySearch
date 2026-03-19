@@ -125,10 +125,7 @@ final class NetworkServiceTests: XCTestCase {
         let client = APIClient()
         let service: NetworkService = client
 
-        // Test that getAPIKey returns String?
-        let key: String? = service.getAPIKey()
-        XCTAssertNil(key)
-
+        // apiKey may be non-nil if a key is stored in Keychain from prior usage
         service.setAPIKey("test-key")
         let key2: String? = service.getAPIKey()
         XCTAssertEqual(key2, "test-key")
