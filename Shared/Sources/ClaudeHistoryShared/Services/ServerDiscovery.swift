@@ -76,14 +76,10 @@ public class ServerDiscovery: ObservableObject {
                   httpResponse.statusCode == 200 else {
                 return false
             }
-            // Verify it's actually our server
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               json["status"] as? String == "ok" {
-                return true
-            }
-            return false
+            let health = try JSONDecoder().decode(HealthResponse.self, from: data)
+            return health.isReachable
         } catch {
-            print("Health check failed: \(error)")
+            print("Health check failed for \(healthURL): \(error)")
             return false
         }
     }

@@ -38,6 +38,15 @@ describe('GET /health', () => {
     expect(res.body.timestamp).toBeDefined();
   });
 
+  it('health response matches contract schema', async () => {
+    const app = createAdminApp({});
+
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(['healthy', 'degraded']).toContain(res.body.status);
+    expect(typeof res.body.timestamp).toBe('string');
+  });
+
   it('should return enhanced health when diagnosticsService is provided', async () => {
     const mockDiagnostics = {
       getHealth: vi.fn().mockReturnValue({
