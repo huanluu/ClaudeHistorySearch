@@ -191,11 +191,13 @@ public enum WebSocketError: LocalizedError {
 @MainActor
 public protocol WebSocketClientProtocol: AnyObject {
     var state: WebSocketState { get }
-    var onMessage: ((WSMessage) -> Void)? { get set }
     var onStateChange: ((WebSocketState) -> Void)? { get set }
     func connect() async throws
     func disconnect()
     func send(_ message: WSMessage) async throws
+    /// Create a new independent message stream. Each call returns a separate stream;
+    /// multiple consumers receive the same messages concurrently (multicast fan-out).
+    func makeMessageStream() -> AsyncStream<WSMessage>
 }
 
 /// WebSocket client for real-time communication with the server
@@ -209,16 +211,42 @@ public class WebSocketClient {
     private var apiKey: String?
     private var baseURL: URL?
 
-    /// Message handler callback
-    public var onMessage: ((WSMessage) -> Void)?
-
     /// Connection state change callback
     public var onStateChange: ((WebSocketState) -> Void)?
+
+    /// Multicast: active stream continuations keyed by UUID
+    private var continuations: [UUID: AsyncStream<WSMessage>.Continuation] = [:]
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     public init() {}
+
+    /// Create a new independent message stream. Multiple callers each get their own stream;
+    /// all active streams receive every message (multicast fan-out).
+    public func makeMessageStream() -> AsyncStream<WSMessage> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            self.continuations[id] = continuation
+            continuation.onTermination = { @Sendable _ in
+                Task { @MainActor in
+                    self.continuations.removeValue(forKey: id)
+                }
+            }
+        }
+    }
+
+    /// Broadcast a message to all active stream subscribers. Exposed for testing only.
+    public func broadcastForTesting(_ message: WSMessage) {
+        broadcast(message)
+    }
+
+    /// Send a message to all active stream continuations.
+    private func broadcast(_ message: WSMessage) {
+        for continuation in continuations.values {
+            continuation.yield(message)
+        }
+    }
 
     /// Configure the WebSocket connection
     public func configure(baseURL: URL, apiKey: String?) {
@@ -271,6 +299,9 @@ public class WebSocketClient {
         webSocketTask = nil
         state = .disconnected
         onStateChange?(.disconnected)
+        // Note: We intentionally do NOT finish continuations on disconnect.
+        // Subscribers survive reconnects — they continue receiving from the new
+        // connection when connect() is called again (issue #74 reconnect requirement).
     }
 
     /// Send a message to the server
@@ -350,9 +381,9 @@ public class WebSocketClient {
                     error = .authenticationFailed(message)
                 }
             default:
-                // Forward to message handler
-                print("[WebSocketClient] Forwarding to onMessage handler (handler exists: \(onMessage != nil))")
-                onMessage?(wsMessage)
+                // Broadcast to all subscribers
+                print("[WebSocketClient] Broadcasting to \(continuations.count) subscriber(s)")
+                broadcast(wsMessage)
             }
 
         case .data:

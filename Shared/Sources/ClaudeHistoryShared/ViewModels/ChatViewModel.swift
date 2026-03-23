@@ -21,8 +21,9 @@ public class ChatViewModel: ObservableObject {
     // MARK: - Private State
 
     internal private(set) var conversationId = UUID().uuidString
-    private weak var webSocketClient: WebSocketClient?
+    private var webSocketClient: (any WebSocketClientProtocol)?
     private var streamingMessageIndex: Int?
+    private var subscriptionTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -31,7 +32,7 @@ public class ChatViewModel: ObservableObject {
     }
 
     /// Configure the WebSocket client after init (called from view's onAppear/task)
-    public func configure(webSocketClient: WebSocketClient?) {
+    public func configure(webSocketClient: (any WebSocketClientProtocol)?) {
         self.webSocketClient = webSocketClient
     }
 
@@ -107,15 +108,18 @@ public class ChatViewModel: ObservableObject {
         inputText = ""
     }
 
-    /// Start listening for assistant WebSocket messages.
-    /// Call from view's onAppear.
-    /// Note: WebSocketClient has a single onMessage slot. Only one consumer (ChatViewModel or
-    /// SessionViewModel) can listen at a time. This is safe because ChatView and SessionView
-    /// are exclusive NavigationStack destinations — only one is visible at a time.
+    /// Start listening for assistant WebSocket messages via multicast stream.
+    /// Call from view's onAppear. Safe to call multiple times — cancels previous subscription.
     public func startListening() {
-        webSocketClient?.onMessage = { [weak self] message in
-            Task { @MainActor in
-                self?.handleMessage(message)
+        // Cancel any existing subscription before creating a new one
+        subscriptionTask?.cancel()
+
+        guard let client = webSocketClient else { return }
+        let stream = client.makeMessageStream()
+        subscriptionTask = Task { [weak self] in
+            for await message in stream {
+                guard let self else { return }
+                self.handleMessage(message)
             }
         }
     }
@@ -123,7 +127,8 @@ public class ChatViewModel: ObservableObject {
     /// Stop listening for WebSocket messages.
     /// Call from view's onDisappear.
     public func stopListening() {
-        webSocketClient?.onMessage = nil
+        subscriptionTask?.cancel()
+        subscriptionTask = nil
     }
 
     // MARK: - Message Handling

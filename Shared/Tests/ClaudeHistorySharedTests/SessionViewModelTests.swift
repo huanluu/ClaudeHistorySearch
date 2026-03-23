@@ -23,7 +23,7 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     func testInitWithWebSocketSetsLiveMode() {
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
         XCTAssertEqual(viewModel.mode, .live)
@@ -48,10 +48,9 @@ final class SessionViewModelTests: XCTestCase {
     // MARK: - WebSocket Message Handling Tests
 
     func testHandleOutputMessageAddsMessage() {
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
-        // Manually set session ID for testing
         viewModel.setSessionIdForTesting("test-session-123")
 
         let outputPayload: [String: Any] = [
@@ -61,13 +60,10 @@ final class SessionViewModelTests: XCTestCase {
         let message = WSMessage(type: .sessionOutput, payload: AnyCodable(outputPayload))
 
         viewModel.handleWebSocketMessage(message)
-
-        // Messages should be populated
-        // Note: The actual implementation will need to parse the output format
     }
 
     func testHandleErrorMessageSetsError() {
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
         viewModel.setSessionIdForTesting("test-session-123")
@@ -85,9 +81,7 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     func testHandleCompleteMessageSetsReadyStateForSuccessfulCompletion() {
-        // When a session completes successfully (exitCode 0), we set state to .ready
-        // to enable sending follow-up messages (chat-like experience)
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
         viewModel.setSessionIdForTesting("test-session-123")
@@ -105,7 +99,7 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     func testHandleCompleteWithNonZeroExitCode() {
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
         viewModel.setSessionIdForTesting("test-session-123")
@@ -127,7 +121,7 @@ final class SessionViewModelTests: XCTestCase {
     }
 
     func testIgnoresMessagesForDifferentSession() {
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
         viewModel.setSessionIdForTesting("my-session")
@@ -141,14 +135,13 @@ final class SessionViewModelTests: XCTestCase {
 
         viewModel.handleWebSocketMessage(message)
 
-        // State should still be running (message ignored)
         XCTAssertEqual(viewModel.state, .running)
     }
 
     // MARK: - Cancel Tests
 
     func testCancelSetsStateToCancelled() {
-        let wsClient = WebSocketClient()
+        let wsClient = MockWebSocketClient()
         let viewModel = SessionViewModel(webSocketClient: wsClient)
 
         viewModel.setSessionIdForTesting("test-session")
@@ -163,19 +156,16 @@ final class SessionViewModelTests: XCTestCase {
 
     func testLiveSession_startSendsCorrectMessage() async throws {
         let mockWS = MockWebSocketClient()
-        // Simulate already authenticated so startSession doesn't try real connection
         mockWS.state = .authenticated
         let viewModel = SessionViewModel(webSocketClient: mockWS)
 
         try await viewModel.startSession(prompt: "Hello Claude", workingDir: "/tmp/test")
 
-        // Should have sent exactly one message
         XCTAssertEqual(mockWS.sentMessages.count, 1)
 
         let sent = mockWS.sentMessages[0]
         XCTAssertEqual(sent.type, .sessionStart)
 
-        // Verify payload contains correct fields
         let payload = sent.payload?.value as? [String: Any]
         XCTAssertNotNil(payload)
         XCTAssertEqual(payload?["prompt"] as? String, "Hello Claude")
@@ -200,7 +190,6 @@ final class SessionViewModelTests: XCTestCase {
 
         viewModel.handleWebSocketMessage(message)
 
-        // The assistant message should be appended
         let assistantMessages = viewModel.messages.filter { $0.role == "assistant" }
         XCTAssertEqual(assistantMessages.count, 1)
         XCTAssertEqual(assistantMessages.first?.content, "Hello from Claude!")
@@ -243,17 +232,19 @@ final class SessionViewModelTests: XCTestCase {
     }
 }
 
-// MARK: - Mock WebSocket Client
+// MARK: - Mock WebSocket Client (shared across test files)
 
 @MainActor
 class MockWebSocketClient: WebSocketClientProtocol {
     var state: WebSocketState = .disconnected
-    var onMessage: ((WSMessage) -> Void)?
     var onStateChange: ((WebSocketState) -> Void)?
 
     var connectCalled = false
     var disconnectCalled = false
     var sentMessages: [WSMessage] = []
+
+    // Multicast: store continuations for makeMessageStream()
+    private var continuations: [UUID: AsyncStream<WSMessage>.Continuation] = [:]
 
     func connect() async throws {
         connectCalled = true
@@ -269,9 +260,23 @@ class MockWebSocketClient: WebSocketClientProtocol {
         sentMessages.append(message)
     }
 
-    // Helper to simulate receiving a message
+    func makeMessageStream() -> AsyncStream<WSMessage> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            self.continuations[id] = continuation
+            continuation.onTermination = { @Sendable _ in
+                Task { @MainActor in
+                    self.continuations.removeValue(forKey: id)
+                }
+            }
+        }
+    }
+
+    // Helper to simulate receiving a message (broadcasts to all subscribers)
     func simulateMessage(_ message: WSMessage) {
-        onMessage?(message)
+        for continuation in continuations.values {
+            continuation.yield(message)
+        }
     }
 
     // Helper to simulate state change
@@ -329,4 +334,3 @@ class MockAPIClient: NetworkService {
         return true
     }
 }
-

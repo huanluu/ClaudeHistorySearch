@@ -4,11 +4,11 @@ import XCTest
 @MainActor
 final class ChatViewModelTests: XCTestCase {
 
-    private var mockWebSocketClient: WebSocketClient!
+    private var mockWebSocketClient: MockWebSocketClient!
     private var viewModel: ChatViewModel!
 
     override func setUp() async throws {
-        mockWebSocketClient = WebSocketClient()
+        mockWebSocketClient = MockWebSocketClient()
         viewModel = ChatViewModel()
         viewModel.configure(webSocketClient: mockWebSocketClient)
     }
@@ -126,23 +126,53 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.chatState, .idle)
     }
 
-    // MARK: - Listening
+    // MARK: - Listening (stream-based)
 
-    func testStartListening_setsOnMessage() {
-        XCTAssertNil(mockWebSocketClient.onMessage)
+    func testStartListening_receivesMessages() async {
+        viewModel.inputText = "Hello"
+        viewModel.sendMessage()
+        let conversationId = viewModel.conversationId
 
         viewModel.startListening()
 
-        XCTAssertNotNil(mockWebSocketClient.onMessage)
-    }
+        // Give the subscription task time to start
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
-    func testStopListening_clearsOnMessage() {
-        viewModel.startListening()
-        XCTAssertNotNil(mockWebSocketClient.onMessage)
+        // Simulate a delta message via the mock's broadcast
+        let deltaMessage = WSMessage(
+            type: .assistantDelta,
+            payload: AnyCodable(["conversationId": conversationId, "text": "Hi there!"])
+        )
+        mockWebSocketClient.simulateMessage(deltaMessage)
+
+        // Give time for delivery
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(viewModel.messages[1].content, "Hi there!")
 
         viewModel.stopListening()
+    }
 
-        XCTAssertNil(mockWebSocketClient.onMessage)
+    func testStopListening_stopsReceivingMessages() async {
+        viewModel.inputText = "Hello"
+        viewModel.sendMessage()
+        let conversationId = viewModel.conversationId
+
+        viewModel.startListening()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        viewModel.stopListening()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // Send a message after stopping — should NOT be received
+        let deltaMessage = WSMessage(
+            type: .assistantDelta,
+            payload: AnyCodable(["conversationId": conversationId, "text": "Should not appear"])
+        )
+        mockWebSocketClient.simulateMessage(deltaMessage)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(viewModel.messages[1].content, "", "Message should not be received after stopListening")
     }
 
     // MARK: - Helpers

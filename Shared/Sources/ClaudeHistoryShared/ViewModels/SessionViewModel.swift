@@ -27,6 +27,9 @@ public class SessionViewModel: ObservableObject {
     private var webSocketClient: (any WebSocketClientProtocol)?
     private var apiClient: (any NetworkService)?
 
+    /// Subscription task for the WebSocket message stream
+    private var subscriptionTask: Task<Void, Never>?
+
     // MARK: - Session Info
 
     /// Current session ID (for live sessions)
@@ -209,6 +212,8 @@ public class SessionViewModel: ObservableObject {
         guard let sessionId = sessionId else { return }
 
         state = .cancelled
+        subscriptionTask?.cancel()
+        subscriptionTask = nil
 
         // Send cancel message (fire and forget)
         Task {
@@ -218,6 +223,13 @@ public class SessionViewModel: ObservableObject {
             )
             try? await webSocketClient?.send(message)
         }
+    }
+
+    /// Stop listening for WebSocket messages and clean up the subscription.
+    /// Call from owning view's onDisappear to prevent the subscription from outliving the view.
+    public func stopListening() {
+        subscriptionTask?.cancel()
+        subscriptionTask = nil
     }
 
     /// Prepare for a new session without starting it yet.
@@ -320,13 +332,19 @@ public class SessionViewModel: ObservableObject {
         try await webSocketClient.send(message)
     }
 
-    /// Set up the WebSocket message handler to receive session responses
+    /// Set up a multicast stream subscription to receive session responses.
+    /// Cancels any existing subscription before creating a new one.
     private func setupMessageHandler() {
         print("[SessionViewModel] Setting up message handler for session: \(sessionId ?? "nil")")
-        webSocketClient?.onMessage = { [weak self] message in
-            print("[SessionViewModel] Received WebSocket message: \(message.type)")
-            Task { @MainActor in
-                self?.handleWebSocketMessage(message)
+        subscriptionTask?.cancel()
+
+        guard let client = webSocketClient else { return }
+        let stream = client.makeMessageStream()
+        subscriptionTask = Task { [weak self] in
+            for await message in stream {
+                guard let self else { return }
+                print("[SessionViewModel] Received WebSocket message: \(message.type)")
+                self.handleWebSocketMessage(message)
             }
         }
     }
