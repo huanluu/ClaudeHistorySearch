@@ -53,4 +53,19 @@ if [ $? -ne 0 ]; then
   exit 2
 fi
 
+# --- Mac app build (only if Swift/app files are staged) ---
+if git diff --cached --name-only | grep -qE '^(Shared/|ClaudeHistorySearch/|ClaudeHistorySearchMac/)'; then
+  MAC_OUTPUT=$(xcodebuild -project ClaudeHistorySearch.xcodeproj \
+    -scheme ClaudeHistorySearchMac \
+    -configuration Release \
+    -derivedDataPath build \
+    -destination 'platform=macOS' \
+    build 2>&1)
+  if [ $? -ne 0 ]; then
+    echo "Mac app build failed — fix build errors before committing:" >&2
+    echo "$MAC_OUTPUT" | grep "error:" >&2
+    exit 2
+  fi
+fi
+
 exit 0
