@@ -4,7 +4,8 @@ import SwiftUI
 /// Two-phase flow: (1) Select working directory, (2) Chat-like interface for messaging.
 public struct NewSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: SessionViewModel
+    @Environment(\.webSocketClient) private var webSocketClient
+    @StateObject private var viewModel = SessionViewModel()
 
     /// Phase tracking: false = setup phase, true = chat phase
     @State private var hasStarted = false
@@ -15,12 +16,7 @@ public struct NewSessionView: View {
     /// Message input for chat phase
     @State private var messagePrompt: String = ""
 
-    private let webSocketClient: WebSocketClient
-
-    public init(webSocketClient: WebSocketClient) {
-        self.webSocketClient = webSocketClient
-        _viewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: webSocketClient))
-    }
+    public init() {}
 
     public var body: some View {
         #if os(iOS)
@@ -325,6 +321,7 @@ public struct NewSessionView: View {
         guard canStartChat else { return }
 
         let expandedDir = expandTilde(workingDir.trimmingCharacters(in: .whitespacesAndNewlines))
+        viewModel.configure(webSocketClient: webSocketClient)
         viewModel.prepareForNewSession(workingDir: expandedDir)
         hasStarted = true
     }
@@ -358,6 +355,7 @@ public struct NewSessionView: View {
 
 #if DEBUG
 #Preview {
-    NewSessionView(webSocketClient: WebSocketClient())
+    NewSessionView()
+        .environment(\.webSocketClient, WebSocketClient())
 }
 #endif

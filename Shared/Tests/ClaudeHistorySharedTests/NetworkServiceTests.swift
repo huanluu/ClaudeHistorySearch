@@ -24,7 +24,7 @@ final class NetworkServiceTests: XCTestCase {
     func testNetworkServiceCanBeUsedAsProtocolType() {
         // Verify we can use APIClient where NetworkService is expected
         func acceptsNetworkService(_ service: NetworkService) -> Bool {
-            return service.isConnected || !service.isConnected // Always true
+            return service.getBaseURL() == nil || service.getBaseURL() != nil // Always true
         }
 
         let client = APIClient()
@@ -69,14 +69,6 @@ final class NetworkServiceTests: XCTestCase {
         let client = APIClient()
         client.setAPIKey("test-key")
         XCTAssertTrue(client.isAuthenticated)
-    }
-
-    // MARK: - error Property Tests
-
-    @MainActor
-    func testErrorDefaultsToNil() {
-        let client = APIClient()
-        XCTAssertNil(client.error)
     }
 
     // MARK: - Protocol Method Signatures
@@ -235,8 +227,8 @@ final class NetworkServiceTests: XCTestCase {
                 self.networkService = networkService
             }
 
-            var isConnected: Bool {
-                networkService.isConnected
+            var hasBaseURL: Bool {
+                networkService.getBaseURL() != nil
             }
         }
 
@@ -244,6 +236,6 @@ final class NetworkServiceTests: XCTestCase {
         client.setBaseURL(URL(string: "http://localhost:3847")!)
 
         let viewModel = MockViewModel(networkService: client)
-        XCTAssertTrue(viewModel.isConnected)
+        XCTAssertTrue(viewModel.hasBaseURL)
     }
 }

@@ -3,7 +3,8 @@ import SwiftUI
 /// Unified session view for iOS and macOS that supports both historical and live modes.
 /// Uses conditional compilation for platform-specific navigation and UI.
 public struct SessionView: View {
-    @EnvironmentObject var apiClient: APIClient
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.webSocketClient) private var webSocketClient
 
     // Session identification
     private let session: Session?
@@ -14,11 +15,8 @@ public struct SessionView: View {
     // Session mode (historical for now, live in Phase 6)
     @State private var mode: SessionMode
 
-    // WebSocket client for live sessions (optional)
-    private let webSocketClient: WebSocketClient?
-
     // ViewModel for live sessions
-    @StateObject private var liveViewModel: SessionViewModel
+    @StateObject private var liveViewModel = SessionViewModel()
 
     // macOS-specific: callbacks for custom navigation and terminal opening
     #if os(macOS)
@@ -37,33 +35,21 @@ public struct SessionView: View {
 
     #if os(iOS)
     /// Initialize for viewing a historical session with Session object (iOS)
-    public init(session: Session, webSocketClient: WebSocketClient? = nil) {
+    public init(session: Session) {
         self.session = session
         self.sessionId = session.id
         self.highlightText = nil
         self.scrollToMessageId = nil
         self._mode = State(initialValue: .historical)
-        self.webSocketClient = webSocketClient
-        if let ws = webSocketClient {
-            _liveViewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: ws))
-        } else {
-            _liveViewModel = StateObject(wrappedValue: SessionViewModel(apiClient: APIClient()))
-        }
     }
 
     /// Initialize for viewing a historical session by ID (iOS - from search results)
-    public init(sessionId: String, highlightText: String? = nil, scrollToMessageId: String? = nil, webSocketClient: WebSocketClient? = nil) {
+    public init(sessionId: String, highlightText: String? = nil, scrollToMessageId: String? = nil) {
         self.session = nil
         self.sessionId = sessionId
         self.highlightText = highlightText
         self.scrollToMessageId = scrollToMessageId
         self._mode = State(initialValue: .historical)
-        self.webSocketClient = webSocketClient
-        if let ws = webSocketClient {
-            _liveViewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: ws))
-        } else {
-            _liveViewModel = StateObject(wrappedValue: SessionViewModel(apiClient: APIClient()))
-        }
     }
     #else
     /// Initialize for viewing a historical session (macOS)
@@ -71,7 +57,6 @@ public struct SessionView: View {
         sessionId: String,
         highlightText: String? = nil,
         scrollToMessageId: String? = nil,
-        webSocketClient: WebSocketClient? = nil,
         onBack: @escaping () -> Void,
         onOpenInTerminal: ((String, String, String?) -> Void)? = nil
     ) {
@@ -82,12 +67,6 @@ public struct SessionView: View {
         self.onBack = onBack
         self.onOpenInTerminal = onOpenInTerminal
         self._mode = State(initialValue: .historical)
-        self.webSocketClient = webSocketClient
-        if let ws = webSocketClient {
-            _liveViewModel = StateObject(wrappedValue: SessionViewModel(webSocketClient: ws))
-        } else {
-            _liveViewModel = StateObject(wrappedValue: SessionViewModel(apiClient: APIClient()))
-        }
     }
     #endif
 
@@ -134,6 +113,7 @@ public struct SessionView: View {
             }
         }
         .task {
+            liveViewModel.configure(webSocketClient: webSocketClient)
             await loadSession()
         }
     }
@@ -181,6 +161,7 @@ public struct SessionView: View {
         .frame(width: 420, height: 500)
         .navigationBarBackButtonHidden(true)
         .task {
+            liveViewModel.configure(webSocketClient: webSocketClient)
             await loadSession()
         }
     }
@@ -415,6 +396,12 @@ public struct SessionView: View {
     // MARK: - Data Loading
 
     private func loadSession() async {
+        guard let apiClient = apiClient else {
+            self.error = "No API client configured"
+            isLoading = false
+            return
+        }
+
         isLoading = true
         error = nil
 
@@ -495,7 +482,7 @@ public struct SessionView: View {
             messageCount: 5,
             preview: "Test preview"
         ))
-        .environmentObject(APIClient())
+        .environment(\.apiClient, APIClient())
     }
 }
 #else
@@ -506,6 +493,6 @@ public struct SessionView: View {
         scrollToMessageId: nil,
         onBack: {}
     )
-    .environmentObject(APIClient())
+    .environment(\.apiClient, APIClient())
 }
 #endif

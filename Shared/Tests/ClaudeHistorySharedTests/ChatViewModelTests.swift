@@ -9,7 +9,8 @@ final class ChatViewModelTests: XCTestCase {
 
     override func setUp() async throws {
         mockWebSocketClient = WebSocketClient()
-        viewModel = ChatViewModel(webSocketClient: mockWebSocketClient)
+        viewModel = ChatViewModel()
+        viewModel.configure(webSocketClient: mockWebSocketClient)
     }
 
     // MARK: - Send Message

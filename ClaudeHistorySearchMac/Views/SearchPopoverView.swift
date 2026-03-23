@@ -8,10 +8,10 @@ enum NavigationDestination: Hashable {
 
 struct SearchPopoverView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
-    @EnvironmentObject var apiClient: APIClient
-    @EnvironmentObject var webSocketClient: WebSocketClient
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.webSocketClient) private var webSocketClient
 
-    @StateObject private var viewModel: SessionListViewModel
+    @EnvironmentObject var viewModel: SessionListViewModel
 
     @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var searchText = ""
@@ -22,10 +22,6 @@ struct SearchPopoverView: View {
 
     private var sortOption: SearchSortOption {
         get { SearchSortOption(rawValue: sortOptionRaw) ?? .relevance }
-    }
-
-    init() {
-        _viewModel = StateObject(wrappedValue: SessionListViewModel(apiClient: APIClient()))
     }
 
     var body: some View {
@@ -77,7 +73,6 @@ struct SearchPopoverView: View {
                         sessionId: sessionId,
                         highlightText: highlightText,
                         scrollToMessageId: scrollToMessageId,
-                        webSocketClient: webSocketClient,
                         onBack: { navigationPath.removeLast() },
                         onOpenInTerminal: { sessionId, workingDir, source in
                             try? TerminalService.shared.openSession(
@@ -87,12 +82,10 @@ struct SearchPopoverView: View {
                             )
                         }
                     )
-                    .environmentObject(apiClient)
                     .toolbar(.hidden)
 
                 case .assistantChat:
                     ChatView(
-                        webSocketClient: webSocketClient,
                         onBack: { navigationPath.removeLast() }
                     )
                     .toolbar(.hidden)
@@ -100,11 +93,10 @@ struct SearchPopoverView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)
+            SettingsView()
         }
         .onAppear {
             isSearchFieldFocused = true
-            viewModel.setAPIClient(apiClient)
             Task {
                 await viewModel.loadSessions()
             }
@@ -144,10 +136,10 @@ struct SearchPopoverView: View {
                     navigationPath.append(NavigationDestination.assistantChat)
                 }) {
                     Image(systemName: "bubble.left.and.text.bubble.right")
-                        .foregroundColor(webSocketClient.state == .authenticated ? .accentColor : .secondary)
+                        .foregroundColor(webSocketClient?.state == .authenticated ? .accentColor : .secondary)
                 }
                 .buttonStyle(.plain)
-                .disabled(webSocketClient.state != .authenticated)
+                .disabled(webSocketClient?.state != .authenticated)
                 .help("Assistant chat")
             }
 
@@ -440,6 +432,7 @@ struct SearchPopoverView: View {
 #Preview {
     SearchPopoverView()
         .environmentObject(ServerDiscovery())
-        .environmentObject(APIClient())
-        .environmentObject(WebSocketClient())
+        .environmentObject(SessionListViewModel(apiClient: APIClient()))
+        .environment(\.apiClient, APIClient())
+        .environment(\.webSocketClient, WebSocketClient())
 }

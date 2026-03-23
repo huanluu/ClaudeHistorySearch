@@ -285,10 +285,6 @@ class MockWebSocketClient: WebSocketClientProtocol {
 
 @MainActor
 class MockAPIClient: NetworkService {
-    var isConnected: Bool = true
-    var isAuthenticated: Bool = true
-    var error: String?
-
     private var baseURL: URL?
     private var apiKey: String?
 

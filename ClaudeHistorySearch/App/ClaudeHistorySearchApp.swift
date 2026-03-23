@@ -4,27 +4,36 @@ import ClaudeHistoryShared
 @main
 struct ClaudeHistorySearchApp: App {
     @StateObject private var serverDiscovery = ServerDiscovery()
-    @StateObject private var apiClient = APIClient()
-    @StateObject private var webSocketClient = WebSocketClient()
+    @StateObject private var viewModel: SessionListViewModel
+
+    private let apiClient: APIClient
+    private let webSocketClient: WebSocketClient
+
+    init() {
+        let api = APIClient()
+        let ws = WebSocketClient()
+        self.apiClient = api
+        self.webSocketClient = ws
+        self._viewModel = StateObject(wrappedValue: SessionListViewModel(apiClient: api))
+    }
 
     var body: some Scene {
         WindowGroup {
             SessionListView()
                 .environmentObject(serverDiscovery)
-                .environmentObject(apiClient)
-                .environmentObject(webSocketClient)
+                .environmentObject(viewModel)
+                .environment(\.apiClient, apiClient)
+                .environment(\.webSocketClient, webSocketClient)
                 .task {
-                    // API key is now loaded in APIClient.init() to avoid race conditions
-
                     // Verify cached URL or discover via Bonjour
-                    // This handles corpnet where Bonjour is blocked but cached IP works
                     serverDiscovery.verifyAndConnect()
 
                     // Wait for connection to establish
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
 
-                    // If we have a URL now, configure WebSocket
+                    // If we have a URL now, configure API client and WebSocket
                     if let url = serverDiscovery.serverURL {
+                        apiClient.setBaseURL(url)
                         configureWebSocket(baseURL: url)
                     } else {
                         // Try localhost as last resort (for local development)
@@ -35,7 +44,7 @@ struct ClaudeHistorySearchApp: App {
                     }
                 }
                 .onChange(of: serverDiscovery.serverURL) { _, newURL in
-                    // Configure WebSocket when server URL changes
+                    apiClient.setBaseURL(newURL)
                     if let url = newURL {
                         configureWebSocket(baseURL: url)
                     }
@@ -53,10 +62,9 @@ struct ClaudeHistorySearchApp: App {
             if healthy {
                 serverDiscovery.setManualURL("http://localhost:3847")
                 configureWebSocket(baseURL: localhostURL)
-                print("Connected to localhost:3847")
             }
         } catch {
-            print("Localhost fallback failed: \(error)")
+            // Localhost not available
         }
     }
 
@@ -64,13 +72,11 @@ struct ClaudeHistorySearchApp: App {
     private func configureWebSocket(baseURL: URL) {
         webSocketClient.configure(baseURL: baseURL, apiKey: apiClient.getAPIKey())
 
-        // Auto-connect WebSocket
         Task {
             do {
                 try await webSocketClient.connect()
-                print("[WebSocket] Connected successfully")
             } catch {
-                print("[ ] Connection failed: \(error)")
+                // WebSocket connection failed — non-fatal
             }
         }
     }

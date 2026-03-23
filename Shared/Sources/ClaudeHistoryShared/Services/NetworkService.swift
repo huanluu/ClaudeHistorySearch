@@ -8,15 +8,6 @@ import Foundation
 /// for safe UI updates.
 @MainActor
 public protocol NetworkService: AnyObject {
-    /// Current connection state
-    var isConnected: Bool { get }
-
-    /// Whether the client has valid authentication
-    var isAuthenticated: Bool { get }
-
-    /// Error state (if any)
-    var error: String? { get }
-
     /// Configure the server URL
     func setBaseURL(_ url: URL?)
 

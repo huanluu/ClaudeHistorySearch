@@ -3,10 +3,10 @@ import ClaudeHistoryShared
 
 struct SessionListView: View {
     @EnvironmentObject var serverDiscovery: ServerDiscovery
-    @EnvironmentObject var apiClient: APIClient
-    @EnvironmentObject var webSocketClient: WebSocketClient
+    @Environment(\.apiClient) private var apiClient
+    @Environment(\.webSocketClient) private var webSocketClient
 
-    @StateObject private var viewModel: SessionListViewModel
+    @EnvironmentObject var viewModel: SessionListViewModel
 
     @AppStorage("searchSortOption") private var sortOptionRaw = SearchSortOption.relevance.rawValue
     @State private var searchText = ""
@@ -16,11 +16,6 @@ struct SessionListView: View {
 
     private var sortOption: SearchSortOption {
         SearchSortOption(rawValue: sortOptionRaw) ?? .relevance
-    }
-
-    init() {
-        // Temporary init — real apiClient is set in .task via viewModel
-        _viewModel = StateObject(wrappedValue: SessionListViewModel(apiClient: APIClient()))
     }
 
     var body: some View {
@@ -71,7 +66,7 @@ struct SessionListView: View {
                             Button(action: { showChat = true }) {
                                 Image(systemName: "bubble.left.and.text.bubble.right")
                             }
-                            .disabled(webSocketClient.state != .authenticated)
+                            .disabled(webSocketClient?.state != .authenticated)
 
                             Button(action: { showNewSession = true }) {
                                 Image(systemName: "plus.circle.fill")
@@ -86,28 +81,25 @@ struct SessionListView: View {
                 }
             }
             .navigationDestination(isPresented: $showChat) {
-                ChatView(webSocketClient: webSocketClient)
+                ChatView()
             }
             .sheet(isPresented: $showSettings) {
-                SettingsView(serverDiscovery: serverDiscovery, apiClient: apiClient)
+                SettingsView()
             }
             .sheet(isPresented: $showNewSession) {
-                NewSessionView(webSocketClient: webSocketClient)
+                NewSessionView()
             }
             .refreshable {
                 await viewModel.loadSessions(refresh: true)
             }
         }
         .task {
-            apiClient.setBaseURL(serverDiscovery.serverURL)
-            // Re-initialize viewModel's apiClient reference
-            viewModel.setAPIClient(apiClient)
             if serverDiscovery.serverURL != nil && viewModel.sessions.isEmpty {
                 await viewModel.loadSessions()
             }
         }
         .onChange(of: serverDiscovery.serverURL) { _, newURL in
-            apiClient.setBaseURL(newURL)
+            apiClient?.setBaseURL(newURL)
             if newURL != nil {
                 Task {
                     await viewModel.loadSessions(refresh: true)
@@ -204,7 +196,7 @@ struct SessionListView: View {
         }
         .listStyle(.plain)
         .navigationDestination(for: Session.self) { session in
-            SessionView(session: session, webSocketClient: webSocketClient)
+            SessionView(session: session)
         }
     }
 
@@ -280,8 +272,7 @@ struct SessionListView: View {
                         SessionView(
                             sessionId: result.sessionId,
                             highlightText: searchText,
-                            scrollToMessageId: result.message.uuid,
-                            webSocketClient: webSocketClient
+                            scrollToMessageId: result.message.uuid
                         )
                     } label: {
                         SearchResultRowContent(result: result, query: searchText)
@@ -299,6 +290,7 @@ struct SessionListView: View {
 #Preview {
     SessionListView()
         .environmentObject(ServerDiscovery())
-        .environmentObject(APIClient())
-        .environmentObject(WebSocketClient())
+        .environmentObject(SessionListViewModel(apiClient: APIClient()))
+        .environment(\.apiClient, APIClient())
+        .environment(\.webSocketClient, WebSocketClient())
 }

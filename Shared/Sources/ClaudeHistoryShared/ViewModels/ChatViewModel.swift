@@ -26,7 +26,12 @@ public class ChatViewModel: ObservableObject {
 
     // MARK: - Init
 
-    public init(webSocketClient: WebSocketClient) {
+    public init() {
+        self.webSocketClient = nil
+    }
+
+    /// Configure the WebSocket client after init (called from view's onAppear/task)
+    public func configure(webSocketClient: WebSocketClient?) {
         self.webSocketClient = webSocketClient
     }
 

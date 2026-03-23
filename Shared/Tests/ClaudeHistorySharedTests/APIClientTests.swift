@@ -185,8 +185,6 @@ final class APIClientTests: XCTestCase {
 
         XCTAssertNil(client.getBaseURL())
         XCTAssertNil(client.getAPIKey())
-        XCTAssertFalse(client.isLoading)
-        XCTAssertNil(client.error)
         XCTAssertTrue(client.isAuthenticated)
     }
 

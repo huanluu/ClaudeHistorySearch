@@ -17,6 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let serverDiscovery = ServerDiscovery()
     let apiClient = APIClient()
     let webSocketClient = WebSocketClient()
+    lazy var viewModel = SessionListViewModel(apiClient: apiClient)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -73,8 +74,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let contentView = SearchPopoverView()
             .environmentObject(serverDiscovery)
-            .environmentObject(apiClient)
-            .environmentObject(webSocketClient)
+            .environmentObject(viewModel)
+            .environment(\.apiClient, apiClient)
+            .environment(\.webSocketClient, webSocketClient)
 
         popover.contentViewController = NSHostingController(rootView: contentView)
     }

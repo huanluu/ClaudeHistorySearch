@@ -3,21 +3,19 @@ import SwiftUI
 /// Chat interface for the assistant feature.
 /// Pushes onto the existing NavigationStack — not a root view.
 public struct ChatView: View {
-    @StateObject private var viewModel: ChatViewModel
+    @Environment(\.webSocketClient) private var webSocketClient
+    @StateObject private var viewModel = ChatViewModel()
 
     private let bottomID = "chat-bottom"
 
     #if os(macOS)
     private let onBack: () -> Void
 
-    public init(webSocketClient: WebSocketClient, onBack: @escaping () -> Void) {
-        _viewModel = StateObject(wrappedValue: ChatViewModel(webSocketClient: webSocketClient))
+    public init(onBack: @escaping () -> Void) {
         self.onBack = onBack
     }
     #else
-    public init(webSocketClient: WebSocketClient) {
-        _viewModel = StateObject(wrappedValue: ChatViewModel(webSocketClient: webSocketClient))
-    }
+    public init() {}
     #endif
 
     public var body: some View {
@@ -46,7 +44,10 @@ public struct ChatView: View {
                 }
             }
         }
-        .onAppear { viewModel.startListening() }
+        .onAppear {
+            viewModel.configure(webSocketClient: webSocketClient)
+            viewModel.startListening()
+        }
         .onDisappear { viewModel.stopListening() }
     }
     #endif
@@ -63,7 +64,10 @@ public struct ChatView: View {
             inputArea
         }
         .frame(width: 420, height: 500)
-        .onAppear { viewModel.startListening() }
+        .onAppear {
+            viewModel.configure(webSocketClient: webSocketClient)
+            viewModel.startListening()
+        }
         .onDisappear { viewModel.stopListening() }
     }
 

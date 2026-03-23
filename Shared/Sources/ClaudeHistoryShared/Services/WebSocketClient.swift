@@ -200,9 +200,9 @@ public protocol WebSocketClientProtocol: AnyObject {
 
 /// WebSocket client for real-time communication with the server
 @MainActor
-public class WebSocketClient: ObservableObject {
-    @Published public private(set) var state: WebSocketState = .disconnected
-    @Published public private(set) var error: WebSocketError?
+public class WebSocketClient {
+    public private(set) var state: WebSocketState = .disconnected
+    public private(set) var error: WebSocketError?
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var pingTimer: Timer?

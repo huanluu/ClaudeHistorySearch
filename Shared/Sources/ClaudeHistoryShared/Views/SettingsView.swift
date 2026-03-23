@@ -3,23 +3,21 @@ import SwiftUI
 /// Shared settings view for both iOS and macOS.
 /// Uses conditional compilation for platform-specific styling.
 public struct SettingsView: View {
-    @ObservedObject var serverDiscovery: ServerDiscovery
-    @ObservedObject var apiClient: APIClient
+    @EnvironmentObject var serverDiscovery: ServerDiscovery
+    @Environment(\.apiClient) private var apiClient
     @Environment(\.dismiss) var dismiss
 
     @State private var manualURL = ""
     @State private var apiKeyInput = ""
     @State private var showAPIKey = false
     @State private var apiKeyStatus: APIKeyStatus = .unknown
+    @State private var isAuthenticated: Bool = true
 
     #if os(macOS)
     @AppStorage("officeEnlistmentPath") private var officeEnlistmentPath = ""
     #endif
 
-    public init(serverDiscovery: ServerDiscovery, apiClient: APIClient) {
-        self.serverDiscovery = serverDiscovery
-        self.apiClient = apiClient
-    }
+    public init() {}
 
     enum APIKeyStatus {
         case unknown, saved, error(String)
@@ -137,9 +135,9 @@ public struct SettingsView: View {
                 Spacer()
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(apiClient.isAuthenticated ? Color.green : Color.red)
+                        .fill(isAuthenticated ? Color.green : Color.red)
                         .frame(width: 8, height: 8)
-                    Text(apiClient.isAuthenticated ? "Authenticated" : "Not authenticated")
+                    Text(isAuthenticated ? "Authenticated" : "Not authenticated")
                         .foregroundColor(.secondary)
                 }
             }
@@ -176,7 +174,7 @@ public struct SettingsView: View {
                 }
                 .disabled(apiKeyInput.isEmpty)
 
-                if apiClient.getAPIKey() != nil {
+                if apiClient?.getAPIKey() != nil {
                     Button("Clear Key") {
                         clearAPIKey()
                     }
@@ -231,6 +229,10 @@ public struct SettingsView: View {
             if manualURL.isEmpty, let cached = serverDiscovery.serverURL {
                 manualURL = cached.absoluteString
             }
+            // Sync auth state from apiClient
+            if let apiClient = apiClient {
+                isAuthenticated = apiClient.isAuthenticated
+            }
         }
     }
 
@@ -282,19 +284,23 @@ public struct SettingsView: View {
     }
 
     private func saveAPIKey() {
+        guard let apiClient = apiClient else { return }
         do {
             try apiClient.saveAPIKeyToKeychain(apiKeyInput)
             apiKeyInput = ""
             apiKeyStatus = .saved
+            isAuthenticated = true
         } catch {
             apiKeyStatus = .error(error.localizedDescription)
         }
     }
 
     private func clearAPIKey() {
+        guard let apiClient = apiClient else { return }
         do {
             try apiClient.clearAPIKey()
             apiKeyStatus = .unknown
+            isAuthenticated = false
         } catch {
             apiKeyStatus = .error(error.localizedDescription)
         }
@@ -302,8 +308,7 @@ public struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(
-        serverDiscovery: ServerDiscovery(),
-        apiClient: APIClient()
-    )
+    SettingsView()
+        .environmentObject(ServerDiscovery())
+        .environment(\.apiClient, APIClient())
 }

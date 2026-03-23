@@ -24,8 +24,8 @@ public class SessionViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    private let webSocketClient: (any WebSocketClientProtocol)?
-    private let apiClient: (any NetworkService)?
+    private var webSocketClient: (any WebSocketClientProtocol)?
+    private var apiClient: (any NetworkService)?
 
     // MARK: - Session Info
 
@@ -42,6 +42,14 @@ public class SessionViewModel: ObservableObject {
     public internal(set) var source: String?
 
     // MARK: - Initialization
+
+    /// Placeholder init for views that may not use live sessions.
+    /// The ViewModel starts in historical mode with no clients.
+    public init() {
+        self.apiClient = nil
+        self.webSocketClient = nil
+        self.mode = .historical
+    }
 
     /// Initialize for historical session viewing
     public init(apiClient: any NetworkService) {
@@ -62,6 +70,14 @@ public class SessionViewModel: ObservableObject {
         self.apiClient = apiClient
         self.webSocketClient = webSocketClient
         self.mode = .historical  // Starts historical, can switch to live
+    }
+
+    /// Configure the WebSocket client after init (called from view's onAppear/task)
+    public func configure(webSocketClient: (any WebSocketClientProtocol)?) {
+        self.webSocketClient = webSocketClient
+        if webSocketClient != nil && mode == .historical {
+            // Keep historical mode by default; live mode is set when starting/resuming a session
+        }
     }
 
     // MARK: - Historical Session Methods
