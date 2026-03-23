@@ -226,7 +226,43 @@ describe('HttpTransport', () => {
       expect(receivedBody).toEqual({ test: 'data' });
     });
 
-    it('should add CORS headers', async () => {
+    it('should add CORS headers for loopback origin', async () => {
+      transport = new HttpTransport({ port: 0 });
+
+      transport.getApp().get('/cors-test', (_req: Request, res: Response) => {
+        res.json({ ok: true });
+      });
+
+      await transport.start();
+
+      const server = transport.getServer();
+      const address = server!.address() as { port: number };
+      const response = await fetch(`http://127.0.0.1:${address.port}/cors-test`, {
+        headers: { Origin: 'http://localhost:3847' },
+      });
+
+      expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:3847');
+    });
+
+    it('should NOT add CORS headers for non-loopback origin', async () => {
+      transport = new HttpTransport({ port: 0 });
+
+      transport.getApp().get('/cors-test', (_req: Request, res: Response) => {
+        res.json({ ok: true });
+      });
+
+      await transport.start();
+
+      const server = transport.getServer();
+      const address = server!.address() as { port: number };
+      const response = await fetch(`http://127.0.0.1:${address.port}/cors-test`, {
+        headers: { Origin: 'http://evil.example.com' },
+      });
+
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    });
+
+    it('should NOT set Access-Control-Allow-Origin to wildcard', async () => {
       transport = new HttpTransport({ port: 0 });
 
       transport.getApp().get('/cors-test', (_req: Request, res: Response) => {
@@ -239,7 +275,7 @@ describe('HttpTransport', () => {
       const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/cors-test`);
 
-      expect(response.headers.get('access-control-allow-origin')).toBe('*');
+      expect(response.headers.get('access-control-allow-origin')).not.toBe('*');
     });
 
     it('should handle OPTIONS preflight requests', async () => {
@@ -249,7 +285,8 @@ describe('HttpTransport', () => {
       const server = transport.getServer();
       const address = server!.address() as { port: number };
       const response = await fetch(`http://127.0.0.1:${address.port}/any-path`, {
-        method: 'OPTIONS'
+        method: 'OPTIONS',
+        headers: { Origin: 'http://localhost:3847' },
       });
 
       expect(response.status).toBe(200);

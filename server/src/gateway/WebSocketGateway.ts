@@ -1,8 +1,7 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Server, IncomingMessage } from 'http';
-import { URL } from 'url';
 import { ZodError } from 'zod';
-import { validateApiKey, hasApiKey } from '../shared/provider/index';
+import { validateApiKey, hasApiKey, isLoopback } from '../shared/provider/index';
 import type { Logger } from '../shared/provider/index';
 import type { AuthenticatedClient, MessageType, WSMessage } from './protocol';
 import type { WsHandler, WsConnectionHandler, WsGateway } from './types';
@@ -29,7 +28,7 @@ export interface WebSocketGatewayOptions {
  * WebSocketGateway — manages WebSocket connections, authentication, and message routing.
  *
  * Features register handlers for specific message types. The gateway:
- * 1. Accepts connections and authenticates via API key query parameter
+ * 1. Accepts connections and authenticates via X-API-Key header
  * 2. Parses incoming messages and routes to registered handlers
  * 3. Manages ping/pong keepalive
  * 4. Provides AuthenticatedClient abstraction so features never touch raw WebSocket
@@ -156,17 +155,24 @@ export class WebSocketGateway implements WsGateway {
     info: { origin: string; secure: boolean; req: IncomingMessage },
     callback: (result: boolean, code?: number, message?: string) => void,
   ): void {
+    // No API key configured: bootstrap mode — loopback only
     if (!this._hasApiKey()) {
-      callback(true);
+      const remoteAddress = info.req.socket?.remoteAddress;
+      if (isLoopback(remoteAddress)) {
+        callback(true);
+        return;
+      }
+      this.logger.log({ msg: 'WebSocket rejected: no API key configured, non-loopback client', op: 'ws.upgrade' });
+      callback(false, 401, 'API key not configured. Access restricted to localhost.');
       return;
     }
 
-    const url = new URL(info.req.url || '', `http://${info.req.headers.host}`);
-    const apiKey = url.searchParams.get('apiKey');
+    // API key configured: require X-API-Key header
+    const apiKey = info.req.headers['x-api-key'];
 
-    if (!apiKey) {
-      this.logger.log({ msg: 'WebSocket rejected: no API key in query', op: 'ws.upgrade' });
-      callback(false, 401, 'API key required');
+    if (!apiKey || typeof apiKey !== 'string') {
+      this.logger.log({ msg: 'WebSocket rejected: no X-API-Key header', op: 'ws.upgrade' });
+      callback(false, 401, 'API key required in X-API-Key header');
       return;
     }
 

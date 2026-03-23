@@ -2,10 +2,29 @@ import type { Request, Response, NextFunction } from 'express';
 import { validateApiKey, hasApiKey } from './keyManager';
 
 /**
- * Paths that don't require authentication
- * - /health is needed for Bonjour health checks
+ * Auth mode:
+ * - 'required': API key must be present and valid
+ * - 'bootstrap-localhost-only': No key configured; allow loopback, reject others
  */
-const PUBLIC_PATHS = ['/health', '/admin'];
+export type AuthMode = 'required' | 'bootstrap-localhost-only';
+
+/**
+ * Paths that don't require authentication.
+ * Only /health is public — needed for Bonjour health checks.
+ */
+export const PUBLIC_PATHS = ['/health'];
+
+/**
+ * Check if a remote address is a loopback address (127.0.0.1, ::1, or IPv4-mapped ::ffff:127.0.0.1)
+ */
+export function isLoopback(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false;
+  return (
+    remoteAddress === '127.0.0.1' ||
+    remoteAddress === '::1' ||
+    remoteAddress === '::ffff:127.0.0.1'
+  );
+}
 
 export interface AuthDeps {
   hasApiKey: () => boolean;
@@ -24,9 +43,16 @@ export function createAuthMiddleware(deps: AuthDeps) {
       return;
     }
 
-    // If no API key is configured, allow all requests (first-run experience)
+    // If no API key is configured, only allow loopback (bootstrap mode)
     if (!deps.hasApiKey()) {
-      next();
+      if (isLoopback(req.socket?.remoteAddress)) {
+        next();
+        return;
+      }
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'API key not configured. Access restricted to localhost. Run "npm run key:generate" to enable remote access.'
+      });
       return;
     }
 

@@ -1,6 +1,6 @@
 # Codebase Scorecard
 
-> 19 invariants. Pass/fail. No judgment needed.
+> 21 invariants. Pass/fail. No judgment needed.
 >
 > Agents optimize locally and create global entropy — each session might produce correct
 > code that gradually degrades the system. These invariants are electric fences that catch drift.
@@ -158,6 +158,20 @@ Adapters: always `shared/infra/<technology>/`. All wiring happens in `app.ts`.
 
 - `spawn(cmd, [arg1, arg2])` is safe — no shell injection
 - `execSync` with user-controlled content is unsafe
+- **Enforced by:** `scorecard/tests/security.test.ts`
+
+#### SEC-INV-3: PUBLIC_PATHS Contains Only /health
+> The auth middleware's `PUBLIC_PATHS` array must equal exactly `['/health']`.
+
+- No other paths should bypass authentication
+- Catches accidental additions to the public path list (e.g., `/admin`)
+- **Enforced by:** `scorecard/tests/security.test.ts`
+
+#### SEC-INV-4: No Query-String API Key Auth
+> No file in `server/src/` may use `searchParams.get('apiKey')`.
+
+- API keys in URLs leak to logs, proxies, and browser history
+- Auth must use the `X-API-Key` header exclusively
 - **Enforced by:** `scorecard/tests/security.test.ts`
 
 #### SEC-INV-5: Environment Variable Containment

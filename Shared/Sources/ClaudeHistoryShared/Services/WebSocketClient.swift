@@ -232,24 +232,26 @@ public class WebSocketClient: ObservableObject {
             throw WebSocketError.invalidURL
         }
 
-        // Build WebSocket URL with API key
+        // Build WebSocket URL
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
         components.path = "/ws"
 
-        if let apiKey = apiKey {
-            components.queryItems = [URLQueryItem(name: "apiKey", value: apiKey)]
-        }
-
         guard let wsURL = components.url else {
             throw WebSocketError.invalidURL
+        }
+
+        // Use URLRequest to send API key as header (not query parameter)
+        var request = URLRequest(url: wsURL)
+        if let apiKey = apiKey {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
 
         state = .connecting
         onStateChange?(.connecting)
 
         let session = URLSession(configuration: .default)
-        webSocketTask = session.webSocketTask(with: wsURL)
+        webSocketTask = session.webSocketTask(with: request)
         webSocketTask?.resume()
 
         // Start receiving messages

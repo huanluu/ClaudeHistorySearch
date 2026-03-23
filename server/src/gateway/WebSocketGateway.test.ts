@@ -49,7 +49,7 @@ describe('WebSocketGateway', () => {
     });
   });
 
-  describe('authentication', () => {
+  describe('authentication via X-API-Key header', () => {
     it('should reject connection without API key', () => {
       return new Promise<void>((resolve, reject) => {
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`);
@@ -70,9 +70,31 @@ describe('WebSocketGateway', () => {
       });
     });
 
-    it('should reject connection with invalid API key', () => {
+    it('should reject connection with API key only in query string', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=invalid-key`);
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+
+        ws.on('error', () => {
+          resolve();
+        });
+
+        ws.on('open', () => {
+          ws.close();
+          reject(new Error('Should not connect with query-string-only API key'));
+        });
+
+        setTimeout(() => {
+          ws.close();
+          resolve();
+        }, 1000);
+      });
+    });
+
+    it('should reject connection with invalid X-API-Key header', () => {
+      return new Promise<void>((resolve, reject) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': 'invalid-key' },
+        });
 
         ws.on('error', () => {
           resolve();
@@ -90,9 +112,11 @@ describe('WebSocketGateway', () => {
       });
     });
 
-    it('should accept connection with valid API key', () => {
+    it('should accept connection with valid X-API-Key header', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
 
         ws.on('open', () => {
           expect(ws.readyState).toBe(WebSocket.OPEN);
@@ -108,7 +132,9 @@ describe('WebSocketGateway', () => {
 
     it('should send auth_result on successful connection', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
 
         ws.on('message', (data) => {
           const message = JSON.parse(data.toString()) as WSMessage;
@@ -128,7 +154,9 @@ describe('WebSocketGateway', () => {
   describe('ping/pong', () => {
     it('should respond to ping with pong', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
         let authReceived = false;
 
         ws.on('message', (data) => {
@@ -155,7 +183,9 @@ describe('WebSocketGateway', () => {
   describe('message handling', () => {
     it('should handle custom message types via ping/pong', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
         let authReceived = false;
 
         ws.on('message', (data) => {
@@ -181,7 +211,9 @@ describe('WebSocketGateway', () => {
   describe('client management', () => {
     it('should track connected clients', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
 
         ws.on('message', (data) => {
           const message = JSON.parse(data.toString()) as WSMessage;
@@ -209,8 +241,12 @@ describe('WebSocketGateway', () => {
   describe('broadcast', () => {
     it('should broadcast message to all clients', () => {
       return new Promise<void>((resolve, reject) => {
-        const ws1 = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
-        const ws2 = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
+        const ws1 = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
+        const ws2 = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          headers: { 'X-API-Key': TEST_KEY },
+        });
 
         let client1Received = false;
         let client2Received = false;
@@ -259,8 +295,8 @@ describe('WebSocketGateway', () => {
     });
   });
 
-  describe('no auth configured', () => {
-    it('should allow connections when no API key is configured', async () => {
+  describe('no auth configured — bootstrap loopback-only', () => {
+    it('should allow loopback connections when no API key is configured', async () => {
       const noAuthHttp = new HttpTransport({ port: 0 });
       let noAuthWs: WebSocketGateway | undefined;
 
@@ -279,6 +315,7 @@ describe('WebSocketGateway', () => {
         });
         noAuthWs.start();
 
+        // Connecting via 127.0.0.1 (loopback) should be allowed
         await new Promise<void>((resolve, reject) => {
           const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
 

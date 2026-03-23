@@ -1,13 +1,14 @@
 import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
-import { createAuthMiddleware, type AuthDeps } from './middleware';
+import { createAuthMiddleware, type AuthDeps, PUBLIC_PATHS } from './middleware';
 
 // No vi.mock needed — dependencies are injected via createAuthMiddleware
 
-function createMockReq(path: string, apiKey?: string): Partial<Request> {
+function createMockReq(path: string, options?: { apiKey?: string; remoteAddress?: string }): Partial<Request> {
   return {
     path,
-    headers: apiKey ? { 'x-api-key': apiKey } : {},
+    headers: options?.apiKey ? { 'x-api-key': options.apiKey } : {},
+    socket: { remoteAddress: options?.remoteAddress ?? '192.168.1.100' } as Request['socket'],
   };
 }
 
@@ -46,14 +47,9 @@ describe('authMiddleware', () => {
       expect(mockHasApiKey).not.toHaveBeenCalled();
     });
 
-    it('skips auth for /admin', () => {
-      const req = createMockReq('/admin');
-      const res = createMockRes();
-
-      middleware(req as Request, res as Response, next);
-
-      expect(next).toHaveBeenCalledTimes(1);
-      expect(res.status).not.toHaveBeenCalled();
+    it('/admin is NOT in PUBLIC_PATHS', () => {
+      expect(PUBLIC_PATHS).toEqual(['/health']);
+      expect(PUBLIC_PATHS).not.toContain('/admin');
     });
 
     it('does not skip auth for /admin/config (exact match, not startsWith)', () => {
@@ -68,16 +64,67 @@ describe('authMiddleware', () => {
     });
   });
 
-  describe('no API key configured', () => {
-    it('calls next without checking auth when hasApiKey returns false', () => {
+  describe('no API key configured — bootstrap mode', () => {
+    beforeEach(() => {
       mockHasApiKey.mockReturnValue(false);
-      const req = createMockReq('/sessions');
+    });
+
+    it('allows loopback IPv4 (127.0.0.1) without key', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '127.0.0.1' });
       const res = createMockRes();
 
       middleware(req as Request, res as Response, next);
 
-      expect(mockHasApiKey).toHaveBeenCalledTimes(1);
-      expect(mockValidateApiKey).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('allows loopback IPv6 (::1) without key', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '::1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('allows IPv4-mapped loopback (::ffff:127.0.0.1) without key', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '::ffff:127.0.0.1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('rejects non-loopback IP without key', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '192.168.1.100' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+
+    it('rejects non-loopback IP for /admin without key', () => {
+      const req = createMockReq('/admin', { remoteAddress: '192.168.1.100' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+
+    it('/health is always public regardless of source IP', () => {
+      const req = createMockReq('/health', { remoteAddress: '10.0.0.1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
     });
@@ -103,7 +150,7 @@ describe('authMiddleware', () => {
 
     it('returns 401 when X-API-Key is invalid', () => {
       mockValidateApiKey.mockReturnValue(false);
-      const req = createMockReq('/sessions', 'bad-key');
+      const req = createMockReq('/sessions', { apiKey: 'bad-key' });
       const res = createMockRes();
 
       middleware(req as Request, res as Response, next);
@@ -118,7 +165,7 @@ describe('authMiddleware', () => {
 
     it('calls next when X-API-Key is valid', () => {
       mockValidateApiKey.mockReturnValue(true);
-      const req = createMockReq('/sessions', 'valid-key');
+      const req = createMockReq('/sessions', { apiKey: 'valid-key' });
       const res = createMockRes();
 
       middleware(req as Request, res as Response, next);
@@ -127,6 +174,26 @@ describe('authMiddleware', () => {
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 for /admin without key', () => {
+      const req = createMockReq('/admin');
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+
+    it('allows /admin with valid key', () => {
+      mockValidateApiKey.mockReturnValue(true);
+      const req = createMockReq('/admin', { apiKey: 'valid-key' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
     });
   });
 });
