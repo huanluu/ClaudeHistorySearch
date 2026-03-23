@@ -1,13 +1,16 @@
 # QA
 
-Deploy fresh code, run all tests including integration, and verify open issues. Invoked via `/qa` or `/qa <issue-numbers>`.
+Deploy fresh code, run all tests including integration, and optionally verify specific issues. Invoked via `/qa` or `/qa <issue-numbers>`.
 
-This is the verification gate between "code is written" and "issue is closed." It deploys, runs the full test suite (including live integration tests), and checks whether open issues can be signed off.
+## Two Modes
+
+1. **`/qa <issue-numbers>`** — Deploy, run full test suite, verify AC for the specified issues, sign off if all pass. This is the verification gate between "code is written" and "issue is closed."
+2. **`/qa`** (no arguments) — Deploy and run full test suite only. No issue verification, no sign-off. Use as a general health check.
 
 ## Arguments
 
-- No arguments: deploy + full test suite + verify all open issues with implementation reports
-- `<issue-numbers>`: deploy + full test suite + verify specific issues (e.g., `/qa 70 71`)
+- `<issue-numbers>`: deploy + full test suite + verify and sign off specific issues (e.g., `/qa 70 71`)
+- No arguments: deploy + full test suite only (no issue verification)
 
 ## Steps
 
@@ -25,7 +28,7 @@ This is the verification gate between "code is written" and "issue is closed." I
    ```
    If health check fails, check logs (`tail -20 /tmp/claude-history-server.err`) and stop.
 
-3. **Build the Mac app** (optional — only if Swift source files changed):
+3. **Build the Mac app** — always build. A healthy system means everything compiles:
    ```bash
    PROJECT_DIR=$(git rev-parse --show-toplevel)
    xcodebuild -project "$PROJECT_DIR/ClaudeHistorySearch.xcodeproj" \
@@ -35,9 +38,7 @@ This is the verification gate between "code is written" and "issue is closed." I
      -destination 'platform=macOS' \
      build 2>&1 | tail -5
    ```
-   If the build fails:
-   - **Server-only changes** (no files in `Shared/`, `ClaudeHistorySearch/`, `ClaudeHistorySearchMac/`): continue with test verification — the app build is irrelevant.
-   - **Swift/Shared changes**: the build failure is a **real QA failure**. Report it and do not sign off.
+   If the build fails, this is a **QA failure**. Report the errors and do not sign off on any issues. The system is not healthy if the app doesn't compile.
 
 ### Phase 2: Full Test Suite
 
@@ -64,18 +65,16 @@ This is the verification gate between "code is written" and "issue is closed." I
    ```
    Record: pass/fail, test count. If any integration test fails, this is a **real failure** (server is freshly deployed), not a skip.
 
-### Phase 3: Verify Issues
+### Phase 3: Verify Issues (only if issue numbers provided)
 
-8. **Find open issues with implementation reports** — either the specified issues or all open issues:
+**If no issue numbers were passed:** skip Phase 3 entirely. Report test results only.
+
+**If issue numbers were passed:** verify each one.
+
+8. **Read each specified issue:**
    ```bash
-   # Specific issues (preferred — pass issue numbers from arguments):
    gh issue view <number> --json title,body,comments
-
-   # All open issues with implementation reports (filter for "## Implementation Report" marker):
-   gh issue list --state open --json number,title,comments \
-     -q '[.[] | select(.comments[]?.body | test("## Implementation Report"))] | .[].number'
    ```
-   Only process issues that have a comment containing `## Implementation Report` — this is the marker `/fix-issue` posts. Do not process issues with only discussion comments.
 
 9. **For each issue, check acceptance criteria:**
    - Read the issue body to get the AC list
@@ -121,6 +120,8 @@ This is the verification gate between "code is written" and "issue is closed." I
 ### Phase 4: Report
 
 12. **Summary to caller:**
+
+    If issue numbers were provided:
     ```
     ## QA Results
 
@@ -137,9 +138,23 @@ This is the verification gate between "code is written" and "issue is closed." I
     - #<N>: SIGNED OFF / PARTIAL (N manual items) / FAILED
     ```
 
+    If no issue numbers (health check mode):
+    ```
+    ## QA Results
+
+    ### Deploy
+    - Server: healthy
+    - Mac app: PASS/FAIL/SKIPPED
+
+    ### Tests
+    - npm test: PASS/FAIL (<count>)
+    - swift test: PASS/FAIL (<count>)
+    - integration: PASS/FAIL (<count>)
+    ```
+
 ## Important Rules
 
 - **Integration test failures after fresh deploy are real failures** — don't skip, investigate.
 - **Don't close issues with unchecked AC.** If manual verification is needed, say so explicitly.
 - **Run integration tests with `RUN_LIVE_INTEGRATION=1`** — this is the env var gate that separates dev from QA.
-- **The Mac app build is optional.** Server-only changes don't need the app to build. Report build status but don't block QA on it.
+- **Mac app build failure = QA failure.** The system is not healthy if any target doesn't compile. Never skip the build.

@@ -36,7 +36,7 @@ This skill handles: reading the issue, creating a plan, Copilot design review, T
 
 ## Step 2: Verify
 
-Invoke `/qa <number>` to verify the fix.
+Invoke `/qa <number>` to verify the fix. **Always pass the issue number** — `/qa` without a number only runs tests, it won't verify AC or sign off.
 
 This skill handles: deploying fresh code, running all tests (including live integration tests with `RUN_LIVE_INTEGRATION=1`), verifying acceptance criteria, posting a QA report, and closing the issue if all AC pass.
 
