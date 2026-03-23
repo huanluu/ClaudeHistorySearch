@@ -1,5 +1,15 @@
 # QA
 
+## Role
+
+You are the skeptical verifier. Your job is to prove that what's claimed to be done actually works — not to rubber-stamp implementation reports.
+
+**Do not take claims at face value.** If an implementation report says "ESLint catches X," inject X and see if ESLint actually catches it. If it says "no raw strings remain," grep for them yourself. If it says "server returns healthy," hit the endpoint and check. Every AC is a claim — your job is to independently verify or falsify each one.
+
+Think like a QA engineer who assumes bugs exist until proven otherwise. The implementation agent and the QA agent are adversarial by design — the implementer says "it works," and you say "prove it."
+
+## Purpose
+
 Deploy fresh code, run all tests including integration, and optionally verify specific issues. Invoked via `/qa` or `/qa <issue-numbers>`.
 
 ## Two Modes
@@ -76,15 +86,32 @@ Deploy fresh code, run all tests including integration, and optionally verify sp
    gh issue view <number> --json title,body,comments
    ```
 
-9. **For each issue, check acceptance criteria:**
-   - Read the issue body to get the AC list
-   - Read the implementation report comment to see what was verified
-   - Check if integration tests cover any remaining unchecked AC
-   - For each AC:
-     - **Verified by unit/contract test**: already checked by `/fix-issue`
-     - **Verified by integration test**: check if a matching integration test passed in Phase 2
-     - **Requires manual verification**: flag it — `/qa` can't help here
-     - **Verified by grep/scan**: run the check now
+9. **For each issue, check acceptance criteria.** Read the AC text carefully and pick the right verification strategy:
+
+   | AC pattern | Strategy | How |
+   |-----------|----------|-----|
+   | "test exists that..." | Check test passed in Phase 2 | Match test name in test output |
+   | "no file contains X" / "grep returns zero" | Run the grep/scan now | `grep -r "pattern" path/` |
+   | "ESLint/lint rule blocks X" / "verify by adding X" | **Inject-and-lint**: temporarily inject the violation into a source file, run the linter, assert it fails with the expected error, then revert | See inject-and-lint pattern below |
+   | "response matches schema" / "endpoint returns X" | Check if integration test covers it | Match against Phase 2 integration results |
+   | "build succeeds" / "tests pass" | Already verified in Phase 2 | Reference Phase 2 results |
+   | Anything requiring UI interaction or human judgment | Flag as manual | Cannot automate |
+
+   **Inject-and-lint pattern** (for "rule blocks X" AC):
+   ```bash
+   # 1. Pick any source file in the relevant scope
+   # 2. Append the violation
+   echo '<violation code>' >> <file>
+   # 3. Run the linter and capture exit code
+   cd server && npm run lint 2>&1 | grep -i "<expected error keyword>"
+   LINT_FAILED=$?
+   # 4. ALWAYS revert — even if lint check fails
+   git checkout -- <file>
+   # 5. Assert the linter caught it
+   # LINT_FAILED == 0 means grep found the error → linter caught it ✓
+   ```
+
+   **Be agentic:** Don't just check what's easy. If an AC describes a specific scenario to test, try to actually test it. The goal is maximum automated verification — flag "manual" only for things that truly require a human (UI interaction, subjective judgment, physical device testing).
 
 10. **Update each issue with a QA report comment:**
     ```bash
