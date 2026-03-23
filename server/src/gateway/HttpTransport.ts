@@ -36,11 +36,14 @@ export class HttpTransport extends Transport {
   private _setupDefaults(): void {
     this.app.use(express.json());
 
-    // CORS middleware for local development
+    // CORS middleware — restricted to loopback origins only
     this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, X-API-Key');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+      const origin = req.headers.origin;
+      if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, X-API-Key');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+      }
       if (req.method === 'OPTIONS') {
         res.sendStatus(200);
         return;

@@ -7,8 +7,8 @@ export type {
   SessionStartOptions, HeadlessRunOptions, AgentSession, CliRuntime,
   CronJobRecord, CronRepository, CronToolService,
 } from './types';
-export { authMiddleware, createAuthMiddleware } from './auth/index';
-export type { AuthDeps } from './auth/index';
+export { authMiddleware, createAuthMiddleware, PUBLIC_PATHS, isLoopback } from './auth/index';
+export type { AuthDeps, AuthMode } from './auth/index';
 export { generateApiKey, validateApiKey, hasApiKey, removeApiKey } from './auth/index';
 export { WorkingDirValidator } from './security/index';
 export type { ValidationResult } from './security/index';

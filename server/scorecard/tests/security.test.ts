@@ -89,6 +89,46 @@ describe('Scorecard: Security Invariants', () => {
     expect(violations).toEqual([]);
   });
 
+  // ─── SEC-INV-3: PUBLIC_PATHS contains only /health ──────────────
+  it('SEC-INV-3: PUBLIC_PATHS equals exactly [/health]', () => {
+    const middlewarePath = join(SRC_DIR, 'shared', 'provider', 'auth', 'middleware.ts');
+    const content = readFileSync(middlewarePath, 'utf-8');
+
+    // Extract the PUBLIC_PATHS array definition
+    const match = content.match(/const\s+PUBLIC_PATHS\s*=\s*\[([^\]]*)\]/);
+    expect(match).not.toBeNull();
+
+    const paths = match![1].split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
+    expect(paths).toEqual(['/health']);
+  });
+
+  // ─── SEC-INV-4: No query-string API key auth ──────────────────
+  it('SEC-INV-4: No searchParams.get(apiKey) in server source', () => {
+    const srcFiles = collectSrcFiles(SRC_DIR);
+    const violations: Array<{ file: string; line: number; text: string }> = [];
+
+    for (const file of srcFiles) {
+      const relFile = relative(SRC_DIR, file);
+      const content = readFileSync(file, 'utf-8');
+      const lines = content.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+
+        if (/searchParams\.get\(['"]apiKey['"]\)/.test(trimmed)) {
+          violations.push({
+            file: relFile,
+            line: i + 1,
+            text: trimmed.substring(0, 100),
+          });
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
   // ─── SEC-INV-5: Environment Variable Containment ─────────────────
   it('SEC-INV-5: process.env reads only in allowed files', () => {
     const srcFiles = collectSrcFiles(SRC_DIR);

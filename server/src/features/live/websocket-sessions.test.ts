@@ -75,7 +75,9 @@ describe('WebSocket Session Integration', () => {
 
   function connectClient(): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${testApiKey}`);
+      const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+        headers: { 'X-API-Key': testApiKey },
+      });
 
       ws.on('message', (data) => {
         const message = JSON.parse(data.toString()) as WSMessage;
