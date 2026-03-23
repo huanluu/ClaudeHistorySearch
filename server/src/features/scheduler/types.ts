@@ -55,11 +55,24 @@ export interface ChangeSet {
 }
 
 /**
- * Interface for external command execution (allows mocking in tests).
- * Only covers execSync for az CLI queries — CLI runtime spawning is
- * handled by the CliRuntime abstraction.
+ * Result of running an external command via argv (no shell).
  */
-export interface CommandExecutor {
-  execSync: (command: string, options?: object) => string;
+export interface CommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+/**
+ * Interface for external command execution (allows mocking in tests).
+ * Uses argv-based invocation (command + args array) to prevent shell injection.
+ * CLI runtime spawning for interactive sessions is handled by the CliRuntime abstraction.
+ */
+export interface CommandRunner {
+  run(command: string, args: readonly string[], options?: {
+    cwd?: string;
+    env?: Record<string, string>;
+    timeout?: number;
+  }): CommandResult;
 }
 

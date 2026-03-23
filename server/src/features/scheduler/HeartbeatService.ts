@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { getConfigDir } from '../../shared/provider/index';
 import type { Logger, CliRuntime, HeartbeatRepository, HeartbeatStateRecord, FileSystem } from '../../shared/provider/index';
-import type { HeartbeatConfig, HeartbeatTask, HeartbeatResult, WorkItem, ChangeSet, CommandExecutor } from './types';
+import type { HeartbeatConfig, HeartbeatTask, HeartbeatResult, WorkItem, ChangeSet, CommandRunner } from './types';
 import { checkForChanges, buildWorkItemPrompt } from './workItems';
 import { parseHeartbeatConfig, parseHeartbeatContent } from './heartbeatParser';
 
@@ -13,7 +13,7 @@ export class HeartbeatService {
   private config: HeartbeatConfig;
   private configDir: string;
   private fs: FileSystem;
-  private executor: CommandExecutor;
+  private runner: CommandRunner;
   private runtime: CliRuntime | null;
   private repo: HeartbeatRepository | null;
   private logger: Logger;
@@ -27,10 +27,10 @@ export class HeartbeatService {
   private schedulerRunCount = 0;
   private initialDelayTimer: NodeJS.Timeout | null = null;
 
-  constructor(fs: FileSystem, executor: CommandExecutor, configDir: string | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime, envOverrides?: Partial<HeartbeatConfig>) {
+  constructor(fs: FileSystem, runner: CommandRunner, configDir: string | undefined, repo: HeartbeatRepository | undefined, logger: Logger, runtime?: CliRuntime, envOverrides?: Partial<HeartbeatConfig>) {
     this.fs = fs;
     this.configDir = configDir || getConfigDir();
-    this.executor = executor;
+    this.runner = runner;
     this.runtime = runtime ?? null;
     this.repo = repo ?? null;
     this.logger = logger;
@@ -195,7 +195,7 @@ export class HeartbeatService {
    * Check for new or updated work items
    */
   async checkForChanges(): Promise<ChangeSet> {
-    return checkForChanges(this.executor, (key) => this.getProcessedItemState(key));
+    return checkForChanges(this.runner, (key) => this.getProcessedItemState(key));
   }
 
   /**

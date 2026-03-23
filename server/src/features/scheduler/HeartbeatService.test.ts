@@ -3,14 +3,14 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { HeartbeatService } from './HeartbeatService';
-import type { WorkItem, CommandExecutor } from './types';
+import type { WorkItem, CommandRunner } from './types';
 import type { HeartbeatRepository, HeartbeatStateRecord, CliRuntime } from '../../shared/provider/index';
 import { noopLogger } from '../../../tests/__helpers/index';
 import { NodeFileSystem } from '../../shared/infra/filesystem/NodeFileSystem';
-import { createNodeCommandExecutor } from '../../shared/infra/runtime/NodeCommandExecutor';
+import { createNodeCommandRunner } from '../../shared/infra/runtime/NodeCommandRunner';
 
 const testFs = new NodeFileSystem();
-const defaultExecutor = createNodeCommandExecutor();
+const defaultRunner = createNodeCommandRunner();
 
 /**
  * Create a mock CliRuntime whose runHeadless resolves with the given sessionId.
@@ -341,7 +341,7 @@ describe('HeartbeatService', () => {
 
   describe('config loading', () => {
     it('should use default values when config file is missing', () => {
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(true);
@@ -359,7 +359,7 @@ describe('HeartbeatService', () => {
         }
       }));
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(false);
@@ -387,7 +387,7 @@ describe('HeartbeatService', () => {
         workingDirectory: '/from/env',
       };
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger, undefined, envOverrides);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger, undefined, envOverrides);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(false);
@@ -407,7 +407,7 @@ describe('HeartbeatService', () => {
         }
       }));
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const config = service.getConfig();
 
       expect(config.enabled).toBe(true); // default
@@ -422,7 +422,7 @@ describe('HeartbeatService', () => {
       const configPath = join(TEST_CONFIG_DIR, 'config.json');
       writeFileSync(configPath, 'not valid json {{{');
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const config = service.getConfig();
 
       // Should fall back to defaults
@@ -447,7 +447,7 @@ describe('HeartbeatService', () => {
 - [ ] Check for PRs needing review
 `);
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(2);
@@ -469,7 +469,7 @@ describe('HeartbeatService', () => {
 - [ ] Another disabled task
 `);
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(1);
@@ -486,7 +486,7 @@ describe('HeartbeatService', () => {
         rmSync(heartbeatPath);
       }
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks).toEqual([]);
@@ -496,7 +496,7 @@ describe('HeartbeatService', () => {
       const heartbeatPath = join(TEST_CONFIG_DIR, 'HEARTBEAT.md');
       writeFileSync(heartbeatPath, '');
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks).toEqual([]);
@@ -519,7 +519,7 @@ describe('HeartbeatService', () => {
 - [x] Task in custom section
 `);
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(3);
@@ -546,7 +546,7 @@ Regular bullet point:
 More text.
 `);
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const tasks = service.parseHeartbeatFile();
 
       expect(tasks.length).toBe(1);
@@ -583,11 +583,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger);
       const changes = await service.checkForChanges();
 
       expect(changes.newItems.length).toBe(1);
@@ -616,11 +616,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger);
 
       // Record work item as processed with OLD date
       service.recordProcessedItem('workitem:12345', '2024-01-14T10:00:00Z');
@@ -653,11 +653,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger);
 
       // Record work item as processed with SAME date
       service.recordProcessedItem('workitem:12345', '2024-01-15T10:00:00Z');
@@ -677,12 +677,11 @@ More text.
 - [x] Fetch Azure DevOps work items assigned to me
 `);
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => { throw new Error('az: command not found'); },
-
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: '', stderr: 'az: command not found', exitCode: 1 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger);
       const changes = await service.checkForChanges();
 
       expect(changes.newItems.length).toBe(0);
@@ -696,7 +695,7 @@ More text.
   describe('Runtime delegation', () => {
     it('delegates to CliRuntime.runHeadless with prompt and workingDir', async () => {
       const mockRuntime = createMockRuntime('result-session');
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger, mockRuntime);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger, mockRuntime);
       const workItem: WorkItem = {
         id: 99999,
         fields: {
@@ -721,7 +720,7 @@ More text.
 
     it('includes HEARTBEAT_SESSION marker in prompt', async () => {
       const mockRuntime = createMockRuntime();
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger, mockRuntime);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger, mockRuntime);
       const workItem: WorkItem = {
         id: 88888,
         fields: {
@@ -748,7 +747,7 @@ More text.
       }));
 
       const mockRuntime = createMockRuntime();
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger, mockRuntime);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger, mockRuntime);
       const workItem: WorkItem = {
         id: 77777,
         fields: {
@@ -768,7 +767,7 @@ More text.
     });
 
     it('throws when no runtime is configured', async () => {
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const workItem: WorkItem = {
         id: 11111,
         fields: {
@@ -793,7 +792,7 @@ More text.
         heartbeat: { enabled: false }
       }));
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(0);
@@ -831,11 +830,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime());
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime());
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(1);
@@ -864,11 +863,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime());
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime());
 
       // Pre-record the item as already processed
       service.recordProcessedItem('workitem:33333', '2024-01-15T10:00:00Z');
@@ -905,11 +904,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime());
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime());
       const result = await service.runHeartbeat(true);
 
       expect(result.tasksProcessed).toBe(1);
@@ -926,7 +925,7 @@ More text.
         heartbeat: { enabled: false }
       }));
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       const result = await service.runHeartbeat();
 
       expect(result.tasksProcessed).toBe(0);
@@ -961,11 +960,11 @@ More text.
         runHeadless: vi.fn().mockRejectedValue(new Error('spawn claude ENOENT')),
       } as unknown as CliRuntime;
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger, failingRuntime);
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger, failingRuntime);
       const result = await service.runHeartbeat();
 
       expect(result.sessionsCreated).toBe(0);
@@ -994,11 +993,11 @@ More text.
         }
       ];
 
-      const mockExecutor: CommandExecutor = {
-        execSync: () => JSON.stringify(mockWorkItems),
+      const mockRunner_: CommandRunner = {
+        run: () => ({ stdout: JSON.stringify(mockWorkItems), stderr: '', exitCode: 0 }),
       };
 
-      const service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime('test-session-abc123'));
+      const service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger, createMockRuntime('test-session-abc123'));
       const result = await service.runHeartbeat();
 
       expect(result.sessionsCreated).toBe(1);
@@ -1030,7 +1029,7 @@ More text.
         },
       });
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, repo, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, repo, noopLogger);
       service.recordProcessedItem('workitem:100', '2024-06-01T00:00:00Z');
 
       expect(calls).toHaveLength(1);
@@ -1049,7 +1048,7 @@ More text.
         },
       });
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, repo, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, repo, noopLogger);
 
       expect(service.getProcessedItemState('workitem:200')).toBe('2024-07-01T00:00:00Z');
       expect(service.getProcessedItemState('workitem:999')).toBeUndefined();
@@ -1064,12 +1063,12 @@ More text.
         getAllState: () => records,
       });
 
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, repo, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, repo, noopLogger);
       expect(service.getAllState()).toEqual(records);
     });
 
     it('getAllState returns [] when no repo is provided', () => {
-      const service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      const service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       expect(service.getAllState()).toEqual([]);
     });
   });
@@ -1096,7 +1095,7 @@ More text.
         heartbeat: { enabled: false }
       }));
 
-      service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       service.startScheduler();
 
       expect(service.isSchedulerActive()).toBe(false);
@@ -1110,7 +1109,7 @@ More text.
         heartbeat: { enabled: true, intervalMs: 60000 }
       }));
 
-      service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       service.startScheduler();
 
       expect(service.isSchedulerActive()).toBe(true);
@@ -1124,7 +1123,7 @@ More text.
         heartbeat: { enabled: true, intervalMs: 60000 }
       }));
 
-      service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       service.startScheduler();
       expect(service.isSchedulerActive()).toBe(true);
 
@@ -1135,7 +1134,7 @@ More text.
     });
 
     it('stopScheduler on inactive scheduler is a no-op (no throw)', () => {
-      service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
 
       expect(() => service.stopScheduler()).not.toThrow();
       expect(service.isSchedulerActive()).toBe(false);
@@ -1147,7 +1146,7 @@ More text.
         heartbeat: { enabled: true, intervalMs: 60000 }
       }));
 
-      service = new HeartbeatService(testFs, defaultExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, defaultRunner, TEST_CONFIG_DIR, undefined, noopLogger);
       service.startScheduler();
       service.startScheduler();
 
@@ -1163,24 +1162,24 @@ More text.
 - [x] Fetch Azure DevOps work items assigned to me
 `);
 
-      let execSyncCallCount = 0;
-      const mockExecutor: CommandExecutor = {
-        execSync: () => {
-          execSyncCallCount++;
-          return '[]';
+      let runCallCount = 0;
+      const mockRunner_: CommandRunner = {
+        run: () => {
+          runCallCount++;
+          return { stdout: '[]', stderr: '', exitCode: 0 };
         },
       };
 
-      service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger);
       service.startScheduler();
 
       // At 4999ms the initial heartbeat should NOT have fired yet
       await vi.advanceTimersByTimeAsync(4999);
-      expect(execSyncCallCount).toBe(0);
+      expect(runCallCount).toBe(0);
 
-      // At 5000ms the initial heartbeat fires, calling runHeartbeat which calls checkForChanges -> fetchWorkItems -> execSync
+      // At 5000ms the initial heartbeat fires, calling runHeartbeat which calls checkForChanges -> fetchWorkItems -> run
       await vi.advanceTimersByTimeAsync(1);
-      expect(execSyncCallCount).toBe(1);
+      expect(runCallCount).toBe(1);
 
       rmSync(heartbeatPath);
     });
@@ -1197,32 +1196,32 @@ More text.
 - [x] Fetch Azure DevOps work items assigned to me
 `);
 
-      let execSyncCallCount = 0;
-      const mockExecutor: CommandExecutor = {
-        execSync: () => {
-          execSyncCallCount++;
-          return '[]';
+      let runCallCount = 0;
+      const mockRunner_: CommandRunner = {
+        run: () => {
+          runCallCount++;
+          return { stdout: '[]', stderr: '', exitCode: 0 };
         },
       };
 
-      service = new HeartbeatService(testFs, mockExecutor, TEST_CONFIG_DIR, undefined, noopLogger);
+      service = new HeartbeatService(testFs, mockRunner_, TEST_CONFIG_DIR, undefined, noopLogger);
       service.startScheduler();
 
       // Run 1: initial delay fires at 5000ms
       await vi.advanceTimersByTimeAsync(5000);
-      expect(execSyncCallCount).toBe(1);
+      expect(runCallCount).toBe(1);
 
       // Run 2: interval fires at 10000ms (total 15000ms from start, but timer started at 0)
       // The interval timer fires at 10000ms from start
       await vi.advanceTimersByTimeAsync(5000);
-      expect(execSyncCallCount).toBe(2);
+      expect(runCallCount).toBe(2);
 
       // After maxRuns=2, scheduler should have stopped
       expect(service.isSchedulerActive()).toBe(false);
 
       // Further interval ticks should not fire additional runs
       await vi.advanceTimersByTimeAsync(10000);
-      expect(execSyncCallCount).toBe(2);
+      expect(runCallCount).toBe(2);
 
       rmSync(heartbeatPath);
       rmSync(configPath);

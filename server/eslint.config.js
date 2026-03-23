@@ -283,6 +283,24 @@ export default tseslint.config(
     },
   },
 
+  // ── Block 8b: SEC-INV-2 — Ban shell-string subprocess APIs ─────────
+  // execSync and exec invoke a shell and are command injection vectors.
+  // Use spawnSync/spawn with argv arrays instead.
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        { selector: 'ImportDeclaration[source.value=/\\.js$/]', message: 'Do not use .js extensions in imports. Use extensionless paths (e.g., ./foo/index).' },
+        { selector: 'ExportNamedDeclaration[source.value=/\\.js$/]', message: 'Do not use .js extensions in re-exports. Use extensionless paths.' },
+        { selector: "ImportDeclaration[source.value='child_process'] ImportSpecifier[imported.name='execSync']", message: 'execSync is banned. Use spawnSync with argv arrays (CommandRunner) instead.' },
+        { selector: "ImportDeclaration[source.value='child_process'] ImportSpecifier[imported.name='exec']", message: 'exec is banned. Use spawn with argv arrays instead.' },
+        { selector: "ImportDeclaration[source.value='node:child_process'] ImportSpecifier[imported.name='execSync']", message: 'execSync is banned. Use spawnSync with argv arrays (CommandRunner) instead.' },
+        { selector: "ImportDeclaration[source.value='node:child_process'] ImportSpecifier[imported.name='exec']", message: 'exec is banned. Use spawn with argv arrays instead.' },
+      ],
+    },
+  },
+
   // ── Block 9: No explicit `any` in source ────────────────────────────
   {
     files: ['src/**/*.ts'],
@@ -311,4 +329,5 @@ export default tseslint.config(
       'no-console': 'error',
     },
   },
+
 );

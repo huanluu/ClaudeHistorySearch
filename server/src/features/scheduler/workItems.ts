@@ -1,18 +1,20 @@
-import type { CommandExecutor, WorkItem, ChangeSet } from './types';
+import type { CommandRunner, WorkItem, ChangeSet } from './types';
 
 /**
  * Fetch work items from Azure DevOps using az CLI with WIQL query
  */
-function fetchWorkItems(executor: CommandExecutor): WorkItem[] {
+function fetchWorkItems(runner: CommandRunner): WorkItem[] {
+  const wiql = "SELECT [System.Id], [System.Title], [System.State], [System.ChangedDate], [System.AssignedTo], [System.Description], [System.WorkItemType] FROM WorkItems WHERE [System.AssignedTo] = @me AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.State] <> 'Resolved' ORDER BY [System.ChangedDate] DESC";
+  const result = runner.run('az', ['boards', 'query', '--wiql', wiql, '-o', 'json']);
+
+  if (result.exitCode !== 0) {
+    throw new Error(`az boards query failed (exit ${result.exitCode}): ${result.stderr || 'unknown error'}`);
+  }
+
   try {
-    const wiql = "SELECT [System.Id], [System.Title], [System.State], [System.ChangedDate], [System.AssignedTo], [System.Description], [System.WorkItemType] FROM WorkItems WHERE [System.AssignedTo] = @me AND [System.State] <> 'Closed' AND [System.State] <> 'Removed' AND [System.State] <> 'Resolved' ORDER BY [System.ChangedDate] DESC";
-    const output = executor.execSync(
-      `az boards query --wiql "${wiql}" -o json`,
-      { encoding: 'utf-8' }
-    );
-    return JSON.parse(output) as WorkItem[];
-  } catch (error) {
-    throw new Error(`Failed to fetch work items: ${(error as Error).message}`);
+    return JSON.parse(result.stdout) as WorkItem[];
+  } catch {
+    throw new Error(`Failed to parse az boards output as JSON: ${result.stdout.slice(0, 200)}`);
   }
 }
 
@@ -20,7 +22,7 @@ function fetchWorkItems(executor: CommandExecutor): WorkItem[] {
  * Check for new or updated work items
  */
 export async function checkForChanges(
-  executor: CommandExecutor,
+  runner: CommandRunner,
   getProcessedItemState: (key: string) => string | undefined,
 ): Promise<ChangeSet> {
   const result: ChangeSet = {
@@ -30,7 +32,7 @@ export async function checkForChanges(
   };
 
   try {
-    const workItems = fetchWorkItems(executor);
+    const workItems = fetchWorkItems(runner);
 
     for (const item of workItems) {
       const key = `workitem:${item.id}`;

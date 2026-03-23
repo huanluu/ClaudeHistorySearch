@@ -1,5 +1,4 @@
 import Bonjour from 'bonjour-service';
-import { execSync } from 'child_process';
 import { Router } from 'express';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -11,7 +10,7 @@ import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AssistantService, registerAssistantHandlers } from './features/assistant/index';
 import { SdkAssistantBackend, createCronMcpTools } from './shared/infra/assistant/index';
-import { ClaudeRuntime, CopilotRuntime, createNodeCommandExecutor } from './shared/infra/runtime/index';
+import { ClaudeRuntime, CopilotRuntime, createNodeCommandRunner } from './shared/infra/runtime/index';
 import type { CliRuntime } from './shared/provider/index';
 import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { ClaudeSessionSource, CopilotSessionSource } from './shared/infra/parsers/index';
@@ -38,16 +37,10 @@ export interface App {
 /**
  * Check if macOS firewall stealth mode is enabled (blocks Bonjour discovery)
  */
-function isStealthModeEnabled(): boolean {
-  try {
-    const output = execSync('/usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    return output.includes('stealth mode is on');
-  } catch {
-    return false;
-  }
+function isStealthModeEnabled(runner: { run(cmd: string, args: readonly string[]): { stdout: string; exitCode: number } }): boolean {
+  const result = runner.run('/usr/libexec/ApplicationFirewall/socketfilterfw', ['--getstealthmode']);
+  if (result.exitCode !== 0) return false;
+  return result.stdout.includes('stealth mode is on');
 }
 
 /**
@@ -92,6 +85,7 @@ interface AppContext {
   heartbeatService: HeartbeatService;
   cronService: CronService;
   cronMcpServerFactory: () => ReturnType<typeof createCronMcpTools>;
+  commandRunner: ReturnType<typeof createNodeCommandRunner>;
   claudeRuntime: ClaudeRuntime;
   workingDirValidator: WorkingDirValidator;
   allowedDirs: string[];
@@ -137,7 +131,7 @@ function publishBonjourService(ctx: AppContext): void {
     ctx.logger.log({ msg: 'Bonjour advertisement skipped (skipBonjour option)', op: 'server.start' });
     return;
   }
-  if (isStealthModeEnabled()) {
+  if (isStealthModeEnabled(ctx.commandRunner)) {
     ctx.logger.log({ msg: 'Bonjour advertisement disabled (firewall stealth mode is on)', op: 'server.start' });
     return;
   }
@@ -257,8 +251,8 @@ export function createApp(config: AppConfig): App {
   const copilotRuntime = new CopilotRuntime(process.env);
   const runtimes = new Map<string, CliRuntime>([[claudeRuntime.name, claudeRuntime], [copilotRuntime.name, copilotRuntime]]);
 
-  const commandExecutor = createNodeCommandExecutor();
-  const heartbeatService = new HeartbeatService(fs, commandExecutor, undefined, heartbeatRepo, logger, claudeRuntime, resolveHeartbeatEnvOverrides());
+  const commandRunner = createNodeCommandRunner();
+  const heartbeatService = new HeartbeatService(fs, commandRunner, undefined, heartbeatRepo, logger, claudeRuntime, resolveHeartbeatEnvOverrides());
   const cronService = new CronService(cronRepo, (opts) => claudeRuntime.runHeadless(opts, logger), logger);
   const cronMcpServerFactory = () => createCronMcpTools(cronService);
 
@@ -301,7 +295,7 @@ export function createApp(config: AppConfig): App {
   const ctx: AppContext = {
     config, serviceType, dbPath, logger, sessionRepo, sessionSources, fs, transport,
     fileWatcher, agentStore, diagnosticsService, heartbeatService, cronService, cronMcpServerFactory,
-    claudeRuntime, workingDirValidator, allowedDirs,
+    commandRunner, claudeRuntime, workingDirValidator, allowedDirs,
     wsGateway: null, bonjour: null, bonjourService: null, reindexTimer: null,
   };
 

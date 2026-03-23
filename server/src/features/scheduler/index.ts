@@ -5,7 +5,8 @@ export type {
   HeartbeatResult,
   WorkItem,
   ChangeSet,
-  CommandExecutor,
+  CommandRunner,
+  CommandResult,
 } from './types';
 export { registerSchedulerRoutes } from './routes';
 export type { SchedulerRouteDeps } from './routes';
