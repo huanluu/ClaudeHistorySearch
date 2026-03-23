@@ -85,10 +85,11 @@ This skill is designed to work in any context — main conversation, subagent, o
 
    If tests fail unexpectedly, diagnose and fix before moving on. If you get stuck after 3 attempts on the same step, stop and report what's blocking.
 
-8. **Verify acceptance criteria** — Go through each acceptance criterion from the issue. For each one:
-   - If it's testable via automated tests: confirm the test exists and passes
-   - If it's a grep/scan check: run the grep and confirm the result
-   - If it's manual-only: note it as "requires manual verification" in the report
+8. **Verify acceptance criteria** — Go through each acceptance criterion from the issue. Classify each one:
+   - **Verified by unit/contract test**: confirm the test exists and passes → mark `[x]`
+   - **Verified by grep/scan**: run the check now → mark `[x]`
+   - **Needs integration test (live server)**: flag as `[ ] (needs /qa)` — write the integration test if it doesn't exist, but don't run it (server may not be current)
+   - **Needs manual verification**: flag as `[ ] (manual)` — cannot be automated
 
 ### Phase 4: Review & Commit
 
@@ -118,35 +119,69 @@ This skill is designed to work in any context — main conversation, subagent, o
     )"
     ```
 
-### Phase 5: Report
+### Phase 5: Report & Persist
 
-12. **Return a structured result** — Summarize what happened:
+12. **Post a completion comment on the GitHub issue** — This is the permanent record. Use `gh issue comment`:
+
+    ```bash
+    gh issue comment <number> --body "$(cat <<'COMMENT_EOF'
+    ## Implementation Report
+
+    **Status:** DONE | BLOCKED | NEEDS_MANUAL_VERIFICATION
+    **Commit:** `<hash>` on branch `<branch>`
+    **Implemented by:** Claude Opus 4.6 | **Reviewed by:** GitHub Copilot (GPT-5.4)
+
+    ### Changes
+    | File | What changed |
+    |------|-------------|
+    | `path/to/file` | <description> |
+
+    ### Key Decisions
+    - <non-obvious choice and why — e.g., "Used healthy|degraded not unhealthy because /health never returns it (caught by Copilot design review)">
+    - <any tradeoffs made>
+
+    ### Design Review Findings (Copilot GPT-5.4)
+    - **Cycle <N>:** <verdict>
+    - <blocking findings that were addressed, if any>
+    - <warnings noted>
+
+    ### Code Review Findings (Copilot GPT-5.4)
+    - **Cycle <N>:** <verdict>
+    - <critical findings fixed>
+    - <warnings noted>
+
+    ### Acceptance Criteria
+    - [x] <criterion> — verified by <unit test name / grep / scan>
+    - [ ] <criterion> — **needs /qa**: covered by integration test `<test name>`
+    - [ ] <criterion> — **manual**: <reason it can't be automated>
+
+    ### Tests (unit + contract only)
+    - npm test: PASS/FAIL (<count> tests)
+    - swift test: PASS/FAIL (<count> tests) *(if applicable)*
+    - npm run lint: PASS/FAIL *(if applicable)*
+
+    ### Next Step
+    Run `/qa <number>` to deploy, run integration tests, and verify remaining AC.
+    COMMENT_EOF
+    )"
+    ```
+
+    **Closing rules:**
+    - **Never close the issue from `/fix-issue`.** Implementation is done, but `/qa` hasn't verified yet.
+    - The issue stays open until `/qa` signs off (or the user closes it manually).
+    - If status is BLOCKED: label it:
+      ```bash
+      gh issue edit <number> --add-label "blocked"
+      ```
+
+13. **Return a brief result to the caller** — Keep this short since the full report is on the issue:
 
     ```
     ## Result
-
     **Issue:** #<number> — <title>
-    **Status:** DONE | BLOCKED | NEEDS_MANUAL_VERIFICATION
-    **Branch:** <current branch name>
-    **Commit:** <commit hash>
-
-    ### Changes
-    - <file>: <what changed>
-
-    ### Tests
-    - npm test: PASS/FAIL
-    - swift test: PASS/FAIL (if applicable)
-    - npm run lint: PASS/FAIL (if applicable)
-
-    ### Acceptance Criteria
-    - [x] <criterion> — verified by <test name / grep / manual>
-    - [ ] <criterion> — requires manual verification: <reason>
-
-    ### Review
-    - Design review: Approved (cycle N)
-    - Code review: Passed (cycle N)
-    - Critical findings fixed: <count>
-    - Warnings noted: <list>
+    **Status:** DONE | BLOCKED
+    **Commit:** <hash>
+    **Comment:** posted to issue
     ```
 
 ## Error Handling

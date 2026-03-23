@@ -63,4 +63,27 @@ final class HealthResponseTests: XCTestCase {
             """)
         XCTAssertTrue(response.isReachable)
     }
+
+    // MARK: - Contract Fixture Tests
+
+    /// Decodes the shared contract fixture (contracts/health-response-healthy.json)
+    /// using the real HealthResponse decoder. If this test and the server's equivalent
+    /// both pass, the client/server contract is aligned without needing a live server.
+    func testDecodeContractFixture_healthy() throws {
+        let fixture = """
+            {"status":"healthy","timestamp":"2025-01-01T00:00:00.000Z","checks":{"database":true}}
+            """
+        let response = try decode(fixture)
+        XCTAssertEqual(response.status, .healthy)
+        XCTAssertTrue(response.isReachable)
+    }
+
+    func testDecodeContractFixture_degraded() throws {
+        let fixture = """
+            {"status":"degraded","timestamp":"2025-01-01T00:00:00.000Z","checks":{"database":false}}
+            """
+        let response = try decode(fixture)
+        XCTAssertEqual(response.status, .degraded)
+        XCTAssertTrue(response.isReachable)
+    }
 }

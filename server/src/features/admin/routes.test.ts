@@ -47,6 +47,17 @@ describe('GET /health', () => {
     expect(typeof res.body.timestamp).toBe('string');
   });
 
+  it('health response matches shared contract fixture', async () => {
+    const fixture = (await import('../../../../contracts/health-response-healthy.json')).default;
+    const app = createAdminApp({});
+
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    // Response must have the same essential fields as the contract fixture
+    expect(res.body.status).toBe(fixture.status);
+    expect(typeof res.body.timestamp).toBe(typeof fixture.timestamp);
+  });
+
   it('should return enhanced health when diagnosticsService is provided', async () => {
     const mockDiagnostics = {
       getHealth: vi.fn().mockReturnValue({

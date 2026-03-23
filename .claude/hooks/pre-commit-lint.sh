@@ -10,7 +10,8 @@ if ! echo "$COMMAND" | grep -qE '(^|[;&|][[:space:]]*)git[[:space:]]+commit\b'; 
   exit 0
 fi
 
-cd "$CLAUDE_PROJECT_DIR" || exit 0
+# Use git toplevel (works in worktrees) with CLAUDE_PROJECT_DIR as fallback
+cd "$(git rev-parse --show-toplevel 2>/dev/null || echo "$CLAUDE_PROJECT_DIR")" || exit 0
 
 # In worktrees, symlink node_modules from the main repo to avoid reinstalling
 if [ ! -d server/node_modules ]; then

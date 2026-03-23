@@ -16,7 +16,8 @@ if ! echo "$COMMAND" | grep -qE '(^|[;&|][[:space:]]*)git[[:space:]]+commit\b'; 
   exit 0
 fi
 
-REPO="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+# Use git toplevel (works in worktrees) with CLAUDE_PROJECT_DIR as fallback
+REPO="$(git rev-parse --show-toplevel 2>/dev/null || echo "$CLAUDE_PROJECT_DIR")"
 [ -z "$REPO" ] && exit 0
 MARKER="$REPO/.code-reviewed"
 

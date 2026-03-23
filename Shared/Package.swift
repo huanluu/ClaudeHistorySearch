@@ -18,5 +18,8 @@ let package = Package(
         .testTarget(
             name: "ClaudeHistorySharedTests",
             dependencies: ["ClaudeHistoryShared"]),
+        .testTarget(
+            name: "ClaudeHistorySharedIntegrationTests",
+            dependencies: ["ClaudeHistoryShared"]),
     ]
 )
