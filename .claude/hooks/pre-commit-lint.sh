@@ -53,8 +53,11 @@ if [ $? -ne 0 ]; then
   exit 2
 fi
 
-# --- Mac app build (only if Swift/app files are staged) ---
-if git diff --cached --name-only | grep -qE '^(Shared/|ClaudeHistorySearch/|ClaudeHistorySearchMac/)'; then
+# --- App builds (only if Swift/app files are staged) ---
+STAGED=$(git diff --cached --name-only)
+
+# Mac app: triggers on Shared/, ClaudeHistorySearch/, or ClaudeHistorySearchMac/
+if echo "$STAGED" | grep -qE '^(Shared/|ClaudeHistorySearch/|ClaudeHistorySearchMac/)'; then
   MAC_OUTPUT=$(xcodebuild -project ClaudeHistorySearch.xcodeproj \
     -scheme ClaudeHistorySearchMac \
     -configuration Release \
@@ -64,6 +67,21 @@ if git diff --cached --name-only | grep -qE '^(Shared/|ClaudeHistorySearch/|Clau
   if [ $? -ne 0 ]; then
     echo "Mac app build failed — fix build errors before committing:" >&2
     echo "$MAC_OUTPUT" | grep "error:" >&2
+    exit 2
+  fi
+fi
+
+# iOS app: triggers on Shared/ or ClaudeHistorySearch/ (not ClaudeHistorySearchMac/)
+if echo "$STAGED" | grep -qE '^(Shared/|ClaudeHistorySearch/)'; then
+  IOS_OUTPUT=$(xcodebuild -project ClaudeHistorySearch.xcodeproj \
+    -scheme ClaudeHistorySearch \
+    -configuration Release \
+    -derivedDataPath build \
+    -destination 'generic/platform=iOS Simulator' \
+    build 2>&1)
+  if [ $? -ne 0 ]; then
+    echo "iOS app build failed — fix build errors before committing:" >&2
+    echo "$IOS_OUTPUT" | grep "error:" >&2
     exit 2
   fi
 fi
