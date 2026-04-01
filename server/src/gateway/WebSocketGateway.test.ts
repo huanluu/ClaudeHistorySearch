@@ -50,59 +50,66 @@ describe('WebSocketGateway', () => {
   });
 
   describe('authentication via X-API-Key header', () => {
-    it('should reject connection without API key', () => {
+    it('should accept loopback connection without API key (trusted)', () => {
       return new Promise<void>((resolve, reject) => {
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`);
 
-        ws.on('error', () => {
-          resolve();
-        });
-
         ws.on('open', () => {
           ws.close();
-          reject(new Error('Should not connect without API key'));
+          resolve();
         });
 
-        setTimeout(() => {
-          ws.close();
-          resolve();
-        }, 1000);
+        ws.on('error', (err) => {
+          reject(err);
+        });
       });
     });
 
-    it('should reject connection with API key only in query string', () => {
+    it('should accept loopback connection with query-string-only key (trusted)', () => {
       return new Promise<void>((resolve, reject) => {
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws?apiKey=${TEST_KEY}`);
 
-        ws.on('error', () => {
-          resolve();
-        });
-
         ws.on('open', () => {
           ws.close();
-          reject(new Error('Should not connect with query-string-only API key'));
+          resolve();
         });
 
-        setTimeout(() => {
-          ws.close();
-          resolve();
-        }, 1000);
+        ws.on('error', (err) => {
+          reject(err);
+        });
       });
     });
 
-    it('should reject connection with invalid X-API-Key header', () => {
+    it('should accept loopback connection with invalid header (trusted)', () => {
       return new Promise<void>((resolve, reject) => {
         const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
           headers: { 'X-API-Key': 'invalid-key' },
         });
 
+        ws.on('open', () => {
+          ws.close();
+          resolve();
+        });
+
+        ws.on('error', (err) => {
+          reject(err);
+        });
+      });
+    });
+
+    it('should reject loopback connection with browser Origin but no API key', () => {
+      return new Promise<void>((resolve, reject) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`, {
+          origin: 'http://evil.example.com',
+        });
+
         ws.on('error', () => {
           resolve();
         });
 
         ws.on('open', () => {
           ws.close();
-          reject(new Error('Should not connect with invalid API key'));
+          reject(new Error('Should not accept browser-origin connection without API key'));
         });
 
         setTimeout(() => {

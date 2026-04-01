@@ -155,19 +155,24 @@ export class WebSocketGateway implements WsGateway {
     info: { origin: string; secure: boolean; req: IncomingMessage },
     callback: (result: boolean, code?: number, message?: string) => void,
   ): void {
-    // No API key configured: bootstrap mode — loopback only
+    const remoteAddress = info.req.socket?.remoteAddress;
+
+    // Loopback trust for native clients (Mac/iOS app via URLSession).
+    // Browser-originated WebSocket upgrades include an Origin header —
+    // require API key for those to prevent cross-site WebSocket hijacking.
+    if (isLoopback(remoteAddress) && !info.origin) {
+      callback(true);
+      return;
+    }
+
+    // No API key configured: reject non-loopback (bootstrap mode)
     if (!this._hasApiKey()) {
-      const remoteAddress = info.req.socket?.remoteAddress;
-      if (isLoopback(remoteAddress)) {
-        callback(true);
-        return;
-      }
       this.logger.log({ msg: 'WebSocket rejected: no API key configured, non-loopback client', op: 'ws.upgrade' });
       callback(false, 401, 'API key not configured. Access restricted to localhost.');
       return;
     }
 
-    // API key configured: require X-API-Key header
+    // Remote clients: require X-API-Key header
     const apiKey = info.req.headers['x-api-key'];
 
     if (!apiKey || typeof apiKey !== 'string') {

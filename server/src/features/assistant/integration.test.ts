@@ -177,15 +177,16 @@ describe('Assistant WebSocket Integration', () => {
     ws.close();
   });
 
-  it('unauthenticated client is rejected', async () => {
+  it('loopback client without API key is accepted (trusted)', async () => {
     const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws`);
 
-    await new Promise<void>((resolve) => {
-      ws.on('close', () => resolve());
-      ws.on('error', () => resolve());
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => resolve());
+      ws.on('error', (err) => reject(err));
     });
 
-    expect(ws.readyState).not.toBe(WebSocket.OPEN);
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    ws.close();
   });
 
   it('disconnect and reconnect with same conversationId preserves multi-turn', async () => {
