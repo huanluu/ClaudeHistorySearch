@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Message types for WebSocket communication
 public enum WSMessageType: String, Codable {
@@ -201,6 +202,7 @@ public protocol WebSocketClientProtocol: AnyObject {
 }
 
 /// WebSocket client for real-time communication with the server
+@Observable
 @MainActor
 public class WebSocketClient {
     public private(set) var state: WebSocketState = .disconnected
