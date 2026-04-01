@@ -195,5 +195,55 @@ describe('authMiddleware', () => {
 
       expect(next).toHaveBeenCalledTimes(1);
     });
+
+    it('allows loopback IPv4 (127.0.0.1) without key when API key configured', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '127.0.0.1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('allows loopback IPv6 (::1) without key when API key configured', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '::1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('allows loopback IPv4-mapped (::ffff:127.0.0.1) without key when API key configured', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '::ffff:127.0.0.1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('allows /admin from loopback without key when API key configured', () => {
+      const req = createMockReq('/admin', { remoteAddress: '127.0.0.1' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('still rejects non-loopback without key when API key configured', () => {
+      const req = createMockReq('/sessions', { remoteAddress: '192.168.1.100' });
+      const res = createMockRes();
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
   });
 });

@@ -25,6 +25,8 @@ export interface AppConfig {
   logPath?: string;
   skipBonjour?: boolean;
   sessionSources?: SessionSource[];
+  /** Override auth middleware (for testing with custom auth deps) */
+  authMiddlewareOverride?: import('express').RequestHandler;
 }
 
 export interface App {
@@ -271,7 +273,7 @@ export function createApp(config: AppConfig): App {
   const requestLoggerOptions: RequestLoggerOptions = { level: (loggingConfig?.requestLogLevel as RequestLogLevel) ?? 'all', logger };
   const transport = new HttpTransport({ port });
   transport.use(createRequestLogger(requestLoggerOptions));
-  transport.use(authMiddleware);
+  transport.use(config.authMiddlewareOverride ?? authMiddleware);
 
   const onConfigChanged = (section: string): void => {
     if (section === 'heartbeat') {

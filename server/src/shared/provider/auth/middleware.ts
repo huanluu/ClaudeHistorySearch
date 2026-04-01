@@ -3,8 +3,11 @@ import { validateApiKey, hasApiKey } from './keyManager';
 
 /**
  * Auth mode:
- * - 'required': API key must be present and valid
+ * - 'required': API key required for remote clients; loopback always trusted
  * - 'bootstrap-localhost-only': No key configured; allow loopback, reject others
+ *
+ * Loopback is trusted in both modes because this is a personal, single-user tool.
+ * Cross-origin CSRF is mitigated by the CORS policy (restricted origins).
  */
 export type AuthMode = 'required' | 'bootstrap-localhost-only';
 
@@ -53,6 +56,12 @@ export function createAuthMiddleware(deps: AuthDeps) {
         error: 'Unauthorized',
         message: 'API key not configured. Access restricted to localhost. Run "npm run key:generate" to enable remote access.'
       });
+      return;
+    }
+
+    // Loopback is always trusted — the API key protects remote access (iOS app over network)
+    if (isLoopback(req.socket?.remoteAddress)) {
+      next();
       return;
     }
 
