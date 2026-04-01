@@ -565,6 +565,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.82rem;
+    table-layout: fixed;
   }
   .cron-table th {
     text-align: left;
@@ -647,7 +648,7 @@
   }
 
   .cron-prompt {
-    max-width: 220px;
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1258,7 +1259,7 @@
       return;
     }
     var html = '<table class="cron-table"><thead><tr>'
-      + '<th>Name</th><th>Schedule</th><th>Status</th><th>Last Run</th><th>Next Run</th><th>Prompt</th><th></th>'
+      + '<th style="width:12%">Name</th><th style="width:12%">Schedule</th><th style="width:8%">Status</th><th style="width:8%">Last Run</th><th style="width:8%">Next Run</th><th>Prompt</th><th style="width:160px">Actions</th>'
       + '</tr></thead><tbody>';
     jobs.forEach(function(job) {
       var sc = jobStatusClass(job);
