@@ -113,13 +113,45 @@ Deploy fresh code, run all tests including integration, and optionally verify sp
 
    **Be agentic:** Don't just check what's easy. If an AC describes a specific scenario to test, try to actually test it. The goal is maximum automated verification — flag "manual" only for things that truly require a human (UI interaction, subjective judgment, physical device testing).
 
-10. **Update each issue with a QA report comment:**
+10. **Cross-model verification via Copilot** — After you've done your own AC verification, send the evidence to Copilot for an independent second opinion. This is the adversarial check — Copilot reviews your work, not the implementer's.
+
+    Construct a prompt with:
+    - The issue title and AC list
+    - Your verification results for each AC (what you checked, what you found)
+    - The test results from Phase 2
+
+    Then run Copilot:
+    ```
+    /copilot You are a QA auditor reviewing another agent's verification work. Below is a GitHub issue with acceptance criteria, and the verification results from the QA agent (Claude). Your job is to challenge the verification — look for:
+
+    1. AC marked as verified but the evidence is weak or circumstantial
+    2. Grep checks that could give false negatives (too narrow pattern, wrong directory)
+    3. Test names that don't actually test what the AC claims
+    4. Inject-and-lint tests that could pass for the wrong reason
+    5. AC that was skipped or marked "manual" but could actually be automated
+    6. Anything the QA agent missed or got wrong
+
+    Read the actual source files to spot-check claims. Don't trust — verify.
+
+    For each AC, state: AGREE (verification is solid) or CHALLENGE (with reason).
+    End with: ENDORSE or REJECT.
+
+    <paste issue AC + your verification results + test results>
+    ```
+
+    The `/copilot` skill handles model selection (GPT-5.4), timeout, and error handling.
+
+    - If Copilot **endorses**: proceed to report.
+    - If Copilot **challenges** specific AC: re-verify those AC using Copilot's feedback, then re-submit to Copilot. Maximum 2 Copilot review cycles.
+    - If Copilot is unavailable: note in the report "Cross-model verification: skipped (Copilot unavailable)" and proceed with your own results.
+
+11. **Update each issue with a QA report comment:**
     ```bash
     gh issue comment <number> --body "$(cat <<'COMMENT_EOF'
     ## QA Verification Report
 
     **Server:** deployed and healthy
-    **Mac app build:** PASS/FAIL/SKIPPED
+    **Mac app build:** PASS/FAIL
 
     ### Test Results
     - npm test: PASS (<count> tests)
@@ -128,25 +160,31 @@ Deploy fresh code, run all tests including integration, and optionally verify sp
     - swift test (integration): PASS (<count> tests)
 
     ### Acceptance Criteria Verification
-    - [x] <criterion> — verified by integration test: <test name>
-    - [x] <criterion> — verified by unit test (from /fix-issue)
+    - [x] <criterion> — verified by <method>
     - [ ] <criterion> — requires manual verification: <reason>
 
-    ### Verdict
-    **SIGN OFF** — all automatable AC verified
+    ### Cross-Model Verification (Copilot GPT-5.4)
+    - **Verdict:** ENDORSE / REJECT
+    - <any challenges raised and how they were resolved>
+
+    ### Final Verdict
+    **SIGN OFF** — all AC verified, Copilot endorsed
     or
     **PARTIAL** — N AC require manual verification (listed above)
+    or
+    **DISPUTED** — Copilot raised unresolved challenges (details above)
     COMMENT_EOF
     )"
     ```
 
-11. **Close issues that are fully verified:**
-    - If ALL AC are checked (no manual items remaining): `gh issue close <number>`
+12. **Close issues that are fully verified:**
+    - If ALL AC are checked AND Copilot endorsed: `gh issue close <number>`
+    - If Copilot raised unresolved challenges: leave open, document the dispute
     - If some AC need manual verification: leave open, the QA report documents what's left
 
 ### Phase 4: Report
 
-12. **Summary to caller:**
+13. **Summary to caller:**
 
     If issue numbers were provided:
     ```
