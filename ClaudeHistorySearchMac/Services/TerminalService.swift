@@ -53,7 +53,8 @@ class TerminalService {
         let isOfficeEnlistment = officeEnlistmentPath.map { !$0.isEmpty && workingDirectory.contains($0) } ?? false
 
         // Build the command: optionally run 'office' first to prepare enlistment
-        let resumeCommand = "\(cli.binary) --resume \(sessionId) \(cli.flags)"
+        let addDirs = isOfficeEnlistment ? " --add-dir office-harness/ --add-dir office-harness/utilities/" : ""
+        let resumeCommand = "\(cli.binary) --resume \(sessionId) \(cli.flags)\(addDirs)"
         let command: String
         if isOfficeEnlistment {
             command = "office && cd '\(escapedDir)' && \(resumeCommand)"
