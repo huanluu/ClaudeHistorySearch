@@ -20,11 +20,20 @@ This single script:
 5. Builds the Mac menu bar app and installs it to `/Applications`
 6. Verifies everything is running
 
-After setup, enter the API key in the app's settings. Find it with:
+Then connect the app to the server:
+
+1. Click the menu bar icon to open the popover
+2. Click the **gear icon** (bottom-left) to open Settings
+3. The app auto-discovers the server via Bonjour — you should see "Connected" under Server Connection
+4. Under **Authentication**, paste your API key and click **Save Key**
+
+Find the API key with:
 
 ```bash
 cat ~/.claude-history-server/.api-key
 ```
+
+If the server isn't discovered automatically (e.g. corporate firewall), enter `http://localhost:3847` under Manual Connection in Settings.
 
 ## Prerequisites
 
