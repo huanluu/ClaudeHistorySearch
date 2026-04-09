@@ -1,233 +1,146 @@
 # Claude History Search
 
-A local search system for Claude Code session history. Consists of a TypeScript server that indexes your Claude Code sessions and iOS/Mac apps for searching, browsing, and running live sessions.
+Instantly search and resume your Claude Code sessions from a Mac menu bar app.
 
-## Features
+A local TypeScript server indexes every Claude Code session transcript (`~/.claude/projects/**/*.jsonl`) into a SQLite FTS5 database. A SwiftUI menu bar app connects to it for fast full-text search and one-click session resumption.
 
-- **Full-text search** across all Claude Code conversations using SQLite FTS5
-- **Live sessions** - Start and resume Claude Code sessions from iOS/Mac via WebSocket
-- **Automatic indexing** of session history from `~/.claude/projects/`
-- **Real-time updates** via file watching (new sessions indexed automatically)
-- **Bonjour discovery** - Apps automatically find the server on your local network
-- **Remote access** - Access from anywhere via ngrok tunnel
-- **Session browsing** - View all sessions grouped by project with pagination
-- **Cross-platform** - iOS, iPad, and Mac apps with shared codebase
+## Quick Setup
 
-## Requirements
+```bash
+git clone https://github.com/huanluu/ClaudeHistorySearch.git
+cd ClaudeHistorySearch
+./scripts/setup.sh
+```
+
+This single script:
+1. Checks prerequisites (Node.js 18+, Xcode, Claude CLI)
+2. Installs server dependencies
+3. Generates an API key
+4. Installs and starts the server as a launchd service (auto-starts at login)
+5. Builds the Mac menu bar app and installs it to `/Applications`
+6. Verifies everything is running
+
+After setup, enter the API key in the app's settings. Find it with:
+
+```bash
+cat ~/.claude-history-server/.api-key
+```
+
+## Prerequisites
+
+| Dependency | Version | Install |
+|------------|---------|---------|
+| **Node.js** | 18+ | `brew install node` |
+| **macOS** | 14.0+ (Sonoma) | — |
+| **Xcode** | 15+ | Mac App Store |
+| **Claude CLI** | Latest | [Install Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) |
+| **iTerm2** | Recommended | `brew install --cask iterm2` |
+
+iTerm2 is used to launch and resume sessions in a terminal with smart split-pane layouts. Falls back to Terminal.app if iTerm2 isn't installed.
+
+## Manual Installation
+
+If you prefer to set things up step by step instead of using `setup.sh`:
 
 ### Server
-- Node.js 18.0.0 or higher
-- macOS (for Claude Code session files)
-- Claude CLI installed (for live sessions)
-
-### iOS/Mac Apps
-- iOS 17.0+ / macOS 14.0+
-- Xcode 15+
-
-## Getting Started
-
-### 1. Start the Server
 
 ```bash
 cd server
 npm install
-npm start
+npm run key:generate    # Save the printed key — you'll need it in the app
+npm start               # Starts on port 3847, indexes all sessions
 ```
 
-The server will:
-- Start on port 3847
-- Advertise via Bonjour as `_claudehistory._tcp` (unless firewall stealth mode is detected)
-- Index all existing sessions from `~/.claude/projects/`
-- Watch for new sessions and index them automatically
+### launchd service (auto-start at login)
 
-For development with auto-reload:
 ```bash
-npm run dev
+# The setup script creates this automatically, but if doing it manually:
+# See scripts/setup.sh for the full plist template
+launchctl load ~/Library/LaunchAgents/com.claude-history-server.plist
 ```
 
-### 2. Run the iOS/Mac App
+Manage the service:
 
-Open `ClaudeHistorySearch.xcodeproj` in Xcode:
-- **iOS**: Select `ClaudeHistorySearch` scheme, run on device or simulator
-- **Mac**: Select `ClaudeHistorySearchMac` scheme, run on Mac
-
-The app will automatically discover the server via Bonjour. You can also manually enter a server URL in Settings.
-
-### 3. Live Sessions (Optional)
-
-The apps support running live Claude Code sessions via WebSocket:
-
-1. Ensure `claude` CLI is installed and in your PATH
-2. Connect to server from the app
-3. Start a new session or resume an existing one
-
-The server spawns Claude CLI processes and streams output back to the app in real-time.
-
-### Corporate/Work Macs (Stealth Mode)
-
-If your Mac has firewall stealth mode enabled (common on corporate-managed Macs), Bonjour discovery won't work. The server auto-detects this and skips Bonjour advertisement.
-
-**Workaround:** Use your Mac's `.local` hostname instead:
-
-1. Find your Mac's hostname:
-   ```bash
-   scutil --get LocalHostName
-   ```
-
-2. In the iOS app, manually enter:
-   ```
-   http://YOUR-MAC-NAME.local:3847
-   ```
-
-The `.local` hostname uses mDNS for resolution (which still works) and persists across networks - the same URL works at home, office, or anywhere both devices are on the same local network.
-
-## Remote Access (iPhone Outside Local Network)
-
-To access your Claude history from anywhere, use ngrok to create a secure tunnel:
-
-### Setup (one-time)
-
-1. Install ngrok:
-   ```bash
-   brew install ngrok
-   ```
-
-2. Sign up at https://dashboard.ngrok.com/signup and get your authtoken
-
-3. Configure ngrok:
-   ```bash
-   ngrok config add-authtoken YOUR_TOKEN
-   ```
-
-### Start Remote Access
-
-1. Start the server:
-   ```bash
-   cd server && npm start
-   ```
-
-2. Start ngrok tunnel:
-   ```bash
-   ngrok http 3847
-   ```
-
-3. Copy the `https://xxx.ngrok-free.dev` URL
-
-4. In the iOS app, go to Settings → Manual Connection and enter the URL
-
-**Note:** Free ngrok URLs change when you restart the tunnel. For a persistent URL, use ngrok's paid plan or set up a Cloudflare Tunnel with your own domain.
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    iOS / Mac App (SwiftUI)                       │
-│  ┌─────────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ ServerDiscovery │  │  APIClient  │  │  WebSocketClient    │  │
-│  │   (Bonjour)     │  │   (REST)    │  │  (Live Sessions)    │  │
-│  └────────┬────────┘  └──────┬──────┘  └──────────┬──────────┘  │
-│           │                  │                    │              │
-│           │    Shared Swift Package (Models, Services, VMs)     │
-└───────────│──────────────────│────────────────────│──────────────┘
-            │                  │                    │
-            └────────┬─────────┴────────────────────┘
-                     │ HTTP / WebSocket
-                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    TypeScript Server                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   Express   │  │  WebSocket  │  │    Session Executor     │  │
-│  │   (REST)    │  │  Transport  │  │    (Claude CLI)         │  │
-│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
-│         │                │                     │                 │
-│  ┌──────┴────────────────┴─────────────────────┴──────────────┐ │
-│  │  Indexer (JSONL) ──► SQLite + FTS5 (better-sqlite3)        │ │
-│  └────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-              ~/.claude/projects/**/*.jsonl
+```bash
+launchctl kickstart -k gui/$(id -u)/com.claude-history-server  # restart
+launchctl list | grep claude-history-server                      # status
+tail -f /tmp/claude-history-server.log                           # logs
 ```
 
-## API Endpoints
+### Mac app
 
-### REST API
+```bash
+xcodebuild -project ClaudeHistorySearch.xcodeproj \
+  -scheme ClaudeHistorySearchMac \
+  -configuration Release \
+  -derivedDataPath build \
+  -destination 'platform=macOS' \
+  build
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/sessions` | GET | List sessions (`limit`, `offset` for pagination) |
-| `/sessions/:id` | GET | Get full conversation by session ID |
-| `/search?q=term` | GET | Full-text search (`sort=relevance\|date`) |
-| `/reindex` | POST | Trigger reindex (`force=true` to reindex all) |
+cp -R build/Build/Products/Release/ClaudeHistorySearchMac.app /Applications/
+open /Applications/ClaudeHistorySearchMac.app
+```
 
-### WebSocket API (`/ws`)
+Or open `ClaudeHistorySearch.xcodeproj` in Xcode, select **ClaudeHistorySearchMac** scheme, and Cmd+R.
 
-For live sessions, connect via WebSocket and send JSON messages:
+## How It Works
 
-| Message | Direction | Purpose |
-|---------|-----------|---------|
-| `session.start` | → Server | Start new Claude session |
-| `session.resume` | → Server | Resume existing session |
-| `session.cancel` | → Server | Cancel running session |
-| `session.output` | ← Server | Stream session output |
-| `session.complete` | ← Server | Session finished |
+```
+┌──────────────────────────────┐
+│  Mac Menu Bar App (SwiftUI)  │
+│  Search · Browse · Resume    │
+└──────────────┬───────────────┘
+               │ HTTP + WebSocket
+               ▼
+┌──────────────────────────────┐
+│  Local Server (TypeScript)   │
+│  Express · SQLite FTS5 · WS  │
+└──────────────┬───────────────┘
+               │ watches + indexes
+               ▼
+   ~/.claude/projects/**/*.jsonl
+```
 
-### Example Requests
+- **Search**: Type a query in the menu bar app, get ranked results across all sessions
+- **Browse**: View sessions grouped by project, sorted by date
+- **Resume**: Click a session to resume it — the server spawns `claude --resume` and streams output back
+
+## API
 
 ```bash
 # Health check
 curl http://localhost:3847/health
 
-# List sessions
-curl http://localhost:3847/sessions?limit=10&offset=0
+# Search sessions
+curl "http://localhost:3847/search?q=swift+concurrency&sort=relevance"
 
-# Search
-curl http://localhost:3847/search?q=swift+concurrency
+# List sessions
+curl http://localhost:3847/sessions?limit=10
+
+# Get a conversation
+curl http://localhost:3847/sessions/<session-id>
 
 # Force reindex
 curl -X POST http://localhost:3847/reindex?force=true
 ```
 
-## Data Storage
+## Data
 
-- **Database**: `~/.claude-history-server/search.db`
-- **Source**: `~/.claude/projects/**/*.jsonl`
+| Path | Contents |
+|------|----------|
+| `~/.claude/projects/**/*.jsonl` | Source — Claude Code session transcripts |
+| `~/.claude-history-server/search.db` | SQLite FTS5 search index |
+| `~/.claude-history-server/config.json` | Server config (API key hash) |
+| `~/.claude-history-server/.api-key` | Plaintext API key (for curl/app) |
 
-## Testing
-
-### Server Tests
-```bash
-cd server
-npm test                    # Run all tests (118 tests)
-npm test -- --watch         # Watch mode
-```
-
-### Swift Package Tests
-```bash
-cd Shared
-swift test                  # Run all tests (~60 tests)
-```
-
-Test coverage includes:
-- Server interface binding (ensures server is reachable on network)
-- Network error handling (connection lost, timeout, etc.)
-- Server discovery and URL caching
-- REST API response parsing
-- WebSocket session management
-
-## Customization
-
-### App Icon
-
-The app icon is generated programmatically. To modify it:
+## Development
 
 ```bash
-# Edit generate_icon.py to change colors/design
-python3 generate_icon.py
+cd server && npm test          # Vitest tests
+cd server && npm run lint      # ESLint + architecture boundary enforcement
+cd server && npm run typecheck # TypeScript strict mode
+cd Shared && swift test        # Swift package tests
 ```
-
-Then rebuild the app in Xcode.
 
 ## License
 
