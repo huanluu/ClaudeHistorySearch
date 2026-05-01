@@ -27,7 +27,7 @@ class TerminalService {
     /// CLI allowlist — maps session source to binary name and resume flags.
     /// Security: never use raw source string as a binary name.
     private let cliConfigs: [String: (binary: String, flags: String)] = [
-        "claude": (binary: "claude", flags: "--dangerously-skip-permissions"),
+        "claude": (binary: "claude", flags: "--permission-mode auto"),
         "copilot": (binary: "copilot", flags: "--allow-all-tools"),
     ]
 
