@@ -1,5 +1,6 @@
 import SwiftUI
 import Carbon
+import Combine
 import ClaudeHistoryShared
 
 extension Notification.Name {
@@ -19,6 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let webSocketClient = WebSocketClient()
     lazy var viewModel = SessionListViewModel(apiClient: apiClient)
 
+    private var cancellables = Set<AnyCancellable>()
+    private var wsReconnectTask: Task<Void, Never>?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
@@ -35,6 +39,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Load API key from keychain
         apiClient.loadAPIKeyFromKeychain()
+
+        // Drive WebSocket setup off the discovered server URL. This is the single
+        // place that calls configureWebSocket — so initial discovery, Bonjour late
+        // discovery, and URL changes all keep the WS in sync with HTTP.
+        serverDiscovery.$serverURL
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] url in
+                guard let self, let url else { return }
+                self.apiClient.setBaseURL(url)
+                self.configureWebSocket(baseURL: url)
+            }
+            .store(in: &cancellables)
+
+        // Recover from WS disconnects (e.g. server restart). HTTP self-heals via
+        // ServerDiscovery, but the WS needs its own retry loop. The closure's
+        // isolation is invisible to the compiler (onStateChange is a plain
+        // `((WebSocketState) -> Void)?`), so hop to MainActor explicitly rather
+        // than relying on WebSocketClient's internal @MainActor invariant.
+        webSocketClient.onStateChange = { [weak self] state in
+            guard state == .disconnected else { return }
+            Task { @MainActor in self?.scheduleWebSocketReconnect() }
+        }
 
         Task {
             await autoConnect()
@@ -148,46 +175,60 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Auto Connect
 
     private func autoConnect() async {
-        if let existingURL = serverDiscovery.serverURL {
-            apiClient.setBaseURL(existingURL)
-            configureWebSocket(baseURL: existingURL)
+        // If discovery already has a URL, the $serverURL observer has handled it.
+        if serverDiscovery.serverURL != nil {
             return
         }
 
+        // Try localhost first — fast path when the user runs the server locally.
         let localhostURL = URL(string: "http://localhost:3847")!
         apiClient.setBaseURL(localhostURL)
 
         do {
-            let healthy = try await apiClient.checkHealth()
-            if healthy {
+            if try await apiClient.checkHealth() {
                 serverDiscovery.setManualURL("http://localhost:3847")
-                configureWebSocket(baseURL: localhostURL)
                 return
             }
         } catch {
-            // Localhost failed, try Bonjour
+            // Localhost unreachable — fall through to Bonjour.
         }
 
+        // Bonjour will publish to serverDiscovery.serverURL when it finds the server;
+        // the $serverURL observer will configure the WS at that point.
         serverDiscovery.startSearching()
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-
-        if let url = serverDiscovery.serverURL {
-            apiClient.setBaseURL(url)
-            configureWebSocket(baseURL: url)
-        }
     }
 
     private func configureWebSocket(baseURL: URL) {
+        wsReconnectTask?.cancel()
         webSocketClient.configure(baseURL: baseURL, apiKey: apiClient.getAPIKey())
 
-        // Auto-connect WebSocket
-        Task {
+        Task { @MainActor in
             do {
                 try await webSocketClient.connect()
                 print("[WebSocket] Connected successfully")
             } catch {
                 print("[WebSocket] Connection failed: \(error)")
+                // Don't rely on WebSocketClient.connect() transitioning state on
+                // every throw path (e.g. invalid-URL throws skip .disconnected).
+                // Schedule the retry here so it's guaranteed.
+                scheduleWebSocketReconnect()
             }
+        }
+    }
+
+    /// Debounced retry: each new .disconnected callback resets the 2s timer, so
+    /// rapid connect-fail loops collapse into a single delayed attempt. The
+    /// guard is `!= .authenticated` (not `== .disconnected`) so we still
+    /// recover if the WS got stuck at `.connecting` (e.g. connect Task was
+    /// cancelled mid-handshake and state never rolled back).
+    private func scheduleWebSocketReconnect() {
+        wsReconnectTask?.cancel()
+        wsReconnectTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            guard self.webSocketClient.state != .authenticated,
+                  let url = self.serverDiscovery.serverURL else { return }
+            self.configureWebSocket(baseURL: url)
         }
     }
 }
