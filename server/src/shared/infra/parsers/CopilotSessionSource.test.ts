@@ -109,6 +109,38 @@ describe('CopilotSessionSource', () => {
     }
   });
 
+  it('extracts cwd from session.resume when session.start has no context', async () => {
+    const tmpFile = join(tmpdir(), `resume-cwd-copilot-${Date.now()}.jsonl`);
+    writeFileSync(tmpFile, [
+      '{"type":"session.start","data":{"sessionId":"resume-1","copilotVersion":"1.0.65","producer":"agency","startTime":"2026-06-26T23:12:01Z","version":1},"id":"s1","timestamp":"2026-06-26T23:12:01Z"}',
+      '{"type":"session.resume","data":{"resumeTime":"2026-06-26T23:12:03Z","context":{"cwd":"/Volumes/Office/Office2/src","gitRoot":"/Volumes/Office/Office2/src","repository":"office/office/Office","branch":"main"}},"id":"r1","timestamp":"2026-06-26T23:12:03Z"}',
+      '{"type":"user.message","data":{"content":"hello"},"id":"u1","timestamp":"2026-06-26T23:12:04Z"}',
+    ].join('\n'));
+
+    try {
+      const result = await source.parse(tmpFile);
+      expect(result.sessionId).toBe('resume-1');
+      expect(result.project).toBe('/Volumes/Office/Office2/src');
+    } finally {
+      rmSync(tmpFile, { force: true });
+    }
+  });
+
+  it('keeps session.start cwd when both events carry context (first-seen wins)', async () => {
+    const tmpFile = join(tmpdir(), `firstwins-cwd-copilot-${Date.now()}.jsonl`);
+    writeFileSync(tmpFile, [
+      '{"type":"session.start","data":{"sessionId":"first-1","context":{"cwd":"/original/path"}},"id":"s1","timestamp":"2025-01-01T00:00:00Z"}',
+      '{"type":"session.resume","data":{"context":{"cwd":"/different/path"}},"id":"r1","timestamp":"2025-01-01T00:00:01Z"}',
+    ].join('\n'));
+
+    try {
+      const result = await source.parse(tmpFile);
+      expect(result.project).toBe('/original/path');
+    } finally {
+      rmSync(tmpFile, { force: true });
+    }
+  });
+
   it('strips <current_datetime> and <sql_tables> tags', async () => {
     const tmpFile = join(tmpdir(), `datetime-copilot-${Date.now()}.jsonl`);
     writeFileSync(tmpFile, [

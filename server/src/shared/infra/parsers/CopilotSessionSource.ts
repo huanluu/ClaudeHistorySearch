@@ -64,11 +64,17 @@ interface CopilotParseState {
 }
 
 function processCopilotEvent(event: CopilotEvent, ts: number | null, state: CopilotParseState): void {
+  // Any event may carry context.cwd (e.g., session.start, session.resume).
+  // First-seen wins so an early start-event cwd is not overwritten by a later resume.
+  if (!state.project) {
+    const ctx = (event.data as { context?: { cwd?: string } } | undefined)?.context;
+    if (ctx?.cwd) state.project = ctx.cwd;
+  }
+
   switch (event.type) {
     case 'session.start': {
       const data = event.data as unknown as CopilotSessionStartData | undefined;
       if (data?.sessionId) state.sessionId = data.sessionId;
-      if (data?.context?.cwd) state.project = data.context.cwd;
       break;
     }
     case 'user.message': {
