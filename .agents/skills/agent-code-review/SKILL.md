@@ -1,8 +1,15 @@
+---
+name: agent-code-review
+description: >
+  Review staged changes before committing. Use when preparing a commit and
+  needing the repository code-review gate to write the .code-reviewed marker.
+---
+
 # Agent Code Review
 
 Use this skill to review staged changes before committing. Invoked via `/agent-code-review`.
 
-This skill delegates the actual review to **GitHub Copilot CLI (GPT)** via the `/copilot` skill for a cross-model second opinion, then handles findings and writes the `.code-reviewed` marker. No Claude subagent is spawned — this skill works in any context including inside subagents.
+This skill delegates the actual review to **GitHub Copilot CLI (GPT)** via the `/copilot` skill for a cross-model second opinion, then handles findings and writes the `.code-reviewed` marker. No Codex subagent is spawned — this skill works in any context including inside subagents.
 
 ## Steps
 

@@ -1,14 +1,21 @@
+---
+name: design-review-agent
+description: >
+  Review an implementation plan for architecture, invariant, and convention
+  problems before writing code. Use after creating or updating a plan.
+---
+
 # Design Review Agent
 
 Review an implementation plan from the perspective of an experienced architect who knows this codebase's architecture, invariants, and conventions deeply. Use this skill after creating a plan (in plan mode or a plan file) to catch design flaws before writing code.
 
-This skill delegates the actual review to **GitHub Copilot CLI (GPT)** via the `/copilot` skill for a cross-model architectural review. No Claude subagent is spawned — this skill works in any context including inside subagents.
+This skill delegates the actual review to **GitHub Copilot CLI (GPT)** via the `/copilot` skill for a cross-model architectural review. No Codex subagent is spawned — this skill works in any context including inside subagents.
 
 ## Steps
 
 1. **Locate the plan** — Find the plan to review. Check in order:
    - If the user specified a plan file path, use that
-   - Otherwise, glob `~/.claude/plans/*.md` and pick the most recently modified plan
+   - Otherwise, glob `~/.Codex/plans/*.md` and pick the most recently modified plan
    - If no plan file exists, check if a plan was pasted into the conversation context
 
    If no plan is found, tell the user and stop.
@@ -16,8 +23,8 @@ This skill delegates the actual review to **GitHub Copilot CLI (GPT)** via the `
 2. **Read the plan** — Read the full plan file content.
 
 3. **Load codebase context** — Read the following files to ground the review in actual project conventions. Read all in parallel:
-   - `CLAUDE.md` (project root — product vision, engineering principles, conventions)
-   - `server/CLAUDE.md` (ports-and-adapters architecture, dependency rules, feature patterns)
+   - `AGENTS.md` (project root — product vision, engineering principles, conventions)
+   - `server/AGENTS.md` (ports-and-adapters architecture, dependency rules, feature patterns)
    - `docs/invariants.md` (design principles for AI-assisted development)
    - `server/eslint.config.js` (actual ESLint enforcement — what's really enforced vs documented)
    - `server/scorecard/SCORECARD.md` (18 structural invariants, pass/fail)
@@ -59,7 +66,7 @@ This skill delegates the actual review to **GitHub Copilot CLI (GPT)** via the `
 
    ### 5. Naming and Placement (warning)
    - Do proposed file names, type names, and function names follow conventions? (UpperCamelCase types, lowerCamelCase functions, UPPER_SNAKE constants)
-   - Are files in the right directory per the decision tree in server/CLAUDE.md?
+   - Are files in the right directory per the decision tree in server/AGENTS.md?
 
    ### 6. Scope Creep (warning)
    - Does the plan stay focused on the stated goal?

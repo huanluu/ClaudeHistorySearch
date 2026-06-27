@@ -1,3 +1,10 @@
+---
+name: improve-scorecard
+description: >
+  Fix failing scorecard invariants using the plan, design review, implement,
+  code review, verify, and snapshot pipeline.
+---
+
 # Improve Scorecard
 
 Fix one or more failing scorecard invariants, following the full plan → design review → implement → code review → verify → snapshot pipeline. Invoked via `/improve-scorecard` with an optional invariant ID argument (e.g., `/improve-scorecard CQ-INV-5`).
@@ -10,7 +17,7 @@ Fix one or more failing scorecard invariants, following the full plan → design
    ```
    **Why not plain `sort`?** The `-N` suffix (e.g., `2026-03-09-2.json`) sorts *before* `2026-03-09.json` because `-` (ASCII 45) < `.` (ASCII 46). Stripping `.json` before sorting fixes this: `2026-03-09` < `2026-03-09-2`.
 
-   Read that file. Also read `server/scorecard/SCORECARD.md` for invariant definitions and `server/scorecard/CLAUDE.md` for procedures.
+   Read that file. Also read `server/scorecard/SCORECARD.md` for invariant definitions and `server/scorecard/AGENTS.md` for procedures.
 
 2. **Pick the target invariant** — If the user specified an invariant ID (e.g., `CQ-INV-5`), use that. Otherwise, analyze the failing invariants and pick the one with the highest ROI — consider:
    - How many violations remain (fewer = closer to fixed)
@@ -24,7 +31,7 @@ Fix one or more failing scorecard invariants, following the full plan → design
 
 3. **Analyze violations** — Read the relevant scorecard test file(s) to understand exactly what's checked. Then read each violating source file to understand the current state. Use subagents for parallel reading if there are many files.
 
-4. **Write a plan** — Create a plan file at `~/.claude/plans/fix-<invariant-id>.md` with:
+4. **Write a plan** — Create a plan file at `~/.Codex/plans/fix-<invariant-id>.md` with:
    - Goal (one sentence)
    - List of specific changes needed, with checkboxes
    - Implementation order

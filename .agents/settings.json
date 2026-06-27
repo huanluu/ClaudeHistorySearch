@@ -6,12 +6,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit-lint.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/pre-commit-lint.sh\"",
             "statusMessage": "Running lint and tests before commit..."
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-code-review.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/check-code-review.sh\"",
             "statusMessage": "Checking code review status..."
           }
         ]

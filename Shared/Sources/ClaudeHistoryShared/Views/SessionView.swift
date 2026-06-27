@@ -198,7 +198,7 @@ public struct SessionView: View {
                     }
                     .buttonStyle(.borderless)
                     .foregroundColor(.secondary)
-                    .help("Open in iTerm2")
+                    .help("Open in cmux or iTerm2")
                 }
 
                 if let detail = sessionDetail {

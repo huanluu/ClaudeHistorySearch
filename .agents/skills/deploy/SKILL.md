@@ -1,3 +1,8 @@
+---
+name: deploy
+description: Deploy the ClaudeHistorySearch server and/or Mac menu bar app. Use when asked to deploy, reload the server, build the release Mac app, copy it to /Applications, or relaunch the app.
+---
+
 # Deploy
 
 Deploy the server and/or Mac menu bar app. Invoked via `/deploy`.

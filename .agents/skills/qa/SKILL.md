@@ -1,3 +1,10 @@
+---
+name: qa
+description: >
+  Deploy fresh code, run the full test suite, and optionally verify GitHub issue
+  acceptance criteria with skeptical QA sign-off.
+---
+
 # QA
 
 ## Role
@@ -122,7 +129,7 @@ Deploy fresh code, run all tests including integration, and optionally verify sp
 
     Then run Copilot:
     ```
-    /copilot You are a QA auditor reviewing another agent's verification work. Below is a GitHub issue with acceptance criteria, and the verification results from the QA agent (Claude). Your job is to challenge the verification — look for:
+    /copilot You are a QA auditor reviewing another agent's verification work. Below is a GitHub issue with acceptance criteria, and the verification results from the QA agent (Codex). Your job is to challenge the verification — look for:
 
     1. AC marked as verified but the evidence is weak or circumstantial
     2. Grep checks that could give false negatives (too narrow pattern, wrong directory)

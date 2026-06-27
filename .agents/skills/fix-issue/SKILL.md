@@ -1,8 +1,15 @@
+---
+name: fix-issue
+description: >
+  Implement a GitHub issue end-to-end: read, plan, design review, implement,
+  test, code review, commit, and report. Use with an issue number.
+---
+
 # Fix Issue
 
 End-to-end implementation of a GitHub issue: read → plan → design review → implement → test → code review → commit. Invoked via `/fix-issue <number>` or `/fix-issue #<number>`.
 
-This skill is designed to work in any context — main conversation, subagent, or worktree. It uses `/copilot` for design review and code review (no Claude subagent spawning), making it fully subagent-safe.
+This skill is designed to work in any context — main conversation, subagent, or worktree. It uses `/copilot` for design review and code review (no Codex subagent spawning), making it fully subagent-safe.
 
 ## Arguments
 
@@ -26,11 +33,11 @@ This skill is designed to work in any context — main conversation, subagent, o
    - Both → will need both test suites
    - Note which specific files the issue references — read them to understand the current state.
 
-4. **Read referenced files** — Read every file mentioned in the issue body. Also read `CLAUDE.md` and (if server changes) `server/CLAUDE.md` for conventions. Do this in parallel.
+4. **Read referenced files** — Read every file mentioned in the issue body. Also read `AGENTS.md` and (if server changes) `server/AGENTS.md` for conventions. Do this in parallel.
 
 ### Phase 2: Plan
 
-5. **Create a plan file** at `~/.claude/plans/issue-<number>.md`:
+5. **Create a plan file** at `~/.Codex/plans/issue-<number>.md`:
 
    ```markdown
    # Issue #<number>: <title>
@@ -113,7 +120,7 @@ This skill is designed to work in any context — main conversation, subagent, o
 
     Fixes #<number>
 
-    Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+    Co-Authored-By: Codex Opus 4.6 (1M context) <noreply@anthropic.com>
     Reviewed-By: GitHub Copilot (GPT-5.4)
     EOF
     )"
@@ -129,7 +136,7 @@ This skill is designed to work in any context — main conversation, subagent, o
 
     **Status:** DONE | BLOCKED | NEEDS_MANUAL_VERIFICATION
     **Commit:** `<hash>` on branch `<branch>`
-    **Implemented by:** Claude Opus 4.6 | **Reviewed by:** GitHub Copilot (GPT-5.4)
+    **Implemented by:** Codex Opus 4.6 | **Reviewed by:** GitHub Copilot (GPT-5.4)
 
     ### Changes
     | File | What changed |
@@ -186,14 +193,14 @@ This skill is designed to work in any context — main conversation, subagent, o
 
 ## Error Handling
 
-- **Copilot unavailable:** If `copilot` binary is not found or auth fails, fall back to self-review (review the diff yourself using the same criteria from the skills). Note in the report: "Reviewed by Claude (Copilot unavailable)".
+- **Copilot unavailable:** If `copilot` binary is not found or auth fails, fall back to self-review (review the diff yourself using the same criteria from the skills). Note in the report: "Reviewed by Codex (Copilot unavailable)".
 - **Tests won't pass after 3 attempts:** Stop. Report what's failing and what you tried. Status: BLOCKED.
 - **Design review won't approve after 3 cycles:** Stop. Report the blocking findings. Status: BLOCKED.
 - **Issue is unclear or has contradictory AC:** Stop. Report what's ambiguous. Status: BLOCKED.
 
 ## Important Rules
 
-- **Follow CLAUDE.md conventions.** Read it. Follow it. Especially: ports-and-adapters architecture, effectless features, constructor injection.
+- **Follow AGENTS.md conventions.** Read it. Follow it. Especially: ports-and-adapters architecture, effectless features, constructor injection.
 - **One logical change per commit.** Don't bundle unrelated changes.
 - **Never modify files outside the issue's scope.** No drive-by refactors, no "while I'm here" improvements.
 - **Mark plan steps as you go.** This survives context compaction.
