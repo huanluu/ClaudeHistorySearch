@@ -57,6 +57,11 @@ function toSessionResponse(s: { id: string; project: string; started_at: number;
   };
 }
 
+function buildFtsPrefixQuery(query: string): string {
+  const tokens = query.match(/[\p{L}\p{N}_]+/gu) ?? [];
+  return tokens.map(t => `"${t}"*`).join(' ');
+}
+
 function handleListSessions(repo: SessionRepository, res: Response, logger: Logger): void {
   try {
     const { limit, offset, automatic: automaticParam } = (res.locals.validated?.query ?? { limit: 20, offset: 0 }) as { limit: number; offset: number; automatic?: string };
@@ -97,7 +102,7 @@ function handleSearch(repo: SessionRepository, res: Response, logger: Logger): v
     const { q: query, limit, offset, sort, automatic: automaticSearchParam } = (res.locals.validated?.query ?? { q: '', limit: 50, offset: 0, sort: 'relevance' }) as { q: string; limit: number; offset: number; sort: SortOption; automatic?: string };
     if (!query || query.trim().length === 0) { res.status(400).json({ error: 'Search query is required' }); return; }
 
-    const sanitizedQuery = query.replace(/['"*()]/g, '').split(/\s+/).filter(t => t.length > 0).map(t => `${t}*`).join(' ');
+    const sanitizedQuery = buildFtsPrefixQuery(query);
     if (!sanitizedQuery) { res.status(400).json({ error: 'Invalid search query' }); return; }
 
     const automaticOnly = automaticSearchParam === 'true';

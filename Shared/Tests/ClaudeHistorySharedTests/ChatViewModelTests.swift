@@ -34,6 +34,17 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.chatState, .idle)
     }
 
+    func testSendMessage_withoutWebSocketClient_setsError() {
+        let viewModel = ChatViewModel()
+        viewModel.inputText = "Hello"
+
+        viewModel.sendMessage()
+
+        XCTAssertEqual(viewModel.messages.count, 0)
+        XCTAssertEqual(viewModel.chatState, .error("Chat is unavailable because the WebSocket client is not configured."))
+        XCTAssertEqual(viewModel.inputText, "Hello")
+    }
+
     func testSendMessage_setsStreamingState() {
         viewModel.inputText = "Hello"
         viewModel.sendMessage()

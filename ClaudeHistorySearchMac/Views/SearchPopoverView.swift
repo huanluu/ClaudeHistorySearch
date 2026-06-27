@@ -136,10 +136,9 @@ struct SearchPopoverView: View {
                     navigationPath.append(NavigationDestination.assistantChat)
                 }) {
                     Image(systemName: "bubble.left.and.text.bubble.right")
-                        .foregroundColor(webSocketClient?.state == .authenticated ? .accentColor : .secondary)
+                        .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
-                .disabled(webSocketClient?.state != .authenticated)
                 .help("Assistant chat")
             }
 

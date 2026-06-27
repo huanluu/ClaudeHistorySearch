@@ -43,6 +43,10 @@ public class ChatViewModel: ObservableObject {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         guard chatState != .streaming else { return }
+        guard let webSocketClient else {
+            chatState = .error("Chat is unavailable because the WebSocket client is not configured.")
+            return
+        }
 
         // Add user message
         let userMessage = Message(
@@ -76,7 +80,7 @@ public class ChatViewModel: ObservableObject {
                         "text": text
                     ])
                 )
-                try await self.webSocketClient?.send(wsMessage)
+                try await webSocketClient.send(wsMessage)
             } catch {
                 self.chatState = .error("Failed to send: \(error.localizedDescription)")
                 self.streamingMessageIndex = nil

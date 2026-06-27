@@ -358,7 +358,33 @@ describe('Search Routes', () => {
       expect(searchSpy).toHaveBeenCalled();
       const [query] = searchSpy.mock.calls[0];
       // Query should have * suffix for prefix matching
-      expect(query).toBe('hello* world*');
+      expect(query).toBe('"hello"* "world"*');
+    });
+
+    it('should treat hyphens as word separators in search query', async () => {
+      const searchSpy = vi.fn().mockReturnValue(sampleSearchResults);
+      const spyRepo = createMockRepository({ searchMessages: searchSpy as SessionRepository['searchMessages'] });
+      const spyApp = createSearchApp({ repo: spyRepo }, false);
+
+      const res = await request(spyApp).get('/search?q=office-hour');
+
+      expect(res.status).toBe(200);
+      expect(searchSpy).toHaveBeenCalled();
+      const [query] = searchSpy.mock.calls[0];
+      expect(query).toBe('"office"* "hour"*');
+    });
+
+    it('should quote search terms so FTS operators are treated as text', async () => {
+      const searchSpy = vi.fn().mockReturnValue(sampleSearchResults);
+      const spyRepo = createMockRepository({ searchMessages: searchSpy as SessionRepository['searchMessages'] });
+      const spyApp = createSearchApp({ repo: spyRepo }, false);
+
+      const res = await request(spyApp).get('/search?q=OR');
+
+      expect(res.status).toBe(200);
+      expect(searchSpy).toHaveBeenCalled();
+      const [query] = searchSpy.mock.calls[0];
+      expect(query).toBe('"OR"*');
     });
   });
 
