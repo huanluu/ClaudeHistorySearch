@@ -13,6 +13,7 @@ const MAX_CONSECUTIVE_ERRORS = 5;
 const TICK_INTERVAL_MS = 60_000;
 
 type RunFn = (opts: { prompt: string; workingDir: string }) => Promise<{ sessionId: string | null }>;
+type WorkingDirResolver = (workingDir: string) => string;
 
 /**
  * Manages scheduled cron jobs: CRUD, scheduling, and execution.
@@ -22,6 +23,7 @@ export class CronService implements CronToolService {
   private tickTimer: NodeJS.Timeout | null = null;
   private isRunning = false;
   private isStopping = false;
+  private isCancellingInFlight = false;
   private isCancellationError: ((error: unknown) => boolean) | null = null;
   private readonly inFlight = new Set<Promise<unknown>>();
 
@@ -30,6 +32,7 @@ export class CronService implements CronToolService {
     private readonly runFn: RunFn,
     private readonly logger: Logger,
     private readonly runtimeName = 'copilot',
+    private readonly resolveWorkingDir: WorkingDirResolver = (workingDir) => workingDir,
   ) {}
 
   // ── CRUD ────────────────────────────────────────────────────────────
@@ -37,6 +40,7 @@ export class CronService implements CronToolService {
   addJob(opts: { name: string; schedule: { kind: string; value: string; timezone?: string }; prompt: string; workingDir: string }): CronJobRecord {
     if (!opts.prompt.trim()) throw new Error('Prompt cannot be empty');
     if (!opts.workingDir.trim()) throw new Error('Working directory cannot be empty');
+    const workingDir = this.resolveWorkingDir(opts.workingDir);
 
     const kind = opts.schedule.kind;
     if (kind !== 'at' && kind !== 'every' && kind !== 'cron') {
@@ -53,7 +57,7 @@ export class CronService implements CronToolService {
       schedule_value: opts.schedule.value,
       schedule_timezone: tz,
       prompt: opts.prompt,
-      working_dir: opts.workingDir,
+      working_dir: workingDir,
       runtime: this.runtimeName,
       next_run_at_ms: CronService.computeNextRun(kind, opts.schedule.value, now, null, tz),
       last_run_at_ms: null,
@@ -80,6 +84,9 @@ export class CronService implements CronToolService {
   updateJob(id: string, fields: Partial<CronJobRecord>): CronJobRecord {
     const existing = this.repo.getById(id);
     if (!existing) throw new Error(`Cron job not found: ${id}`);
+    if (fields.working_dir !== undefined) {
+      fields.working_dir = this.resolveWorkingDir(fields.working_dir);
+    }
 
     // Recalculate nextRunAtMs if schedule changed
     const scheduleChanged = fields.schedule_kind !== undefined || fields.schedule_value !== undefined || fields.schedule_timezone !== undefined;
@@ -104,6 +111,9 @@ export class CronService implements CronToolService {
   // ── Execution ───────────────────────────────────────────────────────
 
   async runJobNow(id: string): Promise<{ sessionId: string | null }> {
+    if (this.isStopping) {
+      throw new Error('Cron scheduler is stopping; refusing to start new job');
+    }
     const job = this.repo.getById(id);
     if (!job) throw new Error(`Cron job not found: ${id}`);
     return this.trackExecution(this.executeJob(job));
@@ -121,30 +131,35 @@ export class CronService implements CronToolService {
   }
 
   async stopScheduler(options: { cancelInFlight?: () => void; isCancellationError?: (error: unknown) => boolean } = {}): Promise<void> {
-    if (this.tickTimer) {
-      clearInterval(this.tickTimer);
-      this.tickTimer = null;
-    }
-    // Await all in-flight executions
-    if (this.inFlight.size > 0) {
-      this.logger.log({ msg: `Cron scheduler stopping: awaiting ${this.inFlight.size} in-flight jobs`, op: 'cron.scheduler' });
-      this.isStopping = options.cancelInFlight !== undefined;
-      this.isCancellationError = options.isCancellationError ?? null;
-      let cancelError: unknown;
-      try {
+    this.isStopping = true;
+    try {
+      if (this.tickTimer) {
+        clearInterval(this.tickTimer);
+        this.tickTimer = null;
+      }
+      // Await all in-flight executions
+      if (this.inFlight.size > 0) {
+        this.logger.log({ msg: `Cron scheduler stopping: awaiting ${this.inFlight.size} in-flight jobs`, op: 'cron.scheduler' });
+        this.isCancellingInFlight = options.cancelInFlight !== undefined;
+        this.isCancellationError = options.isCancellationError ?? null;
+        let cancelError: unknown;
         try {
-          options.cancelInFlight?.();
-        } catch (error) {
-          cancelError = error;
+          try {
+            options.cancelInFlight?.();
+          } catch (error) {
+            cancelError = error;
+          }
+          await Promise.allSettled([...this.inFlight]);
+        } finally {
+          this.isCancellingInFlight = false;
+          this.isCancellationError = null;
         }
-        await Promise.allSettled([...this.inFlight]);
-      } finally {
-        this.isStopping = false;
-        this.isCancellationError = null;
+        if (cancelError) {
+          throw cancelError;
+        }
       }
-      if (cancelError) {
-        throw cancelError;
-      }
+    } finally {
+      this.isStopping = false;
     }
   }
 
@@ -154,6 +169,7 @@ export class CronService implements CronToolService {
 
   /** Check for due jobs and execute them. Called by the scheduler timer. */
   async tick(): Promise<void> {
+    if (this.isStopping) return;
     if (this.isRunning) return;
     this.isRunning = true;
 
@@ -196,7 +212,8 @@ export class CronService implements CronToolService {
     const now = Date.now();
     try {
       const taggedPrompt = `[Cron: ${job.name}] ${job.prompt}`;
-      const result = await this.runFn({ prompt: taggedPrompt, workingDir: job.working_dir });
+      const workingDir = this.resolveWorkingDir(job.working_dir);
+      const result = await this.runFn({ prompt: taggedPrompt, workingDir });
       this.repo.update(job.id, {
         last_run_at_ms: now,
         last_run_status: 'success',
@@ -209,7 +226,7 @@ export class CronService implements CronToolService {
       this.logger.log({ msg: `Cron job succeeded: ${job.name}`, op: 'cron.execute', context: { jobId: job.id, sessionId: result.sessionId } });
       return result;
     } catch (err: unknown) {
-      if (this.isStopping && this.isCancellationError?.(err)) {
+      if (this.isCancellingInFlight && this.isCancellationError?.(err)) {
         this.logger.warn({ msg: `Cron job interrupted during scheduler shutdown: ${job.name}`, op: 'cron.execute', context: { jobId: job.id } });
         return { sessionId: null };
       }

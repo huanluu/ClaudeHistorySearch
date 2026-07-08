@@ -148,6 +148,33 @@ describe('CronService', () => {
       expect(() => service.addJob({ name: 'X', schedule: { kind: 'bogus', value: '* * *' }, prompt: 'Do', workingDir: '/tmp' }))
         .toThrow("Unsupported schedule kind: bogus");
     });
+
+    it('rejects working directories denied by resolver', () => {
+      service = new CronService(
+        repo,
+        runFn as (opts: { prompt: string; workingDir: string }) => Promise<{ sessionId: string | null }>,
+        logger,
+        'copilot',
+        () => { throw new Error('Working directory not allowed'); },
+      );
+
+      expect(() => service.addJob({ name: 'X', schedule: { kind: 'every', value: '1000' }, prompt: 'Do', workingDir: '/private' }))
+        .toThrow('Working directory not allowed');
+    });
+
+    it('persists resolved working directory', () => {
+      service = new CronService(
+        repo,
+        runFn as (opts: { prompt: string; workingDir: string }) => Promise<{ sessionId: string | null }>,
+        logger,
+        'copilot',
+        () => '/resolved',
+      );
+
+      const job = service.addJob({ name: 'X', schedule: { kind: 'every', value: '1000' }, prompt: 'Do', workingDir: '/tmp/link' });
+
+      expect(job.working_dir).toBe('/resolved');
+    });
   });
 
   // ── listJobs / getJobStatus ─────────────────────────────────────────
@@ -190,6 +217,20 @@ describe('CronService', () => {
     it('throws for nonexistent id', () => {
       expect(() => service.updateJob('nope', { name: 'X' })).toThrow('Cron job not found');
     });
+
+    it('validates working directory updates', () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'a', workingDir: '/tmp' });
+      service = new CronService(
+        repo,
+        runFn as (opts: { prompt: string; workingDir: string }) => Promise<{ sessionId: string | null }>,
+        logger,
+        'copilot',
+        () => { throw new Error('Working directory not allowed'); },
+      );
+
+      expect(() => service.updateJob(job.id, { working_dir: '/private' }))
+        .toThrow('Working directory not allowed');
+    });
   });
 
   describe('removeJob', () => {
@@ -217,6 +258,22 @@ describe('CronService', () => {
       expect(updated.last_session_id).toBe('sess-1');
       expect(updated.runtime).toBe('copilot');
       expect(updated.consecutive_errors).toBe(0);
+    });
+
+    it('revalidates persisted working directory before manual execution', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '60000' }, prompt: 'Do it', workingDir: '/work' });
+      repo.update(job.id, { working_dir: '/now-denied' });
+      service = new CronService(
+        repo,
+        runFn as (opts: { prompt: string; workingDir: string }) => Promise<{ sessionId: string | null }>,
+        logger,
+        'copilot',
+        () => { throw new Error('Working directory not allowed'); },
+      );
+
+      await expect(service.runJobNow(job.id)).rejects.toThrow('Working directory not allowed');
+      expect(runFn).not.toHaveBeenCalled();
+      expect(service.getJobStatus(job.id).last_run_status).toBe('error');
     });
 
     it('increments consecutive_errors on failure', async () => {
@@ -377,6 +434,42 @@ describe('CronService', () => {
       const updated = service.getJobStatus(job.id);
       expect(updated.last_run_status).toBeNull();
       expect(updated.consecutive_errors).toBe(0);
+    });
+
+    it('refuses manual runs while the scheduler is stopping', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'x', workingDir: '/tmp' });
+      let resolveRun!: () => void;
+      runFn.mockReturnValue(new Promise(resolve => { resolveRun = () => resolve({ sessionId: 's1' }); }));
+
+      const run = service.runJobNow(job.id);
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler();
+      await expect(service.runJobNow(job.id)).rejects.toThrow('Cron scheduler is stopping');
+
+      resolveRun();
+      await run;
+      await stop;
+    });
+
+    it('resets stopping state when stopScheduler throws from cancellation hook', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'x', workingDir: '/tmp' });
+      let resolveRun!: () => void;
+      runFn.mockReturnValue(new Promise(resolve => { resolveRun = () => resolve({ sessionId: 's1' }); }));
+
+      const run = service.runJobNow(job.id);
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler({
+        cancelInFlight: () => { throw new Error('cleanup failed'); },
+      });
+      resolveRun();
+
+      await expect(stop).rejects.toThrow('cleanup failed');
+      await run;
+
+      runFn.mockResolvedValue({ sessionId: 's2' });
+      await expect(service.runJobNow(job.id)).resolves.toEqual({ sessionId: 's2' });
     });
 
     it('records non-cancellation failures during stop even when cancellation was requested', async () => {

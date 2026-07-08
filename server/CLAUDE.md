@@ -26,6 +26,8 @@ The assistant feature uses the GitHub Copilot SDK to provide real LLM conversati
 
 **Important**: The SDK spawns a nested Copilot runtime. When testing the assistant backend manually, run the server in a separate terminal rather than through another managed app process so subprocess lifetime and authentication prompts are visible.
 
+The Copilot SDK requires Node `^20.19.0 || >=22.12.0`; the launchd service runs `/opt/homebrew/bin/npm`, which must resolve to a compatible Node version.
+
 ### Session indexing source: Claude CLI
 
 Claude Code stores every session transcript as a JSONL file:

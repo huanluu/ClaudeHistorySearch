@@ -74,9 +74,13 @@ export function registerAssistantHandlers(
     return map;
   }
 
-  function removeController(clientId: string, conversationId: string): void {
+  function isActiveController(clientId: string, conversationId: string, controller: AbortController): boolean {
+    return controllers.get(clientId)?.get(conversationId) === controller;
+  }
+
+  function removeController(clientId: string, conversationId: string, controller: AbortController): void {
     const clientMap = controllers.get(clientId);
-    if (clientMap) {
+    if (clientMap?.get(conversationId) === controller) {
       clientMap.delete(conversationId);
       if (clientMap.size === 0) controllers.delete(clientId);
     }
@@ -93,17 +97,23 @@ export function registerAssistantHandlers(
 
     void (async () => {
       for await (const event of assistantService.handleMessage(text, conversationId, controller.signal)) {
+        await new Promise(resolve => setImmediate(resolve));
+        if (!isActiveController(client.clientId, conversationId, controller) || controller.signal.aborted) break;
         if (!sendAssistantEvent(client, event, conversationId, logger)) break;
       }
-      removeController(client.clientId, conversationId);
+      removeController(client.clientId, conversationId, controller);
     })().catch((err: unknown) => {
       handleStreamError(err, client, conversationId, logger);
-      removeController(client.clientId, conversationId);
+      removeController(client.clientId, conversationId, controller);
     });
   });
 
   gateway.on<ValidatedAssistantCancelPayload>('assistant.cancel', (client: AuthenticatedClient, payload) => {
-    controllers.get(client.clientId)?.get(payload.conversationId)?.abort();
+    const controller = controllers.get(client.clientId)?.get(payload.conversationId);
+    if (controller) {
+      controller.abort();
+      removeController(client.clientId, payload.conversationId, controller);
+    }
   });
 
   gateway.onDisconnect((client: AuthenticatedClient) => {

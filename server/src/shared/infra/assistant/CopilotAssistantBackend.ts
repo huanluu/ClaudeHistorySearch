@@ -69,6 +69,8 @@ export class CopilotAssistantBackend {
   private readonly sessions = new Map<string, CopilotSessionState>();
   private readonly runLocks = new Map<string, Promise<void>>();
   private readonly activeQueues = new Map<string, Set<EventQueue>>();
+  private isStopping = false;
+  private isDestroyed = false;
 
   constructor(
     private readonly logger: Logger,
@@ -83,7 +85,7 @@ export class CopilotAssistantBackend {
   }
 
   async *run(prompt: string, options: CopilotRunOptions): AsyncGenerator<CopilotAssistantEvent> {
-    if (options.signal?.aborted) return;
+    if (this.isDestroyed || this.isStopping || options.signal?.aborted) return;
 
     const previousRun = this.runLocks.get(options.conversationId) ?? Promise.resolve();
     let releaseRun!: () => void;
@@ -94,16 +96,17 @@ export class CopilotAssistantBackend {
     let state: CopilotSessionState | undefined;
     let unsubscribe: (() => void) | undefined;
     let queue: EventQueue | undefined;
+    let abortPromise: Promise<unknown> | null = null;
 
     const onAbort = (): void => {
       queue?.push(null);
-      void state?.session.abort()
+      abortPromise = state?.session.abort()
         .catch((error: unknown) => {
           this.logger.warn({
             msg: `Copilot assistant abort failed: ${error instanceof Error ? error.message : String(error)}`,
             op: 'copilot.assistant',
           });
-        });
+        }) ?? null;
     };
 
     if (options.signal) {
@@ -112,11 +115,12 @@ export class CopilotAssistantBackend {
 
     try {
       await previousRun.catch(() => {});
+      if (this.isDestroyed || this.isStopping) return;
       if (options.signal?.aborted) return;
 
       const hadSession = this.sessions.has(options.conversationId);
       state = await this.getOrCreateSession(options);
-      if (options.signal?.aborted) {
+      if (this.isDestroyed || this.isStopping || options.signal?.aborted) {
         if (hadSession) {
           await state.session.abort();
         } else {
@@ -146,7 +150,14 @@ export class CopilotAssistantBackend {
       if (!options.signal?.aborted) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.error({ msg: `Copilot assistant failed: ${message}`, op: 'copilot.assistant', err: error });
-        await this.destroySession(options.conversationId);
+        try {
+          await this.destroySession(options.conversationId);
+        } catch (cleanupError: unknown) {
+          this.logger.warn({
+            msg: `Copilot assistant cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+            op: 'copilot.assistant',
+          });
+        }
         yield { type: 'error', error: message };
       }
     } finally {
@@ -155,6 +166,9 @@ export class CopilotAssistantBackend {
         this.removeActiveQueue(options.conversationId, queue);
       }
       options.signal?.removeEventListener('abort', onAbort);
+      if (abortPromise) {
+        await abortPromise;
+      }
       releaseRun();
       if (this.runLocks.get(options.conversationId) === chainedRun) {
         this.runLocks.delete(options.conversationId);
@@ -171,15 +185,23 @@ export class CopilotAssistantBackend {
   }
 
   async destroyAll(): Promise<void> {
-    for (const conversationId of this.sessions.keys()) {
-      this.closeActiveQueues(conversationId);
-    }
-    const states = [...this.sessions.values()];
-    this.sessions.clear();
-    await Promise.allSettled(states.map(state => state.session.disconnect()));
-    const errors = await this.client.stop();
-    if (errors.length > 0) {
-      this.logger.warn({ msg: `Copilot client stopped with ${errors.length} cleanup error${errors.length === 1 ? '' : 's'}`, op: 'copilot.assistant' });
+    this.isDestroyed = true;
+    this.isStopping = true;
+    try {
+      for (const conversationId of this.sessions.keys()) {
+        this.closeActiveQueues(conversationId);
+      }
+      const states = [...this.sessions.values()];
+      this.sessions.clear();
+      await Promise.allSettled(states.map(state => state.session.disconnect()));
+      this.runLocks.clear();
+      this.activeQueues.clear();
+      const errors = await this.client.stop();
+      if (errors.length > 0) {
+        this.logger.warn({ msg: `Copilot client stopped with ${errors.length} cleanup error${errors.length === 1 ? '' : 's'}`, op: 'copilot.assistant' });
+      }
+    } finally {
+      this.isStopping = false;
     }
   }
 

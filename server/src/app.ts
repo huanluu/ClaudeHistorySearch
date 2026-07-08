@@ -87,7 +87,6 @@ interface AppContext {
   diagnosticsService: DiagnosticsService;
   heartbeatService: HeartbeatService;
   cronService: CronService;
-  cronToolFactory: () => ReturnType<typeof createCronTools>;
   commandRunner: ReturnType<typeof createNodeCommandRunner>;
   runtimes: CliRuntime[];
   workingDirValidator: WorkingDirValidator;
@@ -171,6 +170,42 @@ function wireHttpRoutes(ctx: AppContext, configService: ConfigService, onConfigC
   const adminHtml = ctx.fs.exists(adminHtmlPath) ? ctx.fs.readFile(adminHtmlPath) : undefined;
   registerAdminRoutes(router, { diagnosticsService: ctx.diagnosticsService, configService, onConfigChanged, logger: ctx.logger, adminHtml });
   ctx.transport.use('/', router);
+}
+
+function createAssistantBackend(
+  logger: ReturnType<typeof createLogger>,
+  cronService: CronService,
+): CopilotAssistantBackend {
+  return new CopilotAssistantBackend(logger, () => createCronTools(cronService), () => ({
+    'work-iq': { command: '/opt/homebrew/bin/node', args: ['/opt/homebrew/bin/workiq', 'mcp'] },
+  }));
+}
+
+function createConfigChangedHandler(deps: {
+  configService: ConfigService;
+  heartbeatService: HeartbeatService;
+  requestLoggerOptions: RequestLoggerOptions;
+  workingDirValidator: WorkingDirValidator;
+  logger: ReturnType<typeof createLogger>;
+}): (section: string) => void {
+  return (section: string): void => {
+    if (section === 'heartbeat') {
+      const s = deps.configService.getSection('heartbeat');
+      if (s) deps.heartbeatService.updateConfig(s as Partial<HeartbeatConfig>);
+      deps.heartbeatService.startScheduler();
+    }
+    if (section === 'logging') {
+      const s = deps.configService.getSection('logging') as { requestLogLevel?: string } | null;
+      deps.requestLoggerOptions.level = (s?.requestLogLevel as RequestLogLevel) ?? 'all';
+      deps.logger.log({ msg: `Request log level updated: ${deps.requestLoggerOptions.level}`, op: 'server.config' });
+    }
+    if (section === 'security') {
+      const s = deps.configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
+      const dirs = s?.allowedWorkingDirs ?? [];
+      deps.workingDirValidator.setAllowedDirs(dirs);
+      deps.logger.log({ msg: `Security config updated: ${dirs.length} allowed dirs`, op: 'server.config' });
+    }
+  };
 }
 
 async function startApp(ctx: AppContext): Promise<void> {
@@ -271,11 +306,18 @@ export function createApp(config: AppConfig): App {
 
   const commandRunner = createNodeCommandRunner();
   const heartbeatService = new HeartbeatService(fs, commandRunner, undefined, heartbeatRepo, logger, claudeRuntime, resolveHeartbeatEnvOverrides());
-  const cronService = new CronService(cronRepo, (opts) => copilotRuntime.runHeadless(opts, logger), logger, copilotRuntime.name);
-  const cronToolFactory = () => createCronTools(cronService);
-  const assistantBackend = new CopilotAssistantBackend(logger, () => cronToolFactory(), () => ({
-    'work-iq': { command: '/opt/homebrew/bin/node', args: ['/opt/homebrew/bin/workiq', 'mcp'] },
-  }));
+  const cronService = new CronService(
+    cronRepo,
+    (opts) => copilotRuntime.runHeadless(opts, logger),
+    logger,
+    copilotRuntime.name,
+    (dir) => {
+      const result = workingDirValidator.validate(dir);
+      if (!result.allowed) throw new Error(result.error);
+      return result.resolvedPath ?? dir;
+    },
+  );
+  const assistantBackend = createAssistantBackend(logger, cronService);
 
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
   const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger, fs);
@@ -294,28 +336,13 @@ export function createApp(config: AppConfig): App {
   transport.use(createRequestLogger(requestLoggerOptions));
   transport.use(config.authMiddlewareOverride ?? authMiddleware);
 
-  const onConfigChanged = (section: string): void => {
-    if (section === 'heartbeat') {
-      const s = configService.getSection('heartbeat');
-      if (s) heartbeatService.updateConfig(s as Partial<HeartbeatConfig>);
-      heartbeatService.startScheduler();
-    }
-    if (section === 'logging') {
-      const s = configService.getSection('logging') as { requestLogLevel?: string } | null;
-      requestLoggerOptions.level = (s?.requestLogLevel as RequestLogLevel) ?? 'all';
-      logger.log({ msg: `Request log level updated: ${requestLoggerOptions.level}`, op: 'server.config' });
-    }
-    if (section === 'security') {
-      const s = configService.getSection('security') as { allowedWorkingDirs?: string[] } | null;
-      const dirs = s?.allowedWorkingDirs ?? [];
-      workingDirValidator.setAllowedDirs(dirs);
-      logger.log({ msg: `Security config updated: ${dirs.length} allowed dirs`, op: 'server.config' });
-    }
-  };
+  const onConfigChanged = createConfigChangedHandler({
+    configService, heartbeatService, requestLoggerOptions, workingDirValidator, logger,
+  });
 
   const ctx: AppContext = {
     config, serviceType, dbPath, logger, sessionRepo, sessionSources, fs, transport,
-    fileWatcher, agentStore, assistantBackend, diagnosticsService, heartbeatService, cronService, cronToolFactory,
+    fileWatcher, agentStore, assistantBackend, diagnosticsService, heartbeatService, cronService,
     commandRunner, runtimes: [claudeRuntime, copilotRuntime], workingDirValidator, allowedDirs,
     wsGateway: null, bonjour: null, bonjourService: null, reindexTimer: null,
   };

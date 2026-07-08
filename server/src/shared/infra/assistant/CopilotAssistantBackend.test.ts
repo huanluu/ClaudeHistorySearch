@@ -282,6 +282,26 @@ describe('CopilotAssistantBackend', () => {
     await backend.destroyAll();
   });
 
+  it('does not send a prompt if shutdown starts while creating a new session', async () => {
+    let resolveCreate!: (session: MockSession) => void;
+    mockCreateSession.mockReturnValue(new Promise(resolve => { resolveCreate = resolve; }));
+
+    const backend = new CopilotAssistantBackend(createLogger());
+    const iterator = backend.run('hello', { conversationId: 'conv-1' })[Symbol.asyncIterator]();
+    const first = iterator.next();
+
+    await vi.waitFor(() => expect(mockCreateSession).toHaveBeenCalledOnce());
+    const destroy = backend.destroyAll();
+    const session = new MockSession();
+    sessions.push(session);
+    resolveCreate(session);
+
+    expect((await first).done).toBe(true);
+    await destroy;
+    expect(session.sentPrompts).toEqual([]);
+    expect(session.disconnect).toHaveBeenCalledOnce();
+  });
+
   it('destroys a session after send fails', async () => {
     const session = new MockSession();
     sessions.push(session);
@@ -296,6 +316,25 @@ describe('CopilotAssistantBackend', () => {
 
     expect((await first).value).toEqual({ type: 'error', error: 'send failed' });
     expect(session.disconnect).toHaveBeenCalledOnce();
+    await backend.destroyAll();
+  });
+
+  it('preserves original send error when cleanup fails', async () => {
+    const logger = createLogger();
+    const session = new MockSession();
+    sessions.push(session);
+    vi.spyOn(session, 'send').mockRejectedValue(new Error('send failed'));
+    session.disconnect.mockRejectedValue(new Error('disconnect failed'));
+    mockCreateSession.mockResolvedValue(session);
+
+    const backend = new CopilotAssistantBackend(logger);
+    const iterator = backend.run('hello', { conversationId: 'conv-1' })[Symbol.asyncIterator]();
+
+    expect((await iterator.next()).value).toEqual({ type: 'error', error: 'send failed' });
+    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
+      msg: 'Copilot assistant cleanup failed: disconnect failed',
+      op: 'copilot.assistant',
+    }));
     await backend.destroyAll();
   });
 
@@ -319,6 +358,34 @@ describe('CopilotAssistantBackend', () => {
     await vi.waitFor(() => expect(sessions[0].sentPrompts).toEqual(['one', 'two']));
     sessions[0].emit(idle());
     await secondEvent;
+    await backend.destroyAll();
+  });
+
+  it('keeps the run lock until abort is acknowledged', async () => {
+    const backend = new CopilotAssistantBackend(createLogger());
+    const controller = new AbortController();
+    let resolveAbort!: () => void;
+
+    const firstRun = backend.run('one', { conversationId: 'conv-1', signal: controller.signal })[Symbol.asyncIterator]();
+    const firstEvent = firstRun.next();
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
+    await vi.waitFor(() => expect(sessions[0].handlers).toHaveLength(1));
+    sessions[0].abort.mockReturnValue(new Promise<void>(resolve => { resolveAbort = resolve; }));
+
+    controller.abort();
+    await Promise.resolve();
+
+    const secondRun = backend.run('two', { conversationId: 'conv-1' })[Symbol.asyncIterator]();
+    const secondEvent = secondRun.next();
+    await Promise.resolve();
+    expect(sessions[0].sentPrompts).toEqual(['one']);
+
+    resolveAbort();
+    expect((await firstEvent).done).toBe(true);
+    await vi.waitFor(() => expect(sessions[0].sentPrompts).toEqual(['one', 'two']));
+    sessions[0].emit(idle());
+    await secondEvent;
+    await secondRun.next();
     await backend.destroyAll();
   });
 
@@ -369,6 +436,26 @@ describe('CopilotAssistantBackend', () => {
     await thirdEvent;
     await thirdRun.next();
     await backend.destroyAll();
+  });
+
+  it('does not start queued runs after destroyAll begins', async () => {
+    const backend = new CopilotAssistantBackend(createLogger());
+    const firstRun = backend.run('one', { conversationId: 'conv-1' })[Symbol.asyncIterator]();
+    const firstEvent = firstRun.next();
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
+    await vi.waitFor(() => expect(sessions[0].handlers).toHaveLength(1));
+
+    const queuedRun = backend.run('two', { conversationId: 'conv-1' })[Symbol.asyncIterator]();
+    const queuedEvent = queuedRun.next();
+    await Promise.resolve();
+
+    const destroy = backend.destroyAll();
+    sessions[0].emit(idle());
+    await firstEvent;
+
+    expect((await queuedEvent).done).toBe(true);
+    await destroy;
+    expect(sessions[0].sentPrompts).toEqual(['one']);
   });
 
   it('does not emit complete for an aborted idle event', async () => {
