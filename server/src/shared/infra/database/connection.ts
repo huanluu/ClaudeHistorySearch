@@ -35,6 +35,14 @@ function runSessionMigrations(db: DatabaseType, logger: Logger): void {
   addColumnIfMissing(db, 'sessions', 'source', "TEXT DEFAULT 'claude'", logger);
 }
 
+function runCronMigrations(db: DatabaseType, logger: Logger): void {
+  addColumnIfMissing(db, 'cron_jobs', 'schedule_timezone', 'TEXT', logger);
+  const result = db.prepare("UPDATE cron_jobs SET runtime = 'copilot' WHERE runtime = 'claude'").run();
+  if (result.changes > 0) {
+    logger.log({ msg: `Migrated ${result.changes} cron job runtime value${result.changes === 1 ? '' : 's'} to copilot`, op: 'db.migrate', context: { changed: result.changes } });
+  }
+}
+
 function setupFtsTable(db: DatabaseType, logger: Logger): void {
   // Rebuild FTS table if it still uses porter tokenizer (causes false positives)
   const ftsSchema = db.prepare(
@@ -85,13 +93,13 @@ export function createDatabase(dbPath: string, logger: Logger): DatabaseType {
     CREATE TABLE IF NOT EXISTS cron_jobs (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER DEFAULT 1,
       schedule_kind TEXT NOT NULL, schedule_value TEXT NOT NULL, schedule_timezone TEXT,
-      prompt TEXT NOT NULL, working_dir TEXT NOT NULL, runtime TEXT NOT NULL DEFAULT 'claude',
+      prompt TEXT NOT NULL, working_dir TEXT NOT NULL, runtime TEXT NOT NULL DEFAULT 'copilot',
       next_run_at_ms INTEGER, last_run_at_ms INTEGER, last_run_status TEXT,
       last_session_id TEXT, consecutive_errors INTEGER DEFAULT 0, created_at_ms INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs(next_run_at_ms);
   `);
-  addColumnIfMissing(db, 'cron_jobs', 'schedule_timezone', 'TEXT', logger);
+  runCronMigrations(db, logger);
 
   setupFtsTable(db, logger);
 

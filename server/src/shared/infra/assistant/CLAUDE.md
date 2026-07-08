@@ -2,37 +2,36 @@
 
 ## Why
 
-The assistant feature needs a real LLM backend that can hold multi-turn conversations, call tools, and access external services (calendar, ADO, MS Graph) via MCP servers. This adapter bridges the feature's `AssistantBackend` port to the Claude Agent SDK, which spawns Claude CLI as a persistent subprocess.
+The assistant feature needs a real LLM backend that can hold multi-turn conversations, call tools, and access external services (calendar, ADO, MS Graph) via MCP servers. This adapter bridges the feature's `AssistantBackend` port to the GitHub Copilot SDK, which spawns the Copilot runtime as a persistent subprocess.
 
 ## What
 
 | File | Purpose |
 |------|---------|
-| `SdkAssistantBackend.ts` | Adapter implementing `AssistantBackend` via `@anthropic-ai/claude-agent-sdk` streaming input mode. One persistent subprocess per conversation, reused across turns |
-| `translateSdkEvent.ts` | Stateful translator from SDK message types to `AssistantEvent` (the feature's domain type). Handles mid-stream `assistant` messages, turn boundaries, and session ID tracking |
-| `cronMcpTools.ts` | In-process MCP server exposing cron management tools (create/list/delete jobs). Created via `createSdkMcpServer()` and passed to the SDK |
+| `CopilotAssistantBackend.ts` | Adapter implementing `AssistantBackend` via `@github/copilot-sdk`. One Copilot session per conversation, reused across turns |
+| `cronMcpTools.ts` | Copilot custom tools exposing cron management (create/list/delete/run jobs). Passed to the SDK as session tools |
 
 ## How
 
 ### Session Lifecycle
 
-1. First message for a `conversationId` → `createSession()` spawns a new SDK subprocess via `query()`
-2. Each subsequent message → pushed to the session's async generator channel
+1. First message for a `conversationId` → `CopilotClient.createSession()` creates a Copilot session
+2. Each subsequent message → sent to the existing `CopilotSession`
 3. SDK manages full conversation context internally (no manual history tracking)
 4. Sessions persist across client disconnects; destroyed on abort or explicit cleanup
 
 ### MCP Server Integration
 
-The SDK's `query()` accepts `mcpServers: Record<string, McpServerConfig>` which can be:
-- **In-process** (`McpSdkServerConfigWithInstance`): Tools defined in code, e.g., cron management
-- **Stdio** (`McpStdioServerConfig`): External MCP servers like Work IQ (`{ command, args, env }`)
+The SDK session config accepts:
+- **Custom tools** (`tools: Tool[]`): Tools defined in code, e.g. cron management
+- **Stdio MCP servers** (`mcpServers`): External MCP servers like Work IQ (`{ command, args, env }`)
 
-MCP servers are wired in `app.ts` and passed to the backend constructor. The SDK connects to them and exposes their tools to the assistant.
+Tools and MCP servers are wired in `app.ts` and passed to the backend constructor. The SDK connects to them and exposes their tools to the assistant.
 
 ### Permission Mode
 
-**Always use `permissionMode: 'bypassPermissions'` and `allowDangerouslySkipPermissions: true`.**
+**Always provide `onPermissionRequest: approveAll` for the headless assistant session.**
 
-The SDK subprocess runs headless with no interactive terminal. Without bypass mode, MCP tool calls (e.g., `mcp__work-iq__ask_work_iq`) trigger permission prompts that have no UI to approve them, causing the tool call to hang or fail silently. The generic `allowedTools: ['Mcp']` only approves the built-in Mcp routing tool, not individual MCP server tools which use `mcp__<server>__<tool>` naming.
+The SDK subprocess runs headless with no interactive terminal. Without an approval handler, MCP/tool calls can trigger permission prompts that have no UI to approve, causing the tool call to hang or fail silently.
 
 This is safe because: the server is a local-only, single-user system behind API key auth. The assistant's tool access is already scoped by the `tools` array.

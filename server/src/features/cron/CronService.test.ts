@@ -117,6 +117,7 @@ describe('CronService', () => {
       expect(job.id).toMatch(/^[0-9a-f-]{36}$/);
       expect(job.name).toBe('Test');
       expect(job.enabled).toBe(1);
+      expect(job.runtime).toBe('copilot');
       expect(job.next_run_at_ms).toBeGreaterThan(Date.now() - 1000);
       expect(repo.getById(job.id)).toBeDefined();
     });
@@ -214,6 +215,7 @@ describe('CronService', () => {
       const updated = service.getJobStatus(job.id);
       expect(updated.last_run_status).toBe('success');
       expect(updated.last_session_id).toBe('sess-1');
+      expect(updated.runtime).toBe('copilot');
       expect(updated.consecutive_errors).toBe(0);
     });
 
@@ -223,6 +225,7 @@ describe('CronService', () => {
       await expect(service.runJobNow(job.id)).rejects.toThrow('boom');
       const updated = service.getJobStatus(job.id);
       expect(updated.last_run_status).toBe('error');
+      expect(updated.runtime).toBe('copilot');
       expect(updated.consecutive_errors).toBe(1);
     });
 
@@ -248,6 +251,52 @@ describe('CronService', () => {
 
     it('throws for nonexistent id', async () => {
       await expect(service.runJobNow('nope')).rejects.toThrow('Cron job not found');
+    });
+
+    it('tracks manual runs as in-flight so shutdown cancellation is not recorded as a failure', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '60000' }, prompt: 'x', workingDir: '/tmp' });
+      let rejectRun!: (error: Error) => void;
+      runFn.mockReturnValue(new Promise((_resolve, reject) => { rejectRun = reject; }));
+
+      const run = service.runJobNow(job.id);
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler({
+        isCancellationError: (error) => error instanceof Error && error.message.includes('terminated by signal'),
+        cancelInFlight: () => rejectRun(new Error('copilot terminated by signal SIGTERM')),
+      });
+
+      await expect(run).resolves.toEqual({ sessionId: null });
+      await stop;
+
+      const updated = service.getJobStatus(job.id);
+      expect(updated.last_run_status).toBeNull();
+      expect(updated.consecutive_errors).toBe(0);
+    });
+
+    it('does not let an in-flight manual run block scheduler ticks for other jobs', async () => {
+      const manualJob = service.addJob({ name: 'Manual', schedule: { kind: 'every', value: '60000' }, prompt: 'manual', workingDir: '/tmp' });
+      const scheduledJob = service.addJob({ name: 'Scheduled', schedule: { kind: 'every', value: '60000' }, prompt: 'scheduled', workingDir: '/tmp' });
+      repo.update(scheduledJob.id, { next_run_at_ms: 1 });
+
+      let resolveManual!: () => void;
+      runFn.mockImplementation(({ prompt }: { prompt: string; workingDir: string }) => {
+        if (prompt.includes('manual')) {
+          return new Promise(resolve => { resolveManual = () => resolve({ sessionId: 'manual-session' }); });
+        }
+        return Promise.resolve({ sessionId: 'scheduled-session' });
+      });
+
+      const manualRun = service.runJobNow(manualJob.id);
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      await service.tick();
+
+      expect(runFn).toHaveBeenCalledTimes(2);
+      expect(service.getJobStatus(scheduledJob.id).last_session_id).toBe('scheduled-session');
+
+      resolveManual();
+      await manualRun;
     });
   });
 
@@ -305,6 +354,102 @@ describe('CronService', () => {
       service.startScheduler();
       await service.stopScheduler();
       expect(service.isSchedulerActive()).toBe(false);
+    });
+
+    it('cancels in-flight work during stop without recording a job failure', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'x', workingDir: '/tmp' });
+      repo.update(job.id, { next_run_at_ms: 1 });
+
+      let rejectRun!: (error: Error) => void;
+      runFn.mockReturnValue(new Promise((_resolve, reject) => { rejectRun = reject; }));
+
+      const tick = service.tick();
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler({
+        isCancellationError: (error) => error instanceof Error && error.message.includes('terminated by signal'),
+        cancelInFlight: () => rejectRun(new Error('copilot terminated by signal SIGTERM')),
+      });
+
+      await stop;
+      await tick;
+
+      const updated = service.getJobStatus(job.id);
+      expect(updated.last_run_status).toBeNull();
+      expect(updated.consecutive_errors).toBe(0);
+    });
+
+    it('records non-cancellation failures during stop even when cancellation was requested', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'x', workingDir: '/tmp' });
+      repo.update(job.id, { next_run_at_ms: 1 });
+
+      let rejectRun!: (error: Error) => void;
+      runFn.mockReturnValue(new Promise((_resolve, reject) => { rejectRun = reject; }));
+
+      const tick = service.tick();
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler({
+        isCancellationError: (error) => error instanceof Error && error.message.includes('terminated by signal'),
+        cancelInFlight: () => rejectRun(new Error('boom')),
+      });
+
+      await stop;
+      await tick;
+
+      const updated = service.getJobStatus(job.id);
+      expect(updated.last_run_status).toBe('error');
+      expect(updated.consecutive_errors).toBe(1);
+    });
+
+    it('records in-flight failures during graceful stop when no cancellation was requested', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'x', workingDir: '/tmp' });
+      repo.update(job.id, { next_run_at_ms: 1 });
+
+      let rejectRun!: (error: Error) => void;
+      runFn.mockReturnValue(new Promise((_resolve, reject) => { rejectRun = reject; }));
+
+      const tick = service.tick();
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler();
+      rejectRun(new Error('boom'));
+
+      await stop;
+      await tick;
+
+      const updated = service.getJobStatus(job.id);
+      expect(updated.last_run_status).toBe('error');
+      expect(updated.consecutive_errors).toBe(1);
+    });
+
+    it('resets stopping state when cancellation hook throws', async () => {
+      const job = service.addJob({ name: 'A', schedule: { kind: 'every', value: '1000' }, prompt: 'x', workingDir: '/tmp' });
+      repo.update(job.id, { next_run_at_ms: 1 });
+
+      let rejectRun!: (error: Error) => void;
+      runFn.mockReturnValue(new Promise((_resolve, reject) => { rejectRun = reject; }));
+
+      const tick = service.tick();
+      await vi.waitFor(() => expect(runFn).toHaveBeenCalledOnce());
+
+      const stop = service.stopScheduler({
+        isCancellationError: (error) => error instanceof Error && error.message.includes('terminated by signal'),
+        cancelInFlight: () => {
+          rejectRun(new Error('copilot terminated by signal SIGTERM'));
+          throw new Error('cleanup failed');
+        },
+      });
+
+      await expect(stop).rejects.toThrow('cleanup failed');
+      await tick;
+
+      runFn.mockRejectedValue(new Error('boom'));
+      await expect(service.runJobNow(job.id)).rejects.toThrow('boom');
+
+      const updated = service.getJobStatus(job.id);
+      expect(updated.last_run_status).toBe('error');
+      expect(updated.consecutive_errors).toBe(1);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { CopilotAgentSession, CopilotRuntime } from './CopilotRuntime';
+import { CopilotAgentSession, CopilotProcessTerminatedError, CopilotRuntime } from './CopilotRuntime';
 import { noopLogger } from '../../../../tests/__helpers/index';
 
 const { mockSpawn } = vi.hoisted(() => ({
@@ -125,12 +125,13 @@ describe('CopilotAgentSession', () => {
 
 describe('CopilotRuntime', () => {
   let mockProcess: ReturnType<typeof createMockProcess>;
-  const runtime = new CopilotRuntime(process.env);
+  let runtime: CopilotRuntime;
 
   beforeEach(() => {
     mockSpawn.mockReset();
     mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    runtime = new CopilotRuntime(process.env);
   });
 
   it('has name "copilot"', () => {
@@ -157,6 +158,35 @@ describe('CopilotRuntime', () => {
       expect(result.sessionId).toBe('copilot-uuid-123');
     });
 
+    it('tracks child process while headless run is active', () => {
+      void runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
+
+      expect(runtime.trackedProcesses.size).toBe(1);
+      expect(runtime.trackedProcesses.has(mockProcess as unknown as import('child_process').ChildProcess)).toBe(true);
+    });
+
+    it('removes child from trackedProcesses on close', async () => {
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
+
+      mockProcess.stdout.emit('data', Buffer.from('{"type":"result","sessionId":"copilot-uuid-123"}\n'));
+      mockProcess.emit('close');
+
+      await promise;
+      expect(runtime.trackedProcesses.size).toBe(0);
+    });
+
+    it('cleanup kills all tracked processes', () => {
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger).catch(() => undefined);
+
+      runtime.cleanup();
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(runtime.trackedProcesses.size).toBe(1);
+
+      mockProcess.emit('close', null, 'SIGTERM');
+      void promise;
+      expect(runtime.trackedProcesses.size).toBe(0);
+    });
+
     it('returns null sessionId if process exits without result event', async () => {
       const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
 
@@ -175,12 +205,45 @@ describe('CopilotRuntime', () => {
       await expect(promise).rejects.toThrow('copilot exited with code 1');
     });
 
+    it('drains stderr output during headless runs', async () => {
+      const logger = { ...noopLogger, verbose: vi.fn() };
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, logger);
+
+      mockProcess.stderr.emit('data', Buffer.from('warning output\n'));
+      mockProcess.emit('close');
+
+      await promise;
+      expect(logger.verbose).toHaveBeenCalledWith(expect.objectContaining({
+        msg: 'copilot stderr output drained (15 bytes)',
+        op: 'runtime.headless',
+      }));
+    });
+
+    it('rejects when terminated by signal', async () => {
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
+
+      mockProcess.emit('close', null, 'SIGTERM');
+
+      await expect(promise).rejects.toThrow('copilot terminated by signal SIGTERM');
+      await expect(promise).rejects.toBeInstanceOf(CopilotProcessTerminatedError);
+    });
+
     it('rejects on spawn error', async () => {
       const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
 
       mockProcess.emit('error', new Error('ENOENT'));
 
       await expect(promise).rejects.toThrow('ENOENT');
+    });
+
+    it('removes child from trackedProcesses on spawn error', async () => {
+      const promise = runtime.runHeadless({ prompt: 'analyze', workingDir: '/tmp' }, noopLogger);
+
+      expect(runtime.trackedProcesses.size).toBe(1);
+      mockProcess.emit('error', new Error('ENOENT'));
+
+      await expect(promise).rejects.toThrow('ENOENT');
+      expect(runtime.trackedProcesses.size).toBe(0);
     });
 
     it('uses last result event if multiple are emitted', async () => {

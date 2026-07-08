@@ -20,6 +20,7 @@ function createMockRuntime(sessionId = 'mock-session-id'): CliRuntime {
     name: 'mock',
     startSession: vi.fn(),
     runHeadless: vi.fn().mockResolvedValue({ sessionId }),
+    cleanup: vi.fn(),
   } as unknown as CliRuntime;
 }
 
@@ -958,6 +959,7 @@ More text.
         name: 'failing',
         startSession: vi.fn(),
         runHeadless: vi.fn().mockRejectedValue(new Error('spawn claude ENOENT')),
+        cleanup: vi.fn(),
       } as unknown as CliRuntime;
 
       const mockRunner_: CommandRunner = {

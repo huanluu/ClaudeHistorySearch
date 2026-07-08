@@ -114,7 +114,7 @@ export interface CronJobRecord {
   schedule_timezone: string | null; // IANA timezone for cron expressions (e.g., 'America/Los_Angeles')
   prompt: string;
   working_dir: string;
-  runtime: string;                // 'claude'
+  runtime: string;                // CLI runtime name, e.g. 'copilot'
   next_run_at_ms: number | null;
   last_run_at_ms: number | null;
   last_run_status: string | null; // 'success' | 'error' | null
@@ -222,4 +222,5 @@ export interface CliRuntime {
   readonly name: string;
   startSession(sessionId: string, logger: Logger): AgentSession;
   runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }>;
+  cleanup(): void;
 }

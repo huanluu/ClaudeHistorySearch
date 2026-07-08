@@ -95,13 +95,27 @@ export class CopilotAgentSession extends EventEmitter implements AgentSession {
 
 // ── CopilotRuntime ──────────────────────────────────────────────────
 
+export class CopilotProcessTerminatedError extends Error {
+  constructor(readonly signal: string) {
+    super(`copilot terminated by signal ${signal}`);
+    this.name = 'CopilotProcessTerminatedError';
+  }
+}
+
 export class CopilotRuntime implements CliRuntime {
   readonly name = 'copilot';
+  readonly trackedProcesses = new Set<ChildProcess>();
 
   constructor(private readonly parentEnv: Record<string, string | undefined>) {}
 
   startSession(sessionId: string, logger: Logger): AgentSession {
     return new CopilotAgentSession(sessionId, logger, this.parentEnv);
+  }
+
+  cleanup(): void {
+    for (const child of this.trackedProcesses) {
+      child.kill('SIGTERM');
+    }
   }
 
   runHeadless(options: HeadlessRunOptions, logger: Logger): Promise<{ sessionId: string | null }> {
@@ -114,6 +128,7 @@ export class CopilotRuntime implements CliRuntime {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
+      this.trackedProcesses.add(child);
       let resolved = false;
       let lastSessionId: string | null = null;
 
@@ -130,16 +145,28 @@ export class CopilotRuntime implements CliRuntime {
         handleLine(data);
       });
 
+      child.stderr?.on('data', (data: Buffer) => {
+        if (data.length > 0) {
+          logger.verbose({ msg: `copilot stderr output drained (${data.length} bytes)`, op: 'runtime.headless', context: { runtime: this.name } });
+        }
+      });
+
       child.on('error', (error) => {
+        this.trackedProcesses.delete(child);
         if (!resolved) {
           resolved = true;
           reject(error);
         }
       });
 
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
+        this.trackedProcesses.delete(child);
         if (!resolved) {
           resolved = true;
+          if (signal) {
+            reject(new CopilotProcessTerminatedError(signal));
+            return;
+          }
           if (code && code !== 0) {
             reject(new Error(`copilot exited with code ${code}`));
             return;

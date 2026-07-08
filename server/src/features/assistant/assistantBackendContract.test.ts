@@ -15,18 +15,18 @@ async function collectEvents(backend: AssistantBackend, prompt: string): Promise
   return events;
 }
 
-function runContractSuite(name: string, createBackend: () => AssistantBackend) {
+function runContractSuite(name: string, createBackend: () => AssistantBackend, timeoutMs?: number) {
   describe(`AssistantBackend contract: ${name}`, () => {
     it('emits at least one event', async () => {
       const events = await collectEvents(createBackend(), 'hello');
       expect(events.length).toBeGreaterThanOrEqual(1);
-    });
+    }, timeoutMs);
 
     it('final event is complete or error', async () => {
       const events = await collectEvents(createBackend(), 'hello');
       const last = events[events.length - 1];
       expect(['complete', 'error']).toContain(last.type);
-    });
+    }, timeoutMs);
 
     it('complete event includes sessionId', async () => {
       const events = await collectEvents(createBackend(), 'hello');
@@ -34,7 +34,7 @@ function runContractSuite(name: string, createBackend: () => AssistantBackend) {
       if (complete) {
         expect(complete.sessionId).toBeDefined();
       }
-    });
+    }, timeoutMs);
 
     it('events arrive in valid sequence: delta* then complete|error', async () => {
       const events = await collectEvents(createBackend(), 'hello');
@@ -50,7 +50,7 @@ function runContractSuite(name: string, createBackend: () => AssistantBackend) {
         }
       }
       expect(seenTerminal).toBe(true);
-    });
+    }, timeoutMs);
 
     it('respects abort signal', async () => {
       const controller = new AbortController();
@@ -67,7 +67,7 @@ function runContractSuite(name: string, createBackend: () => AssistantBackend) {
       // Should not emit delta events when pre-aborted
       const deltas = events.filter(e => e.type === 'delta');
       expect(deltas.length).toBe(0);
-    });
+    }, timeoutMs);
   });
 }
 
@@ -81,7 +81,7 @@ runContractSuite('MockAssistantBackend', () =>
   ]),
 );
 
-// Conditional — real SDK (requires Claude CLI, don't run in CI)
+// Conditional — real SDK (requires Copilot CLI auth/runtime, don't run in CI)
 if (process.env.TEST_WITH_SDK === '1') {
   // Dynamic import to avoid loading SDK in normal test runs
   const { SdkAssistantBackend } = await import('../../shared/infra/assistant/index');
@@ -92,7 +92,8 @@ if (process.env.TEST_WITH_SDK === '1') {
     verbose: () => {},
     log: () => {},
   };
-  runContractSuite('SdkAssistantBackend', () =>
+  runContractSuite('CopilotAssistantBackend', () =>
     new SdkAssistantBackend(noopLogger),
+    30000,
   );
 }

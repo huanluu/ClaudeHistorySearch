@@ -9,8 +9,8 @@ import { HttpTransport, WebSocketGateway, validateQuery, validateBody, SearchQue
 import type { AuthenticatedClient } from './gateway/index';
 import { AgentStore, registerLiveHandlers } from './features/live/index';
 import { AssistantService, registerAssistantHandlers } from './features/assistant/index';
-import { SdkAssistantBackend, createCronMcpTools } from './shared/infra/assistant/index';
-import { ClaudeRuntime, CopilotRuntime, createNodeCommandRunner } from './shared/infra/runtime/index';
+import { CopilotAssistantBackend, createCronTools } from './shared/infra/assistant/index';
+import { ClaudeRuntime, CopilotRuntime, CopilotProcessTerminatedError, createNodeCommandRunner } from './shared/infra/runtime/index';
 import type { CliRuntime } from './shared/provider/index';
 import { indexAllSessions, FileWatcher, registerSearchRoutes } from './features/search/index';
 import { ClaudeSessionSource, CopilotSessionSource } from './shared/infra/parsers/index';
@@ -83,12 +83,13 @@ interface AppContext {
   transport: HttpTransport;
   fileWatcher: FileWatcher;
   agentStore: AgentStore;
+  assistantBackend: CopilotAssistantBackend;
   diagnosticsService: DiagnosticsService;
   heartbeatService: HeartbeatService;
   cronService: CronService;
-  cronMcpServerFactory: () => ReturnType<typeof createCronMcpTools>;
+  cronToolFactory: () => ReturnType<typeof createCronTools>;
   commandRunner: ReturnType<typeof createNodeCommandRunner>;
-  claudeRuntime: ClaudeRuntime;
+  runtimes: CliRuntime[];
   workingDirValidator: WorkingDirValidator;
   allowedDirs: string[];
   wsGateway: WebSocketGateway | null;
@@ -106,11 +107,7 @@ function initializeWebSocketGateway(ctx: AppContext): void {
 
   registerLiveHandlers(gw, { agentStore: ctx.agentStore, validator: ctx.workingDirValidator, logger: ctx.logger });
 
-  const assistantBackend = new SdkAssistantBackend(ctx.logger, () => ({
-    cron: ctx.cronMcpServerFactory(),
-    'work-iq': { command: '/opt/homebrew/bin/node', args: ['/opt/homebrew/bin/workiq', 'mcp'] },
-  }));
-  const assistantService = new AssistantService(assistantBackend, ctx.logger);
+  const assistantService = new AssistantService(ctx.assistantBackend, ctx.logger);
   registerAssistantHandlers(gw, { assistantService, logger: ctx.logger });
 
   gw.onConnect((client: AuthenticatedClient) => {
@@ -217,16 +214,35 @@ async function startApp(ctx: AppContext): Promise<void> {
 
 async function stopApp(ctx: AppContext): Promise<void> {
   ctx.logger.log({ msg: 'Shutting down...', op: 'server.stop' });
-  ctx.claudeRuntime.cleanup();
   if (ctx.reindexTimer) { clearInterval(ctx.reindexTimer); ctx.reindexTimer = null; }
   ctx.heartbeatService.stopScheduler();
-  await ctx.cronService.stopScheduler();
+  let cronStopError: unknown;
+  try {
+    await ctx.cronService.stopScheduler({
+      isCancellationError: (error) => error instanceof CopilotProcessTerminatedError,
+      cancelInFlight: () => {
+        for (const runtime of ctx.runtimes) {
+          runtime.cleanup();
+        }
+      },
+    });
+  } catch (error) {
+    cronStopError = error;
+    ctx.logger.error({ msg: `Cron scheduler stop failed: ${error instanceof Error ? error.message : String(error)}`, op: 'server.stop', err: error });
+  }
+  for (const runtime of ctx.runtimes) {
+    runtime.cleanup();
+  }
   ctx.bonjourService?.stop?.();
   ctx.bonjour?.destroy();
   await ctx.fileWatcher.stop();
+  await ctx.assistantBackend.destroyAll();
   await ctx.wsGateway?.stop();
   await ctx.transport.stop();
   ctx.logger.log({ msg: 'Server stopped', op: 'server.stop' });
+  if (cronStopError) {
+    throw cronStopError;
+  }
 }
 
 /**
@@ -255,8 +271,11 @@ export function createApp(config: AppConfig): App {
 
   const commandRunner = createNodeCommandRunner();
   const heartbeatService = new HeartbeatService(fs, commandRunner, undefined, heartbeatRepo, logger, claudeRuntime, resolveHeartbeatEnvOverrides());
-  const cronService = new CronService(cronRepo, (opts) => claudeRuntime.runHeadless(opts, logger), logger);
-  const cronMcpServerFactory = () => createCronMcpTools(cronService);
+  const cronService = new CronService(cronRepo, (opts) => copilotRuntime.runHeadless(opts, logger), logger, copilotRuntime.name);
+  const cronToolFactory = () => createCronTools(cronService);
+  const assistantBackend = new CopilotAssistantBackend(logger, () => cronToolFactory(), () => ({
+    'work-iq': { command: '/opt/homebrew/bin/node', args: ['/opt/homebrew/bin/workiq', 'mcp'] },
+  }));
 
   const sessionSources = config.sessionSources ?? [new ClaudeSessionSource(), new CopilotSessionSource()];
   const fileWatcher = new FileWatcher(sessionSources, sessionRepo, logger, fs);
@@ -296,8 +315,8 @@ export function createApp(config: AppConfig): App {
 
   const ctx: AppContext = {
     config, serviceType, dbPath, logger, sessionRepo, sessionSources, fs, transport,
-    fileWatcher, agentStore, diagnosticsService, heartbeatService, cronService, cronMcpServerFactory,
-    commandRunner, claudeRuntime, workingDirValidator, allowedDirs,
+    fileWatcher, agentStore, assistantBackend, diagnosticsService, heartbeatService, cronService, cronToolFactory,
+    commandRunner, runtimes: [claudeRuntime, copilotRuntime], workingDirValidator, allowedDirs,
     wsGateway: null, bonjour: null, bonjourService: null, reindexTimer: null,
   };
 

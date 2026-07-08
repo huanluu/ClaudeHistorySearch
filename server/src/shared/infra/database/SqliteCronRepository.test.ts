@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import Database from 'better-sqlite3';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { rmSync } from 'fs';
 import { createDatabase } from './connection';
 import { SqliteCronRepository } from './SqliteCronRepository';
 import type { CronJobRecord } from '../../provider/index';
@@ -14,7 +18,7 @@ function makeJob(overrides: Partial<CronJobRecord> = {}): CronJobRecord {
     schedule_timezone: null,
     prompt: 'Do something',
     working_dir: '/tmp',
-    runtime: 'claude',
+    runtime: 'copilot',
     next_run_at_ms: 1000,
     last_run_at_ms: null,
     last_run_status: null,
@@ -88,5 +92,35 @@ describe('SqliteCronRepository', () => {
   it('remove is a no-op for nonexistent id', () => {
     repo.remove('nonexistent');
     // No throw
+  });
+
+  it('migrates existing claude cron runtime rows to copilot', () => {
+    const dbPath = join(tmpdir(), `cron-runtime-migration-${Date.now()}.db`);
+    const preMigrationDb = new Database(dbPath);
+    preMigrationDb.exec(`
+      CREATE TABLE cron_jobs (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER DEFAULT 1,
+        schedule_kind TEXT NOT NULL, schedule_value TEXT NOT NULL, schedule_timezone TEXT,
+        prompt TEXT NOT NULL, working_dir TEXT NOT NULL, runtime TEXT NOT NULL DEFAULT 'claude',
+        next_run_at_ms INTEGER, last_run_at_ms INTEGER, last_run_status TEXT,
+        last_session_id TEXT, consecutive_errors INTEGER DEFAULT 0, created_at_ms INTEGER NOT NULL
+      );
+      INSERT INTO cron_jobs (
+        id, name, enabled, schedule_kind, schedule_value, schedule_timezone, prompt, working_dir,
+        runtime, next_run_at_ms, last_run_at_ms, last_run_status, last_session_id, consecutive_errors, created_at_ms
+      ) VALUES (
+        'legacy', 'Legacy', 1, 'every', '60000', NULL, 'Do something', '/tmp',
+        'claude', 1000, NULL, NULL, NULL, 0, 123
+      );
+    `);
+    preMigrationDb.close();
+
+    const logger = createLogger('/dev/null');
+    const migratedDb = createDatabase(dbPath, logger);
+    const migrated = new SqliteCronRepository(migratedDb).getById('legacy');
+    migratedDb.close();
+    rmSync(dbPath, { force: true });
+
+    expect(migrated?.runtime).toBe('copilot');
   });
 });

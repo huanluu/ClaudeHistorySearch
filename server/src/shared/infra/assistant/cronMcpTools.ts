@@ -1,37 +1,44 @@
-import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod/v4';
-import type { CronToolService } from '../../provider/index';
+import { defineTool, type Tool } from '@github/copilot-sdk';
+import type { CronJobRecord, CronToolService } from '../../provider/index';
 
-/**
- * Creates an in-process MCP server exposing cron job management tools.
- * The returned server is passed to the SDK's `query()` via `mcpServers`.
- *
- * Tool handlers delegate to the injected CronToolService port.
- */
-type ToolResult = { content: Array<{ type: 'text'; text: string }> };
+type ToolResult = string;
 
-function textResult(text: string): ToolResult {
-  return { content: [{ type: 'text' as const, text }] };
+interface CronAddArgs {
+  name: string;
+  schedule_kind: 'at' | 'every' | 'cron';
+  schedule_value: string;
+  timezone?: string;
+  prompt: string;
+  workingDir: string;
 }
 
-function errorResult(err: unknown): ToolResult {
-  return textResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
+interface CronStatusArgs {
+  jobId: string;
 }
 
-function handleCronList(service: CronToolService): ToolResult {
-  const jobs = service.listJobs();
-  if (jobs.length === 0) return textResult('No cron jobs configured.');
+interface CronUpdateArgs {
+  jobId: string;
+  name?: string;
+  enabled?: boolean;
+  schedule_kind?: 'at' | 'every' | 'cron';
+  schedule_value?: string;
+  timezone?: string;
+  prompt?: string;
+  workingDir?: string;
+}
+
+function formatJobList(jobs: CronJobRecord[]): string {
+  if (jobs.length === 0) return 'No cron jobs configured.';
   const lines = jobs.map(j => {
     const status = j.enabled ? 'enabled' : 'disabled';
     const next = j.next_run_at_ms ? new Date(j.next_run_at_ms).toISOString() : 'none';
     const last = j.last_run_status ?? 'never run';
     return `- ${j.name} (${j.id}): ${status}, schedule=${j.schedule_kind}:${j.schedule_value}, next=${next}, last=${last}`;
   });
-  return textResult(lines.join('\n'));
+  return lines.join('\n');
 }
 
-function handleCronStatus(service: CronToolService, jobId: string): ToolResult {
-  const j = service.getJobStatus(jobId);
+function formatJobStatus(j: CronJobRecord): string {
   const info = [
     `Name: ${j.name}`, `ID: ${j.id}`, `Enabled: ${j.enabled ? 'yes' : 'no'}`,
     `Schedule: ${j.schedule_kind} ${j.schedule_value}`,
@@ -40,59 +47,122 @@ function handleCronStatus(service: CronToolService, jobId: string): ToolResult {
     `Last status: ${j.last_run_status ?? 'N/A'}`, `Last session: ${j.last_session_id ?? 'N/A'}`,
     `Consecutive errors: ${j.consecutive_errors}`, `Prompt: ${j.prompt}`,
   ];
-  return textResult(info.join('\n'));
+  return info.join('\n');
 }
 
-export function createCronMcpTools(service: CronToolService) {
-  return createSdkMcpServer({
-    name: 'cron',
-    version: '1.0.0',
-    tools: [
-      tool('cron_add', 'Create a new scheduled cron job. Use kind "at" for one-shot, "every" for interval, "cron" for cron expressions.', {
-        name: z.string().describe('Human-readable job name'),
-        schedule_kind: z.enum(['at', 'every', 'cron']).describe('"at" for one-shot, "every" for interval, "cron" for cron expression'),
-        schedule_value: z.string().describe('ISO timestamp, interval in ms, or cron expression'),
-        timezone: z.string().optional().describe('IANA timezone for cron expressions'),
-        prompt: z.string().describe('The prompt to send to the Claude CLI session'),
-        workingDir: z.string().describe('Working directory for the CLI session'),
-      }, async (args) => {
+function errorText(error: unknown): ToolResult {
+  return `Error: ${error instanceof Error ? error.message : String(error)}`;
+}
+
+export function createCronTools(service: CronToolService): Tool<unknown>[] {
+  return [
+    defineTool<CronAddArgs>('cron_add', {
+      description: 'Create a new scheduled cron job. Use kind "at" for one-shot, "every" for interval, "cron" for cron expressions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Human-readable job name' },
+          schedule_kind: { type: 'string', enum: ['at', 'every', 'cron'], description: '"at" for one-shot, "every" for interval, "cron" for cron expression' },
+          schedule_value: { type: 'string', description: 'ISO timestamp, interval in ms, or cron expression' },
+          timezone: { type: 'string', description: 'IANA timezone for cron expressions' },
+          prompt: { type: 'string', description: 'The prompt to send to the scheduled CLI session' },
+          workingDir: { type: 'string', description: 'Working directory for the CLI session' },
+        },
+        required: ['name', 'schedule_kind', 'schedule_value', 'prompt', 'workingDir'],
+      },
+      skipPermission: true,
+      handler: async (args) => {
         try {
           const job = service.addJob({
-            name: args.name, prompt: args.prompt, workingDir: args.workingDir,
+            name: args.name,
+            prompt: args.prompt,
+            workingDir: args.workingDir,
             schedule: { kind: args.schedule_kind, value: args.schedule_value, timezone: args.timezone },
           });
-          return textResult(`Created cron job "${job.name}" (${job.id}). Next run: ${job.next_run_at_ms ? new Date(job.next_run_at_ms).toISOString() : 'N/A'}`);
-        } catch (err: unknown) { return errorResult(err); }
-      }),
-      tool('cron_list', 'List all cron jobs with their current status.', {}, async () => handleCronList(service)),
-      tool('cron_status', 'Get detailed status of a specific cron job.', { jobId: z.string().describe('The job ID') }, async (args) => {
-        try { return handleCronStatus(service, args.jobId); } catch (err: unknown) { return errorResult(err); }
-      }),
-      tool('cron_run', 'Immediately trigger a cron job, bypassing its schedule.', { jobId: z.string().describe('The job ID to run now') }, async (args) => {
+          return `Created cron job "${job.name}" (${job.id}). Next run: ${job.next_run_at_ms ? new Date(job.next_run_at_ms).toISOString() : 'N/A'}`;
+        } catch (error: unknown) { return errorText(error); }
+      },
+    }) as Tool<unknown>,
+    defineTool('cron_list', {
+      description: 'List all cron jobs with their current status.',
+      parameters: { type: 'object', properties: {} },
+      skipPermission: true,
+      handler: () => formatJobList(service.listJobs()),
+    }),
+    defineTool<CronStatusArgs>('cron_status', {
+      description: 'Get detailed status of a specific cron job.',
+      parameters: {
+        type: 'object',
+        properties: { jobId: { type: 'string', description: 'The job ID' } },
+        required: ['jobId'],
+      },
+      skipPermission: true,
+      handler: (args) => {
+        try { return formatJobStatus(service.getJobStatus(args.jobId)); }
+        catch (error: unknown) { return errorText(error); }
+      },
+    }) as Tool<unknown>,
+    defineTool<CronStatusArgs>('cron_run', {
+      description: 'Immediately trigger a cron job, bypassing its schedule.',
+      parameters: {
+        type: 'object',
+        properties: { jobId: { type: 'string', description: 'The job ID to run now' } },
+        required: ['jobId'],
+      },
+      skipPermission: true,
+      handler: async (args) => {
         try {
           const result = await service.runJobNow(args.jobId);
-          return textResult(`Job triggered. Session ID: ${result.sessionId ?? 'unknown'}`);
-        } catch (err: unknown) { return errorResult(err); }
-      }),
-      tool('cron_update', 'Update an existing cron job. Pass only the fields you want to change.', {
-        jobId: z.string().describe('The job ID to update'),
-        name: z.string().optional(), enabled: z.boolean().optional(),
-        schedule_kind: z.enum(['at', 'every', 'cron']).optional(), schedule_value: z.string().optional(),
-        timezone: z.string().optional(), prompt: z.string().optional(), workingDir: z.string().optional(),
-      }, async (args) => {
+          return `Job triggered. Session ID: ${result.sessionId ?? 'unknown'}`;
+        } catch (error: unknown) { return errorText(error); }
+      },
+    }) as Tool<unknown>,
+    defineTool<CronUpdateArgs>('cron_update', {
+      description: 'Update an existing cron job. Pass only the fields you want to change.',
+      parameters: {
+        type: 'object',
+        properties: {
+          jobId: { type: 'string', description: 'The job ID to update' },
+          name: { type: 'string' },
+          enabled: { type: 'boolean' },
+          schedule_kind: { type: 'string', enum: ['at', 'every', 'cron'] },
+          schedule_value: { type: 'string' },
+          timezone: { type: 'string' },
+          prompt: { type: 'string' },
+          workingDir: { type: 'string' },
+        },
+        required: ['jobId'],
+      },
+      skipPermission: true,
+      handler: (args) => {
         try {
           const { jobId, enabled, workingDir, timezone, ...rest } = args;
-          const fields: Record<string, unknown> = { ...rest };
+          const fields: Partial<CronJobRecord> = {};
+          if (rest.name !== undefined) fields.name = rest.name;
+          if (rest.schedule_kind !== undefined) fields.schedule_kind = rest.schedule_kind;
+          if (rest.schedule_value !== undefined) fields.schedule_value = rest.schedule_value;
+          if (rest.prompt !== undefined) fields.prompt = rest.prompt;
           if (enabled !== undefined) fields.enabled = enabled ? 1 : 0;
           if (workingDir !== undefined) fields.working_dir = workingDir;
           if (timezone !== undefined) fields.schedule_timezone = timezone;
-          return textResult(`Updated job "${service.updateJob(jobId, fields).name}" (${jobId}).`);
-        } catch (err: unknown) { return errorResult(err); }
-      }),
-      tool('cron_remove', 'Delete a cron job permanently.', { jobId: z.string().describe('The job ID to remove') }, async (args) => {
-        try { service.removeJob(args.jobId); return textResult(`Job ${args.jobId} removed.`); }
-        catch (err: unknown) { return errorResult(err); }
-      }),
-    ],
-  });
+          return `Updated job "${service.updateJob(jobId, fields).name}" (${jobId}).`;
+        } catch (error: unknown) { return errorText(error); }
+      },
+    }) as Tool<unknown>,
+    defineTool<CronStatusArgs>('cron_remove', {
+      description: 'Delete a cron job permanently.',
+      parameters: {
+        type: 'object',
+        properties: { jobId: { type: 'string', description: 'The job ID to remove' } },
+        required: ['jobId'],
+      },
+      skipPermission: true,
+      handler: (args) => {
+        try {
+          service.removeJob(args.jobId);
+          return `Job ${args.jobId} removed.`;
+        } catch (error: unknown) { return errorText(error); }
+      },
+    }) as Tool<unknown>,
+  ];
 }

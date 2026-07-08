@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createCronMcpTools } from './cronMcpTools';
+import { createCronTools } from './cronMcpTools';
 import type { CronToolService, CronJobRecord } from '../../provider/index';
 
 function makeJob(overrides: Partial<CronJobRecord> = {}): CronJobRecord {
@@ -12,7 +12,7 @@ function makeJob(overrides: Partial<CronJobRecord> = {}): CronJobRecord {
     schedule_timezone: null,
     prompt: 'Do something',
     working_dir: '/tmp',
-    runtime: 'claude',
+    runtime: 'copilot',
     next_run_at_ms: Date.now() + 3600000,
     last_run_at_ms: null,
     last_run_status: null,
@@ -34,17 +34,22 @@ function makeMockService(): CronToolService {
   };
 }
 
-describe('createCronMcpTools', () => {
-  it('returns an MCP server with name "cron"', () => {
+describe('createCronTools', () => {
+  it('returns Copilot custom cron tools', () => {
     const service = makeMockService();
-    const server = createCronMcpTools(service);
-    expect(server.name).toBe('cron');
-    expect(server.type).toBe('sdk');
+    const tools = createCronTools(service);
+    expect(tools.map(tool => tool.name)).toEqual([
+      'cron_add', 'cron_list', 'cron_status', 'cron_run', 'cron_update', 'cron_remove',
+    ]);
   });
 
-  it('server has an instance property', () => {
+  it('tool handlers delegate to the cron service', async () => {
     const service = makeMockService();
-    const server = createCronMcpTools(service);
-    expect(server.instance).toBeDefined();
+    const tools = createCronTools(service);
+    const list = tools.find(tool => tool.name === 'cron_list');
+    expect(list?.handler).toBeDefined();
+    const result = await list!.handler!({}, { sessionId: 's1', toolCallId: 't1', toolName: 'cron_list', arguments: {} });
+    expect(result).toContain('Test Job');
+    expect(service.listJobs).toHaveBeenCalled();
   });
 });

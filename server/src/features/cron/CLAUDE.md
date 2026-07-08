@@ -2,7 +2,7 @@
 
 ## What
 
-General-purpose scheduled task system. Users create cron jobs via the assistant chat ("schedule a dead code sweep tonight"), and the server executes them on schedule by spawning Claude CLI sessions.
+General-purpose scheduled task system. Users create cron jobs via the assistant chat ("schedule a dead code sweep tonight"), and the server executes them on schedule by spawning Copilot CLI sessions.
 
 ## Why
 
@@ -12,10 +12,10 @@ The assistant is most valuable when it works proactively — running mechanical 
 
 ```
 User: "schedule a dead code sweep every night"
-  → Assistant calls mcp__cron__cron_add (in-process MCP tool)
+  → Assistant calls cron_add (Copilot custom tool)
     → CronService.addJob() persists to SQLite
     → Scheduler tick (every 60s) checks for due jobs
-      → Spawns Claude CLI via CliRuntime.runHeadless()
+      → Spawns Copilot CLI via CliRuntime.runHeadless()
       → Updates job state (lastRunStatus, nextRunAtMs, sessionId)
       → Session output gets indexed by search (existing pipeline)
 ```
@@ -39,7 +39,7 @@ User: "schedule a dead code sweep every night"
 - **Max 3 jobs per tick** — prevents resource exhaustion.
 - **Circuit breaker** — auto-disables job after 5 consecutive errors.
 - **In-flight tracking** — `stopScheduler()` awaits all running jobs before returning.
-- **Process tracking** — `ClaudeRuntime` tracks spawned processes; `app.stop()` cleans them up (REL-INV-2).
+- **Process tracking** — the selected `CliRuntime` tracks spawned processes; `app.stop()` cleans them up (REL-INV-2).
 
 ## REST API
 

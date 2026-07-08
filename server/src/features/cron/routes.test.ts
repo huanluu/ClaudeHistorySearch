@@ -16,7 +16,7 @@ function makeJob(overrides: Partial<CronJobRecord> = {}): CronJobRecord {
     schedule_timezone: null,
     prompt: 'Do something',
     working_dir: '/tmp',
-    runtime: 'claude',
+    runtime: 'copilot',
     next_run_at_ms: Date.now() + 3600000,
     last_run_at_ms: null,
     last_run_status: null,

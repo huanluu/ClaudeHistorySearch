@@ -1,2 +1,2 @@
-export { SdkAssistantBackend } from './SdkAssistantBackend';
-export { createCronMcpTools } from './cronMcpTools';
+export { CopilotAssistantBackend, SdkAssistantBackend } from './CopilotAssistantBackend';
+export { createCronTools } from './cronMcpTools';

@@ -21,12 +21,15 @@ type RunFn = (opts: { prompt: string; workingDir: string }) => Promise<{ session
 export class CronService implements CronToolService {
   private tickTimer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private isStopping = false;
+  private isCancellationError: ((error: unknown) => boolean) | null = null;
   private readonly inFlight = new Set<Promise<unknown>>();
 
   constructor(
     private readonly repo: CronRepository,
     private readonly runFn: RunFn,
     private readonly logger: Logger,
+    private readonly runtimeName = 'copilot',
   ) {}
 
   // ── CRUD ────────────────────────────────────────────────────────────
@@ -51,7 +54,7 @@ export class CronService implements CronToolService {
       schedule_timezone: tz,
       prompt: opts.prompt,
       working_dir: opts.workingDir,
-      runtime: 'claude',
+      runtime: this.runtimeName,
       next_run_at_ms: CronService.computeNextRun(kind, opts.schedule.value, now, null, tz),
       last_run_at_ms: null,
       last_run_status: null,
@@ -103,7 +106,7 @@ export class CronService implements CronToolService {
   async runJobNow(id: string): Promise<{ sessionId: string | null }> {
     const job = this.repo.getById(id);
     if (!job) throw new Error(`Cron job not found: ${id}`);
-    return this.executeJob(job);
+    return this.trackExecution(this.executeJob(job));
   }
 
   // ── Scheduler ───────────────────────────────────────────────────────
@@ -117,7 +120,7 @@ export class CronService implements CronToolService {
     this.logger.log({ msg: `Cron scheduler started (${TICK_INTERVAL_MS / 1000}s tick)`, op: 'cron.scheduler' });
   }
 
-  async stopScheduler(): Promise<void> {
+  async stopScheduler(options: { cancelInFlight?: () => void; isCancellationError?: (error: unknown) => boolean } = {}): Promise<void> {
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
@@ -125,7 +128,23 @@ export class CronService implements CronToolService {
     // Await all in-flight executions
     if (this.inFlight.size > 0) {
       this.logger.log({ msg: `Cron scheduler stopping: awaiting ${this.inFlight.size} in-flight jobs`, op: 'cron.scheduler' });
-      await Promise.allSettled([...this.inFlight]);
+      this.isStopping = options.cancelInFlight !== undefined;
+      this.isCancellationError = options.isCancellationError ?? null;
+      let cancelError: unknown;
+      try {
+        try {
+          options.cancelInFlight?.();
+        } catch (error) {
+          cancelError = error;
+        }
+        await Promise.allSettled([...this.inFlight]);
+      } finally {
+        this.isStopping = false;
+        this.isCancellationError = null;
+      }
+      if (cancelError) {
+        throw cancelError;
+      }
     }
   }
 
@@ -142,27 +161,36 @@ export class CronService implements CronToolService {
       const now = Date.now();
       const dueJobs = this.repo.getDueJobs(now);
       const batch = dueJobs.slice(0, MAX_CONCURRENT_PER_TICK);
+      const scheduledPromises: Promise<unknown>[] = [];
 
       for (const job of batch) {
-        const promise = this.executeJob(job).catch((err: unknown) => {
+        const promise = this.trackExecution(this.executeJob(job)).catch((err: unknown) => {
           this.logger.error({
             msg: `Cron job execution failed: ${err instanceof Error ? err.message : String(err)}`,
             op: 'cron.execute',
             context: { jobId: job.id },
           });
         });
-        this.inFlight.add(promise);
-        void promise.finally(() => this.inFlight.delete(promise));
+        scheduledPromises.push(promise);
       }
 
       // Wait for this batch to complete before allowing next tick
-      await Promise.allSettled([...this.inFlight]);
+      await Promise.allSettled(scheduledPromises);
     } finally {
       this.isRunning = false;
     }
   }
 
   // ── Internals ───────────────────────────────────────────────────────
+
+  private async trackExecution(promise: Promise<{ sessionId: string | null }>): Promise<{ sessionId: string | null }> {
+    this.inFlight.add(promise);
+    try {
+      return await promise;
+    } finally {
+      this.inFlight.delete(promise);
+    }
+  }
 
   private async executeJob(job: CronJobRecord): Promise<{ sessionId: string | null }> {
     const now = Date.now();
@@ -173,6 +201,7 @@ export class CronService implements CronToolService {
         last_run_at_ms: now,
         last_run_status: 'success',
         last_session_id: result.sessionId,
+        runtime: this.runtimeName,
         consecutive_errors: 0,
         next_run_at_ms: CronService.computeNextRun(job.schedule_kind, job.schedule_value, now, now, job.schedule_timezone),
         ...(job.schedule_kind === 'at' ? { enabled: 0 } : {}),
@@ -180,11 +209,16 @@ export class CronService implements CronToolService {
       this.logger.log({ msg: `Cron job succeeded: ${job.name}`, op: 'cron.execute', context: { jobId: job.id, sessionId: result.sessionId } });
       return result;
     } catch (err: unknown) {
+      if (this.isStopping && this.isCancellationError?.(err)) {
+        this.logger.warn({ msg: `Cron job interrupted during scheduler shutdown: ${job.name}`, op: 'cron.execute', context: { jobId: job.id } });
+        return { sessionId: null };
+      }
       const errors = job.consecutive_errors + 1;
       const disabled = errors >= MAX_CONSECUTIVE_ERRORS;
       this.repo.update(job.id, {
         last_run_at_ms: now,
         last_run_status: 'error',
+        runtime: this.runtimeName,
         consecutive_errors: errors,
         next_run_at_ms: disabled ? null : CronService.computeNextRun(job.schedule_kind, job.schedule_value, now, now, job.schedule_timezone),
         ...(disabled ? { enabled: 0 } : {}),
